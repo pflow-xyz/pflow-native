@@ -1104,15 +1104,7 @@ impl Law {
     }
 }
 
-fn gcd(a: i64, b: i64) -> i64 {
-    let (mut a, mut b) = (a.abs(), b.abs());
-    while b != 0 {
-        (a, b) = (b, a % b);
-    }
-    a
-}
-
-/// Minimal semi-positive P-invariants (Farkas' algorithm over the
+/// Minimal semi-positive P-invariants ([`crate::analysis::farkas`] over the
 /// incidence matrix of flow arcs; read and inhibitor arcs move nothing),
 /// valued at `start`. The bool is true when the elimination hit its row cap
 /// and the list may be incomplete.
@@ -1138,84 +1130,10 @@ pub fn p_invariants(net: &Net, start: &HashMap<String, i64>) -> (Vec<Law>, bool)
             }
         }
     }
-    type Row = (Vec<i64>, Vec<i64>);
-    let mut rows: Vec<Row> = (0..n)
-        .map(|i| {
-            let mut y = vec![0; n];
-            y[i] = 1;
-            (c[i].clone(), y)
-        })
-        .collect();
-    let mut truncated = false;
-    let combine = |p: &Row, q: &Row, j: usize| -> Option<Row> {
-        let a = -q.0[j];
-        let b = p.0[j];
-        let mix = |x: &[i64], y: &[i64]| -> Option<Vec<i64>> {
-            x.iter()
-                .zip(y)
-                .map(|(u, v)| u.checked_mul(a)?.checked_add(v.checked_mul(b)?))
-                .collect()
-        };
-        let mut d = mix(&p.0, &q.0)?;
-        let mut y = mix(&p.1, &q.1)?;
-        let g = d.iter().chain(y.iter()).fold(0, |g, &x| gcd(g, x));
-        if g > 1 {
-            d.iter_mut().for_each(|x| *x /= g);
-            y.iter_mut().for_each(|x| *x /= g);
-        }
-        Some((d, y))
-    };
-    'cols: for j in 0..ts.len() {
-        let mut next: Vec<Row> = rows.iter().filter(|r| r.0[j] == 0).cloned().collect();
-        let pos: Vec<&Row> = rows.iter().filter(|r| r.0[j] > 0).collect();
-        let neg: Vec<&Row> = rows.iter().filter(|r| r.0[j] < 0).collect();
-        for p in &pos {
-            for q in &neg {
-                match combine(p, q, j) {
-                    Some(r) => {
-                        if !next.contains(&r) {
-                            next.push(r);
-                        }
-                    }
-                    None => truncated = true,
-                }
-                if next.len() > MAX_FARKAS_ROWS {
-                    truncated = true;
-                    rows = next;
-                    break 'cols;
-                }
-            }
-        }
-        rows = next;
-    }
-    if truncated {
-        // A cut elimination leaves rows that are not invariants; keep only
-        // the ones that are (every incidence entry zero).
-        rows.retain(|r| r.0.iter().all(|&x| x == 0));
-    }
-    let mut ys: Vec<Vec<i64>> = rows
-        .into_iter()
-        .map(|r| r.1)
-        .filter(|y| y.iter().any(|&x| x != 0))
-        .collect();
-    ys.sort();
-    ys.dedup();
-    let support = |y: &[i64]| -> Vec<usize> { (0..y.len()).filter(|&i| y[i] != 0).collect() };
-    let supports: Vec<Vec<usize>> = ys.iter().map(|y| support(y)).collect();
-    let minimal: Vec<&Vec<i64>> = ys
+    let crate::analysis::farkas::FarkasResult { basis, truncated } =
+        crate::analysis::farkas::farkas(&c, MAX_FARKAS_ROWS);
+    let mut laws: Vec<Law> = basis
         .iter()
-        .enumerate()
-        .filter(|(i, _)| {
-            !supports.iter().enumerate().any(|(k, s)| {
-                k != *i
-                    && s.len() < supports[*i].len()
-                    && s.iter().all(|x| supports[*i].contains(x))
-            })
-        })
-        .map(|(_, y)| y)
-        .collect();
-    let mut laws: Vec<Law> = minimal
-        .into_iter()
         .map(|y| {
             let terms = (0..n)
                 .filter(|&i| y[i] != 0)

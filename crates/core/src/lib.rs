@@ -7,6 +7,7 @@
 //! Nothing here depends on egui, so the same crate builds for native,
 //! headless and `wasm32-unknown-unknown`.
 
+pub mod analysis;
 pub mod artifact;
 pub mod cid;
 pub mod commands;
