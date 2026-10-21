@@ -11,7 +11,9 @@ mod inspector;
 mod json_pane;
 mod panels;
 mod plot;
+mod results;
 mod shortcuts;
+mod views;
 
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
@@ -33,6 +35,7 @@ pub trait Services {
 pub enum BottomTab {
     #[default]
     Plot,
+    Workbench,
     Run,
     Console,
 }
@@ -63,6 +66,7 @@ pub struct App {
     pub(crate) inspector: inspector::InspectorState,
     pub(crate) bottom: BottomTab,
     pub(crate) plot: plot::PlotState,
+    pub(crate) results: results::ResultsState,
     pub(crate) console: panels::ConsoleState,
     pub(crate) dialogs: dialogs::DialogState,
     pub(crate) json: json_pane::JsonPaneState,
@@ -99,6 +103,7 @@ impl App {
             inspector: Default::default(),
             bottom: BottomTab::Plot,
             plot: Default::default(),
+            results: Default::default(),
             console: Default::default(),
             dialogs: Default::default(),
             json: Default::default(),
@@ -174,6 +179,49 @@ impl App {
         self.invoke_from_menu(id);
     }
 
+    /// Fills transition/place arguments from the current selection, so
+    /// "select a transition, click Rate Scan" needs no typing.
+    fn selection_prefill(&self, id: &str) -> Value {
+        let Some(spec) = self.sess.registry().find(id) else {
+            return Value::Null;
+        };
+        let doc = &self.sess.doc;
+        let ts: Vec<&String> = self
+            .sess
+            .selection
+            .iter()
+            .filter(|s| doc.transition(s).is_some())
+            .collect();
+        let ps: Vec<&String> = self
+            .sess
+            .selection
+            .iter()
+            .filter(|s| doc.place(s).is_some())
+            .collect();
+        let mut m = serde_json::Map::new();
+        let (mut ti, mut pi) = (0, 0);
+        for a in spec.args {
+            let pick = match a.name {
+                "transition" | "param_x" | "param_y" => {
+                    let v = ts.get(ti).map(|s| json!(s));
+                    ti += 1;
+                    v
+                }
+                "place" | "observable" => {
+                    let v = ps.get(pi).map(|s| json!(s));
+                    pi += 1;
+                    v
+                }
+                "id" if ts.len() + ps.len() == 1 => ts.first().or(ps.first()).map(|s| json!(s)),
+                _ => None,
+            };
+            if let Some(v) = pick {
+                m.insert(a.name.into(), v);
+            }
+        }
+        Value::Object(m)
+    }
+
     /// Runs `id` the way a menu or the palette does: path arguments come
     /// from a file dialog, other required arguments from a form.
     pub(crate) fn invoke(&mut self, id: &'static str) {
@@ -198,7 +246,7 @@ impl App {
                         .collect::<Vec<_>>().join(", "),
                 }),
                 "file.open_cid" => json!({ "server": "https://pflow.xyz" }),
-                _ => Value::Null,
+                _ => self.selection_prefill(id),
             };
             self.ask_args(id, &prefill);
         } else {
@@ -315,6 +363,19 @@ impl App {
                 });
             }
         });
+    }
+
+    pub(crate) fn export_artifact_as(&mut self, id: &str, format: &str) {
+        let Some(svc) = self.services.as_deref() else {
+            self.status = Err("exports need a file system".into());
+            return;
+        };
+        if let Some(p) = svc.pick_save(&format!("{id}.{format}"), format) {
+            self.queue(
+                "export.artifact",
+                json!({ "id": id, "format": format, "path": p }),
+            );
+        }
     }
 
     pub(crate) fn export_artifact(&mut self, format: &str) {
@@ -606,7 +667,7 @@ impl eframe::App for App {
         if settings.bottom_panel {
             egui::Panel::bottom("bottom")
                 .resizable(true)
-                .default_size(260.0)
+                .default_size(330.0)
                 .show(ui, |ui| panels::bottom(self, ui));
         }
         if settings.json_pane {

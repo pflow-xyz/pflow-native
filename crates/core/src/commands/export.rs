@@ -44,6 +44,40 @@ pub const SET: &[CommandSpec] = &[
         journal: false,
     },
     CommandSpec {
+        id: "artifact.put",
+        label: "Put Result",
+        help: "Store a result computed elsewhere so the app's views show it. `data` is an artifact body: \
+               {kind: timeseries|heatmap|matrix|graph|trace|table|scatter|report, ...} (see artifact.get output).",
+        menu: "",
+        shortcut: None,
+        args: &[arg("title", Str, "display title"), arg("data", Json, "artifact data with a `kind` tag")],
+        enabled: always,
+        run: put,
+        journal: false,
+    },
+    CommandSpec {
+        id: "artifact.delete",
+        label: "Delete Result",
+        help: "Forget one stored result.",
+        menu: "",
+        shortcut: None,
+        args: &[arg("id", Str, "artifact id")],
+        enabled: always,
+        run: delete,
+        journal: false,
+    },
+    CommandSpec {
+        id: "artifact.clear",
+        label: "Clear Results",
+        help: "Forget every stored result.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: always,
+        run: clear,
+        journal: false,
+    },
+    CommandSpec {
         id: "artifact.get",
         label: "Get Result",
         help: "One artifact in full.",
@@ -103,4 +137,33 @@ fn get(sess: &mut Session, a: &Value) -> Result<Value> {
         .artifact(id)
         .ok_or_else(|| Error::NotFound(format!("no artifact {id:?}")))?;
     Ok(json!(art))
+}
+
+fn put(sess: &mut Session, a: &Value) -> Result<Value> {
+    let data: crate::artifact::ArtifactData = serde_json::from_value(a["data"].clone())
+        .map_err(|e| Error::BadArgs(format!("data: {e}")))?;
+    data.validate().map_err(Error::BadArgs)?;
+    let title = s(a, "title").unwrap().to_string();
+    let source = crate::session::Step {
+        command: "artifact.put".into(),
+        args: Value::Null,
+    };
+    let id = sess.add_artifact(title, source, data);
+    Ok(json!({ "artifact": id }))
+}
+
+fn delete(sess: &mut Session, a: &Value) -> Result<Value> {
+    let id = s(a, "id").unwrap();
+    let n = sess.artifacts.len();
+    sess.artifacts.retain(|x| x.id != id);
+    if sess.artifacts.len() == n {
+        return Err(Error::NotFound(format!("no artifact {id:?}")));
+    }
+    Ok(json!({ "deleted": id }))
+}
+
+fn clear(sess: &mut Session, _: &Value) -> Result<Value> {
+    let n = sess.artifacts.len();
+    sess.artifacts.clear();
+    Ok(json!({ "deleted": n }))
 }

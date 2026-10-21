@@ -122,9 +122,54 @@ impl ArtifactData {
     /// Export formats this kind supports (JSON always).
     pub fn formats(&self) -> &'static [&'static str] {
         match self {
-            ArtifactData::TimeSeries { .. } => &["json", "csv", "svg"],
+            ArtifactData::TimeSeries { .. }
+            | ArtifactData::Heatmap { .. }
+            | ArtifactData::Scatter { .. } => &["json", "csv", "svg"],
             ArtifactData::Report(_) | ArtifactData::Graph { .. } => &["json"],
             _ => &["json", "csv"],
         }
+    }
+
+    /// Shape checks for data that did not come from our own commands.
+    pub fn validate(&self) -> Result<(), String> {
+        match self {
+            ArtifactData::TimeSeries { x, series, .. } => {
+                for s in series {
+                    if s.values.len() != x.len() {
+                        return Err(format!(
+                            "series {:?}: {} values for {} x",
+                            s.name,
+                            s.values.len(),
+                            x.len()
+                        ));
+                    }
+                    if s.band.as_ref().is_some_and(|b| b.len() != x.len()) {
+                        return Err(format!("series {:?}: band length differs from x", s.name));
+                    }
+                }
+            }
+            ArtifactData::Heatmap { xs, ys, z, .. } => {
+                if z.len() != ys.len() || z.iter().any(|r| r.len() != xs.len()) {
+                    return Err("heatmap z must be ys.len() rows of xs.len() values".into());
+                }
+            }
+            ArtifactData::Matrix { rows, cols, values } => {
+                if values.len() != rows.len() || values.iter().any(|r| r.len() != cols.len()) {
+                    return Err("matrix values must be rows × cols".into());
+                }
+            }
+            ArtifactData::Table { columns, rows } => {
+                if rows.iter().any(|r| r.len() != columns.len()) {
+                    return Err("every table row needs one cell per column".into());
+                }
+            }
+            ArtifactData::Scatter {
+                points, highlight, ..
+            } if highlight.iter().any(|&i| i >= points.len()) => {
+                return Err("scatter highlight index out of range".into());
+            }
+            _ => {}
+        }
+        Ok(())
     }
 }

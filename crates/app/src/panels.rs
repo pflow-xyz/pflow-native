@@ -5,7 +5,7 @@
 use eframe::egui;
 use serde_json::{json, Value};
 
-use crate::{plot, App, BottomTab};
+use crate::{results, App, BottomTab};
 
 #[derive(Default)]
 pub struct ConsoleState {
@@ -46,13 +46,15 @@ impl ConsoleState {
 
 pub fn bottom(app: &mut App, ui: &mut egui::Ui) {
     ui.horizontal(|ui| {
-        ui.selectable_value(&mut app.bottom, BottomTab::Plot, "📈 Plot");
+        ui.selectable_value(&mut app.bottom, BottomTab::Plot, "📈 Results");
+        ui.selectable_value(&mut app.bottom, BottomTab::Workbench, "🔬 Workbench");
         ui.selectable_value(&mut app.bottom, BottomTab::Run, "▶ Run");
         ui.selectable_value(&mut app.bottom, BottomTab::Console, "⌨ Console");
     });
     ui.separator();
     match app.bottom {
-        BottomTab::Plot => plot::ui(app, ui),
+        BottomTab::Plot => results::ui(app, ui),
+        BottomTab::Workbench => workbench(app, ui),
         BottomTab::Run => run(app, ui),
         BottomTab::Console => console(app, ui),
     }
@@ -171,4 +173,31 @@ fn console(app: &mut App, ui: &mut egui::Ui) {
                 };
             }
         });
+}
+
+/// Every simulation / analysis command, grouped by menu, as buttons. Each
+/// opens its argument form, prefilled from the selection; results land in
+/// the Results tab.
+fn workbench(app: &mut App, ui: &mut egui::Ui) {
+    let reg = app.sess.registry();
+    let groups = ["Simulate", "Workbench", "Analyze", "Data"];
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        for g in groups {
+            let cmds: Vec<_> = reg.commands().iter().filter(|c| c.menu == g).collect();
+            if cmds.is_empty() {
+                continue;
+            }
+            ui.strong(g);
+            ui.horizontal_wrapped(|ui| {
+                for c in cmds {
+                    let r = ui.button(c.label).on_hover_text(format!("{}\n{}", c.help, c.id));
+                    if r.clicked() {
+                        app.invoke(c.id);
+                    }
+                }
+            });
+            ui.add_space(6.0);
+        }
+        ui.weak("Tip: select a transition or place first — forms prefill transition/place arguments from the selection.");
+    });
 }

@@ -211,8 +211,16 @@ pub fn artifact(a: &Artifact, format: &str) -> Result<String> {
         (ArtifactData::TimeSeries { x_label, x, series }, "csv") => {
             let mut s = csv_field(x_label);
             for se in series {
+                let name = match &se.group {
+                    Some(g) => format!("{g}:{}", se.name),
+                    None => se.name.clone(),
+                };
                 s.push(',');
-                s.push_str(&csv_field(&se.name));
+                s.push_str(&csv_field(&name));
+                if se.band.is_some() {
+                    s.push(',');
+                    s.push_str(&csv_field(&format!("{name}_sd")));
+                }
             }
             s.push('\n');
             for (i, xv) in x.iter().enumerate() {
@@ -220,6 +228,10 @@ pub fn artifact(a: &Artifact, format: &str) -> Result<String> {
                 for se in series {
                     s.push(',');
                     s.push_str(&se.values.get(i).map(|v| v.to_string()).unwrap_or_default());
+                    if let Some(b) = &se.band {
+                        s.push(',');
+                        s.push_str(&b.get(i).map(|v| v.to_string()).unwrap_or_default());
+                    }
                 }
                 s.push('\n');
             }
@@ -228,6 +240,25 @@ pub fn artifact(a: &Artifact, format: &str) -> Result<String> {
         (ArtifactData::TimeSeries { x_label, x, series }, "svg") => {
             Ok(timeseries_svg(&a.title, x_label, x, series))
         }
+        (
+            ArtifactData::Heatmap {
+                x_label,
+                y_label,
+                xs,
+                ys,
+                z,
+            },
+            "svg",
+        ) => Ok(heatmap_svg(&a.title, x_label, y_label, xs, ys, z)),
+        (
+            ArtifactData::Scatter {
+                x_label,
+                y_label,
+                points,
+                highlight,
+            },
+            "svg",
+        ) => Ok(scatter_svg(&a.title, x_label, y_label, points, highlight)),
         (ArtifactData::Matrix { rows, cols, values }, "csv") => {
             let mut s = String::new();
             for c in cols {
@@ -307,24 +338,82 @@ pub fn artifact(a: &Artifact, format: &str) -> Result<String> {
     }
 }
 
-fn timeseries_svg(
-    title: &str,
-    x_label: &str,
-    x: &[f64],
-    series: &[crate::artifact::Series],
-) -> String {
-    let (w, h) = (720.0, 400.0);
-    let (ml, mr, mt, mb) = (56.0, 140.0, 32.0, 40.0);
-    let (pw, ph) = (w - ml - mr, h - mt - mb);
-    let xmin = x.first().copied().unwrap_or(0.0);
-    let xmax = x.last().copied().unwrap_or(1.0).max(xmin + 1e-9);
-    let ymax = series
+/// Sequential color scale (viridis-like) for t in [0, 1]; shared with the
+/// app so heatmap exports match the screen.
+pub fn heat_rgb(t: f64) -> (u8, u8, u8) {
+    const STOPS: [(f64, f64, f64); 5] = [
+        (68.0, 1.0, 84.0),
+        (59.0, 82.0, 139.0),
+        (33.0, 145.0, 140.0),
+        (94.0, 201.0, 98.0),
+        (253.0, 231.0, 37.0),
+    ];
+    let t = if t.is_finite() {
+        t.clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let f = t * (STOPS.len() - 1) as f64;
+    let i = (f.floor() as usize).min(STOPS.len() - 2);
+    let u = f - i as f64;
+    let (a, b) = (STOPS[i], STOPS[i + 1]);
+    let mix = |x: f64, y: f64| (x + (y - x) * u).round() as u8;
+    (mix(a.0, b.0), mix(a.1, b.1), mix(a.2, b.2))
+}
+
+/// Color index per distinct series name, in first-seen order.
+pub fn name_index(series: &[crate::artifact::Series]) -> Vec<usize> {
+    let mut names: Vec<&str> = vec![];
+    series
         .iter()
-        .flat_map(|s| s.values.iter().copied())
-        .fold(0.0_f64, f64::max)
-        .max(1e-9);
-    let sx = |v: f64| ml + (v - xmin) / (xmax - xmin) * pw;
-    let sy = |v: f64| mt + ph - v / ymax * ph;
+        .map(|s| match names.iter().position(|n| *n == s.name) {
+            Some(i) => i,
+            None => {
+                names.push(&s.name);
+                names.len() - 1
+            }
+        })
+        .collect()
+}
+
+/// Dash index per distinct group (None = solid), in first-seen order.
+pub fn group_index(series: &[crate::artifact::Series]) -> Vec<usize> {
+    let mut groups: Vec<&str> = vec![];
+    series
+        .iter()
+        .map(|s| match &s.group {
+            None => 0,
+            Some(g) => match groups.iter().position(|x| *x == g) {
+                Some(i) => i,
+                None => {
+                    groups.push(g);
+                    groups.len() - 1
+                }
+            },
+        })
+        .collect()
+}
+
+const DASHES: &[&str] = &["", "6 3", "2 3", "10 3 2 3", "1 2"];
+
+struct Frame {
+    h: f64,
+    ml: f64,
+    mt: f64,
+    pw: f64,
+    ph: f64,
+}
+
+fn svg_frame(title: &str, legend: bool) -> (String, Frame) {
+    let (w, h) = (720.0, 400.0);
+    let (ml, mr, mt, mb) = (56.0, if legend { 150.0 } else { 20.0 }, 32.0, 40.0);
+    let f = Frame {
+        h,
+        ml,
+        mt,
+        pw: w - ml - mr,
+        ph: h - mt - mb,
+    };
     let mut s = format!(
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {h}" width="{w}" height="{h}" font-family="sans-serif" font-size="11">"#
     );
@@ -334,56 +423,280 @@ fn timeseries_svg(
         r#"<text x="{ml}" y="20" font-size="13" font-weight="bold">{}</text>"#,
         esc(title)
     );
+    (s, f)
+}
+
+fn svg_axes(s: &mut String, f: &Frame, x: (f64, f64), y: (f64, f64), x_label: &str, y_label: &str) {
     let _ = write!(
         s,
-        r##"<rect x="{ml}" y="{mt}" width="{pw}" height="{ph}" fill="none" stroke="#999"/>"##
+        r##"<rect x="{}" y="{}" width="{}" height="{}" fill="none" stroke="#999"/>"##,
+        f.ml, f.mt, f.pw, f.ph
     );
     for i in 0..=4 {
-        let v = ymax * i as f64 / 4.0;
+        let fy = i as f64 / 4.0;
+        let yv = y.0 + (y.1 - y.0) * fy;
         let _ = write!(
             s,
-            r##"<text x="{}" y="{:.1}" text-anchor="end" fill="#555">{:.3}</text>"##,
-            ml - 4.0,
-            sy(v) + 4.0,
-            v
+            r##"<text x="{}" y="{:.1}" text-anchor="end" fill="#555">{}</text>"##,
+            f.ml - 4.0,
+            f.mt + f.ph - fy * f.ph + 4.0,
+            short_num(yv)
         );
-        let xv = xmin + (xmax - xmin) * i as f64 / 4.0;
+        let xv = x.0 + (x.1 - x.0) * fy;
         let _ = write!(
             s,
-            r##"<text x="{:.1}" y="{}" text-anchor="middle" fill="#555">{:.3}</text>"##,
-            sx(xv),
-            mt + ph + 14.0,
-            xv
+            r##"<text x="{:.1}" y="{}" text-anchor="middle" fill="#555">{}</text>"##,
+            f.ml + fy * f.pw,
+            f.mt + f.ph + 14.0,
+            short_num(xv)
         );
     }
     let _ = write!(
         s,
         r##"<text x="{:.1}" y="{}" text-anchor="middle" fill="#333">{}</text>"##,
-        ml + pw / 2.0,
-        h - 6.0,
+        f.ml + f.pw / 2.0,
+        f.h - 6.0,
         esc(x_label)
     );
-    for (i, se) in series.iter().enumerate() {
-        let (r, g, b) = PALETTE[i % PALETTE.len()];
+    if !y_label.is_empty() {
+        let _ = write!(
+            s,
+            r##"<text x="12" y="{:.1}" text-anchor="middle" fill="#333" transform="rotate(-90 12 {:.1})">{}</text>"##,
+            f.mt + f.ph / 2.0,
+            f.mt + f.ph / 2.0,
+            esc(y_label)
+        );
+    }
+}
+
+fn short_num(v: f64) -> String {
+    let a = v.abs();
+    if a != 0.0 && !(1e-3..1e5).contains(&a) {
+        format!("{v:.2e}")
+    } else {
+        format!("{v:.3}")
+    }
+}
+
+fn timeseries_svg(
+    title: &str,
+    x_label: &str,
+    x: &[f64],
+    series: &[crate::artifact::Series],
+) -> String {
+    let (mut s, f) = svg_frame(title, true);
+    let xmin = x.first().copied().unwrap_or(0.0);
+    let xmax = x.last().copied().unwrap_or(1.0).max(xmin + 1e-9);
+    let ymax = series
+        .iter()
+        .flat_map(|se| {
+            se.values
+                .iter()
+                .enumerate()
+                .map(move |(i, v)| v + se.band.as_ref().map_or(0.0, |b| b[i]))
+        })
+        .fold(0.0_f64, f64::max)
+        .max(1e-9);
+    let ymin = series
+        .iter()
+        .flat_map(|se| se.values.iter().copied())
+        .fold(0.0_f64, f64::min);
+    let sx = |v: f64| f.ml + (v - xmin) / (xmax - xmin) * f.pw;
+    let sy = |v: f64| f.mt + f.ph - (v - ymin) / (ymax - ymin) * f.ph;
+    svg_axes(&mut s, &f, (xmin, xmax), (ymin, ymax), x_label, "");
+    let ni = name_index(series);
+    let gi = group_index(series);
+    for (k, se) in series.iter().enumerate() {
+        let (r, g, b) = PALETTE[ni[k] % PALETTE.len()];
+        if let Some(band) = &se.band {
+            let upper: Vec<String> = x
+                .iter()
+                .zip(&se.values)
+                .zip(band)
+                .map(|((&xv, &yv), &bv)| format!("{:.2},{:.2}", sx(xv), sy(yv + bv)))
+                .collect();
+            let lower: Vec<String> = x
+                .iter()
+                .zip(&se.values)
+                .zip(band)
+                .rev()
+                .map(|((&xv, &yv), &bv)| format!("{:.2},{:.2}", sx(xv), sy(yv - bv)))
+                .collect();
+            let _ = write!(
+                s,
+                r#"<polygon fill="rgb({r},{g},{b})" fill-opacity="0.18" stroke="none" points="{} {}"/>"#,
+                upper.join(" "),
+                lower.join(" ")
+            );
+        }
         let pts: Vec<String> = x
             .iter()
             .zip(&se.values)
             .map(|(&xv, &yv)| format!("{:.2},{:.2}", sx(xv), sy(yv)))
             .collect();
+        let dash = DASHES[gi[k] % DASHES.len()];
         let _ = write!(
             s,
-            r#"<polyline fill="none" stroke="rgb({r},{g},{b})" stroke-width="2" points="{}"/>"#,
+            r#"<polyline fill="none" stroke="rgb({r},{g},{b})" stroke-width="2" stroke-dasharray="{dash}" points="{}"/>"#,
             pts.join(" ")
         );
-        let ly = mt + 12.0 + i as f64 * 16.0;
+        let label = match &se.group {
+            Some(gr) => format!("{} · {}", se.name, gr),
+            None => se.name.clone(),
+        };
+        let ly = f.mt + 12.0 + k as f64 * 15.0;
+        if ly < f.h - 10.0 {
+            let lx = f.ml + f.pw + 10.0;
+            let _ = write!(
+                s,
+                r#"<line x1="{lx}" y1="{ly}" x2="{}" y2="{ly}" stroke="rgb({r},{g},{b})" stroke-width="3" stroke-dasharray="{dash}"/><text x="{}" y="{}">{}</text>"#,
+                lx + 16.0,
+                lx + 20.0,
+                ly + 4.0,
+                esc(&label)
+            );
+        }
+    }
+    s.push_str("</svg>\n");
+    s
+}
+
+fn heatmap_svg(
+    title: &str,
+    x_label: &str,
+    y_label: &str,
+    xs: &[f64],
+    ys: &[f64],
+    z: &[Vec<f64>],
+) -> String {
+    let (mut s, f) = svg_frame(title, true);
+    let (zmin, zmax) = z
+        .iter()
+        .flatten()
+        .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), &v| {
+            (a.min(v), b.max(v))
+        });
+    let span = (zmax - zmin).max(1e-12);
+    let (nx, ny) = (xs.len().max(1), ys.len().max(1));
+    let (cw, ch) = (f.pw / nx as f64, f.ph / ny as f64);
+    for (iy, row) in z.iter().enumerate() {
+        for (ix, &v) in row.iter().enumerate() {
+            let (r, g, b) = heat_rgb((v - zmin) / span);
+            let _ = write!(
+                s,
+                r#"<rect x="{:.2}" y="{:.2}" width="{:.2}" height="{:.2}" fill="rgb({r},{g},{b})"><title>{x_label}={} {y_label}={} → {}</title></rect>"#,
+                f.ml + ix as f64 * cw,
+                f.mt + f.ph - (iy + 1) as f64 * ch,
+                cw + 0.3,
+                ch + 0.3,
+                xs[ix],
+                ys[iy],
+                v
+            );
+        }
+    }
+    let xr = (
+        xs.first().copied().unwrap_or(0.0),
+        xs.last().copied().unwrap_or(1.0),
+    );
+    let yr = (
+        ys.first().copied().unwrap_or(0.0),
+        ys.last().copied().unwrap_or(1.0),
+    );
+    svg_axes(&mut s, &f, xr, yr, x_label, y_label);
+    // Color bar.
+    let bx = f.ml + f.pw + 20.0;
+    for i in 0..50 {
+        let t = i as f64 / 49.0;
+        let (r, g, b) = heat_rgb(t);
         let _ = write!(
             s,
-            r#"<line x1="{}" y1="{ly}" x2="{}" y2="{ly}" stroke="rgb({r},{g},{b})" stroke-width="3"/><text x="{}" y="{}">{}</text>"#,
-            w - mr + 10.0,
-            w - mr + 26.0,
-            w - mr + 30.0,
-            ly + 4.0,
-            esc(&se.name)
+            r#"<rect x="{bx}" y="{:.2}" width="16" height="{:.2}" fill="rgb({r},{g},{b})"/>"#,
+            f.mt + f.ph - (i + 1) as f64 * f.ph / 50.0,
+            f.ph / 50.0 + 0.3
+        );
+    }
+    let _ = write!(
+        s,
+        r#"<text x="{}" y="{}">{}</text>"#,
+        bx + 20.0,
+        f.mt + 8.0,
+        short_num(zmax)
+    );
+    let _ = write!(
+        s,
+        r#"<text x="{}" y="{}">{}</text>"#,
+        bx + 20.0,
+        f.mt + f.ph,
+        short_num(zmin)
+    );
+    s.push_str("</svg>\n");
+    s
+}
+
+fn scatter_svg(
+    title: &str,
+    x_label: &str,
+    y_label: &str,
+    points: &[(f64, f64)],
+    highlight: &[usize],
+) -> String {
+    let (mut s, f) = svg_frame(title, false);
+    let fold = |sel: fn(&(f64, f64)) -> f64| {
+        points
+            .iter()
+            .map(sel)
+            .fold((f64::INFINITY, f64::NEG_INFINITY), |(a, b), v| {
+                (a.min(v), b.max(v))
+            })
+    };
+    let (x0, x1) = fold(|p| p.0);
+    let (y0, y1) = fold(|p| p.1);
+    let (x0, x1) = if points.is_empty() {
+        (0.0, 1.0)
+    } else {
+        (x0, x1.max(x0 + 1e-9))
+    };
+    let (y0, y1) = if points.is_empty() {
+        (0.0, 1.0)
+    } else {
+        (y0, y1.max(y0 + 1e-9))
+    };
+    svg_axes(&mut s, &f, (x0, x1), (y0, y1), x_label, y_label);
+    let sx = |v: f64| f.ml + (v - x0) / (x1 - x0) * f.pw;
+    let sy = |v: f64| f.mt + f.ph - (v - y0) / (y1 - y0) * f.ph;
+    for (i, &(x, y)) in points.iter().enumerate() {
+        if !highlight.contains(&i) {
+            let _ = write!(
+                s,
+                r##"<circle cx="{:.2}" cy="{:.2}" r="2.5" fill="#9ca3af"/>"##,
+                sx(x),
+                sy(y)
+            );
+        }
+    }
+    let mut front: Vec<(f64, f64)> = highlight
+        .iter()
+        .filter_map(|&i| points.get(i).copied())
+        .collect();
+    front.sort_by(|a, b| a.0.total_cmp(&b.0));
+    if front.len() > 1 {
+        let pts: Vec<String> = front
+            .iter()
+            .map(|&(x, y)| format!("{:.2},{:.2}", sx(x), sy(y)))
+            .collect();
+        let _ = write!(
+            s,
+            r##"<polyline fill="none" stroke="#ef4444" stroke-width="1.5" points="{}"/>"##,
+            pts.join(" ")
+        );
+    }
+    for &(x, y) in &front {
+        let _ = write!(
+            s,
+            r##"<circle cx="{:.2}" cy="{:.2}" r="4" fill="#ef4444"/>"##,
+            sx(x),
+            sy(y)
         );
     }
     s.push_str("</svg>\n");
