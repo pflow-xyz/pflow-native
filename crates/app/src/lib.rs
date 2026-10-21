@@ -28,6 +28,8 @@ pub use canvas::CanvasState;
 /// path-taking menu items are disabled there.
 pub trait Services {
     fn pick_open(&self) -> Option<String>;
+    /// Open dialog for other file kinds (event logs).
+    fn pick_open_kind(&self, name: &str, exts: &[&str]) -> Option<String>;
     fn pick_save(&self, default_name: &str, ext: &str) -> Option<String>;
 }
 
@@ -274,6 +276,9 @@ impl App {
         let pick = |svc: &dyn Services, id: &str, sess: &Session| -> Option<Option<Value>> {
             Some(match id {
                 "file.open" => svc.pick_open().map(|p| json!({ "path": p })),
+                "data.load_log" => svc
+                    .pick_open_kind("Event log", &["csv", "jsonl", "ndjson", "txt"])
+                    .map(|p| json!({ "path": p })),
                 "file.save" if sess.path.is_none() => svc
                     .pick_save("net.json", "json")
                     .map(|p| json!({ "path": p })),
@@ -286,8 +291,10 @@ impl App {
                 _ => return None,
             })
         };
-        let needs_path = matches!(id, "file.open" | "export.svg" | "view.screenshot")
-            || (id == "file.save" && self.sess.path.is_none());
+        let needs_path = matches!(
+            id,
+            "file.open" | "export.svg" | "view.screenshot" | "data.load_log"
+        ) || (id == "file.save" && self.sess.path.is_none());
         match self.services.as_deref() {
             Some(svc) => match pick(svc, id, &self.sess) {
                 Some(Some(args)) => self.queue(id, args),

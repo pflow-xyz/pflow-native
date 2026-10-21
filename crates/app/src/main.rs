@@ -18,6 +18,12 @@ fn main() -> eframe::Result {
                 .pick_file()
                 .map(|p| p.display().to_string())
         }
+        fn pick_open_kind(&self, name: &str, exts: &[&str]) -> Option<String> {
+            rfd::FileDialog::new()
+                .add_filter(name, exts)
+                .pick_file()
+                .map(|p| p.display().to_string())
+        }
         fn pick_save(&self, default_name: &str, ext: &str) -> Option<String> {
             rfd::FileDialog::new()
                 .set_file_name(default_name)
