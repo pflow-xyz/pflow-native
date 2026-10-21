@@ -7,6 +7,7 @@ pub mod analysis;
 pub mod cid;
 pub mod clipboard;
 pub mod command;
+pub mod compose;
 pub mod conformance;
 pub mod data;
 pub mod details;
@@ -49,6 +50,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     conformance::SET,
     export::SET,
     models::SET,
+    compose::SET,
     macros::SET,
     command::SET,
 ];

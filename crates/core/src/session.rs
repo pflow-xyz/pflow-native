@@ -285,7 +285,13 @@ impl Session {
     /// Runs `steps` as one undo step; on the first failure everything the
     /// batch did is rolled back and the error names the failing step.
     pub fn batch(&mut self, steps: &[Step]) -> Result<Value> {
-        let before = self.snapshot("batch");
+        // A batch that sets rates undoes them too (compose.extend's
+        // set_rate ops, a macro that tunes rates).
+        let before = if steps.iter().any(|st| st.command == "sim.set_rate") {
+            self.snapshot_with_rates("batch")
+        } else {
+            self.snapshot("batch")
+        };
         let rev = self.revision;
         let view = self.view;
         let mut results = Vec::with_capacity(steps.len());
@@ -305,7 +311,8 @@ impl Session {
             }
         }
         self.depth -= 1;
-        if self.revision != rev {
+        let rates_changed = before.rates.as_ref().is_some_and(|r| *r != self.rates);
+        if self.revision != rev || rates_changed {
             self.push_undo(before);
         }
         Ok(json!({ "results": results }))
@@ -363,6 +370,27 @@ impl Session {
     }
 
     /// Applies `f` as one undoable edit; on error the session is restored.
+    /// [`Session::edit`] for edits that also change session rates
+    /// (fusing a component that declares rates): undo restores both.
+    pub(crate) fn edit_with_rates<T>(
+        &mut self,
+        label: &str,
+        f: impl FnOnce(&mut Self) -> Result<T>,
+    ) -> Result<T> {
+        let snap = self.snapshot_with_rates(label);
+        match f(self) {
+            Ok(v) => {
+                self.push_undo(snap);
+                self.touch();
+                Ok(v)
+            }
+            Err(e) => {
+                self.restore(snap);
+                Err(e)
+            }
+        }
+    }
+
     pub(crate) fn edit<T>(
         &mut self,
         label: &str,

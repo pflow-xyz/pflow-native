@@ -11,6 +11,7 @@ pub mod analysis;
 pub mod artifact;
 pub mod cid;
 pub mod commands;
+pub mod compose;
 pub mod conformance;
 pub mod doc;
 pub mod eventlog;
