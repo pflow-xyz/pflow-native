@@ -27,6 +27,7 @@ pub mod settings;
 pub mod sim;
 pub mod statespace;
 pub mod stochastic;
+pub mod store;
 pub mod systems;
 pub mod view;
 
@@ -55,6 +56,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     compose::SET,
     systems::SET,
     outbound::SET,
+    store::SET,
     macros::SET,
     command::SET,
 ];

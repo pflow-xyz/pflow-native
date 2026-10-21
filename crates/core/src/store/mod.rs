@@ -1,0 +1,1350 @@
+//! The local, persistent, content-addressed store: sim.pflow.xyz's
+//! `pkg/modelstore` semantics, as far as they make sense on one machine
+//! with one user.
+//!
+//! - **Models** are addressed by their pflow.xyz CID ([`crate::cid::seal`]),
+//!   so a model stored here has the id pflow.xyz gives it. Storing the same
+//!   net twice is the same model. Metadata (title, creation time, parents,
+//!   license, successor) lives beside the model in an index, never inside
+//!   it, for sim's reason: an envelope must not change the content's id.
+//! - **Relations** are typed edges between stored entities, under sim's
+//!   predicate registry ([`predicate`]), checked as `sim_link` checks them.
+//! - **Collections** are named groupings whose membership is `hasMember`
+//!   edges; **maps** are content-addressed key→value tables. Both get
+//!   sim's ids (sha256 of Go's canonical JSON, 24 hex; [`canon`]).
+//! - **Versioning** mirrors sim: `supersede` records the successor and a
+//!   `supersededBy` edge; migration offers list what happens to each edge
+//!   of the old model; accepting an offer writes the edge on the current
+//!   successor plus a `migratedFrom` edge back to the old one (the old edge
+//!   stays, as on sim).
+//!
+//! # One user
+//!
+//! sim checks who may write what (owners, write rules, attribution). Here
+//! the person at the keyboard owns every entity, so every ownership check
+//! passes and edges carry no `attributedTo`. Licenses stay irrevocable and
+//! a licensed model cannot be deleted, as on sim.
+//!
+//! # Layout
+//!
+//! Through a [`StoreBackend`] (files under `<data_dir>/store/` natively,
+//! memory on the web):
+//!
+//! | Key | What |
+//! |---|---|
+//! | `models/<cid>.jsonld` | the document, `@id` set to its CID |
+//! | `index.json` | `{"models": {cid: {title, created, parents, license, superseded_by, places, transitions}}}` |
+//! | `edges.json` | `{"relations": {id: {Subject, Predicate, Object, At}}}` (sim's Relation JSON) |
+//! | `collections.json` | `{"collections": {id: {Name}}}` |
+//! | `maps/<id>.json` | `{"Data": {...}}`, the canonical bytes the id is computed over |
+//!
+//! # Why a module-level handle
+//!
+//! The store is per-user state shared by every session in the process (the
+//! app's document, its control channel, an MCP session) and outlives any
+//! one document; it is not part of undo. So the commands reach it through
+//! [`open`], a process-wide handle created lazily from
+//! [`crate::outbound::data_dir`], rather than through a `Session` field.
+//! [`set_thread_store`] overrides it per thread (tests, embedders). Moving
+//! the handle into `Session` later only changes [`open`]'s callers.
+
+pub mod backend;
+pub mod canon;
+pub mod predicate;
+pub mod query;
+
+use std::collections::{BTreeMap, BTreeSet, VecDeque};
+use std::path::PathBuf;
+use std::sync::{Arc, Mutex};
+
+use serde::{de::DeserializeOwned, Deserialize, Serialize};
+use serde_json::{json, Value};
+
+pub use backend::{FsBackend, MemoryBackend, StoreBackend};
+use predicate::{Fate, Kind, Range};
+
+use crate::doc::Document;
+use crate::{Error, Result};
+
+/// Metadata kept beside a stored model (sim's lineage + ownership
+/// envelopes, minus the owner).
+#[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize)]
+pub struct ModelMeta {
+    #[serde(default)]
+    pub title: String,
+    /// Milliseconds since the epoch when first stored (0 on the web build).
+    #[serde(default)]
+    pub created: u64,
+    /// The models this one was derived from (provenance), nearest first.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub parents: Vec<String>,
+    /// A commons dedication; set once, irrevocable.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub license: Option<String>,
+    /// The model that replaces this one (`store.supersede`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub superseded_by: Option<String>,
+    #[serde(default)]
+    pub places: usize,
+    #[serde(default)]
+    pub transitions: usize,
+}
+
+/// A stored edge, in sim's `Relation` JSON shape (Go field names), so its
+/// id is computed over the same bytes sim would hash.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Relation {
+    #[serde(rename = "Subject")]
+    pub subject: String,
+    #[serde(rename = "Predicate")]
+    pub predicate: String,
+    #[serde(rename = "Object")]
+    pub object: String,
+    /// RFC 3339; Go's zero time for tool-recorded edges.
+    #[serde(rename = "At")]
+    pub at: String,
+    #[serde(
+        rename = "attributedTo",
+        default,
+        skip_serializing_if = "Option::is_none"
+    )]
+    pub attributed_to: Option<String>,
+}
+
+impl Relation {
+    pub fn new(subject: &str, predicate: &str, object: &str, at: String) -> Self {
+        Self {
+            subject: subject.into(),
+            predicate: predicate.into(),
+            object: object.into(),
+            at,
+            attributed_to: None,
+        }
+    }
+
+    /// The relation's content id.
+    pub fn id(&self) -> String {
+        canon::content_id(&serde_json::to_value(self).expect("plain strings"))
+    }
+
+    /// The edge as `store.edges` reports it.
+    pub fn to_json(&self, id: &str) -> Value {
+        json!({
+            "id": id,
+            "subject": self.subject,
+            "predicate": self.predicate,
+            "object": self.object,
+            "at": self.at,
+            "axis": predicate::axis_of(&self.predicate),
+        })
+    }
+
+    fn touches(&self, id: &str) -> bool {
+        self.subject == id || self.object == id
+    }
+
+    /// Same triple, either orientation for a symmetric predicate.
+    fn same_triple(&self, s: &str, p: &str, o: &str) -> bool {
+        self.predicate == p
+            && ((self.subject == s && self.object == o)
+                || (predicate::is_symmetric(p) && self.subject == o && self.object == s))
+    }
+}
+
+/// A named grouping (sim's `Collection` with no owner: membership is
+/// `hasMember` edges, so the id never changes when something joins).
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Collection {
+    #[serde(rename = "Name")]
+    pub name: String,
+}
+
+impl Collection {
+    pub fn id(&self) -> String {
+        canon::content_id(&serde_json::to_value(self).expect("a string"))
+    }
+}
+
+/// sim's commons-license allowlist.
+pub const LICENSES: &[&str] = &["CC0-1.0", "CC-BY-4.0", "CC-BY-SA-4.0"];
+/// sim's bound on a stored map or collection.
+pub const MAX_ENTITY_BYTES: usize = 256 * 1024;
+/// sim's supersession-chain bound (hops).
+pub const MAX_CHAIN: usize = 64;
+/// sim's bound on one accept.
+pub const MAX_ACCEPTS: usize = 25;
+
+const INDEX: &str = "index.json";
+const EDGES: &str = "edges.json";
+const COLLECTIONS: &str = "collections.json";
+
+#[derive(Default, Serialize, Deserialize)]
+struct IndexFile {
+    #[serde(default)]
+    models: BTreeMap<String, ModelMeta>,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct EdgesFile {
+    #[serde(default)]
+    relations: BTreeMap<String, Relation>,
+}
+
+#[derive(Default, Serialize, Deserialize)]
+struct CollectionsFile {
+    #[serde(default)]
+    collections: BTreeMap<String, Collection>,
+}
+
+fn model_key(cid: &str) -> String {
+    format!("models/{cid}.jsonld")
+}
+
+fn map_key(id: &str) -> String {
+    format!("maps/{id}.json")
+}
+
+/// A refusal: the request was understood and the answer is no.
+fn refuse(msg: impl Into<String>) -> Error {
+    Error::Invalid(msg.into())
+}
+
+const ID_REMEDY: &str = "pass a model's CID (store.list, file.cid) or the 24-hex id a store.* command returned for a collection, map or relation";
+
+/// Everything but the maps, read once per operation.
+pub struct Snapshot {
+    pub models: BTreeMap<String, ModelMeta>,
+    pub relations: BTreeMap<String, Relation>,
+    pub collections: BTreeMap<String, Collection>,
+    has_map: BTreeSet<String>,
+}
+
+impl Snapshot {
+    /// Which kind of stored entity `id` is, if any.
+    pub fn kind_of(&self, id: &str) -> Option<Kind> {
+        if self.models.contains_key(id) {
+            Some(Kind::Model)
+        } else if self.collections.contains_key(id) {
+            Some(Kind::Collection)
+        } else if self.has_map.contains(id) {
+            Some(Kind::Map)
+        } else if self.relations.contains_key(id) {
+            Some(Kind::Relation)
+        } else {
+            None
+        }
+    }
+
+    /// Relations touching `id`, ordered by time then id (sim's order).
+    pub fn edges_of(&self, id: &str) -> Vec<(&String, &Relation)> {
+        let mut out: Vec<_> = self
+            .relations
+            .iter()
+            .filter(|(_, r)| r.touches(id))
+            .collect();
+        sort_edges(&mut out);
+        out
+    }
+
+    /// An existing relation with this triple (either orientation when
+    /// symmetric), whatever its time; ties go to the smallest id.
+    pub fn find(&self, s: &str, p: &str, o: &str) -> Option<String> {
+        self.relations
+            .iter()
+            .find(|(_, r)| r.same_triple(s, p, o))
+            .map(|(id, _)| id.clone())
+    }
+
+    /// sim's `CheckLink`: vocabulary, then both ends, in sim's order; the
+    /// first failure is returned as a refusal.
+    pub fn check_link(&self, subject: &str, pred: &str, object: &str) -> Result<()> {
+        let linkable = predicate::linkable_names();
+        if subject.is_empty() {
+            return Err(refuse(
+                "subject is empty; pass the id of the stored entity the edge starts from",
+            ));
+        }
+        if pred.is_empty() {
+            return Err(refuse(format!(
+                "predicate is empty; store.link writes one of {linkable}"
+            )));
+        }
+        if object.is_empty() {
+            return Err(refuse("object is empty; pass the id of the stored entity the edge points to (for @type, a model kind)"));
+        }
+        let p = predicate::lookup(pred).ok_or_else(|| {
+            refuse(format!(
+                "predicate {pred:?} is not registered; store.link writes one of {linkable} (store.info lists each one's subject and object kinds)"
+            ))
+        })?;
+        if let Some(stored) = p.stored_as {
+            return Err(refuse(format!(
+                "predicate {:?} is the inverse of {stored:?} and is never stored; link it the other way round: store.link {{subject: <object>, predicate: {stored:?}, object: <subject>}}",
+                p.name
+            )));
+        }
+        if p.axis == predicate::Axis::Structural {
+            return Err(refuse(format!(
+                "predicate {:?} is structural: the edge exists only with a witness, so store.link cannot assert it; a prover (sim_prove) records it together with the witness it finds",
+                p.name
+            )));
+        }
+        if !p.writable_by(predicate::WRITER_LINK) {
+            return Err(tool_written_refusal(p));
+        }
+        self.check_end("subject", subject, p.name, p.domain)?;
+        match p.range {
+            Range::Literal(_) => {
+                if !predicate::MODEL_KINDS.contains(&object) {
+                    return Err(refuse(format!(
+                        "{:?} takes a type name from https://sim.pflow.xyz/ns/models/v1; {object:?} is not one ({})",
+                        p.name,
+                        predicate::MODEL_KINDS.join(", ")
+                    )));
+                }
+            }
+            Range::Kinds(kinds) => self.check_end("object", object, p.name, kinds)?,
+        }
+        if subject == object {
+            return Err(refuse(format!(
+                "subject and object are both {subject}; {:?} relates two different entities",
+                p.name
+            )));
+        }
+        Ok(())
+    }
+
+    fn check_end(&self, end: &str, id: &str, pred: &str, want: &[Kind]) -> Result<()> {
+        if !canon::is_model_cid(id) && !canon::is_sha24(id) {
+            return Err(refuse(format!(
+                "{end} {id:?} is not a content id; {ID_REMEDY}"
+            )));
+        }
+        match self.kind_of(id) {
+            Some(k) if want.contains(&k) => Ok(()),
+            None => Err(refuse(format!(
+                "{end} {id} is not a stored entity: no model, collection, map or relation in the local store has that id (store.put stores a model, store.collection_create a collection)"
+            ))),
+            Some(k) => {
+                let mut msg = format!(
+                    "{end} {id} is {} {}; {pred:?} needs {} as its {end}",
+                    predicate::article(k.name()),
+                    k.name(),
+                    predicate::kind_list(want)
+                );
+                if want == [Kind::Collection] {
+                    msg.push_str(" (store.collection_create makes one)");
+                }
+                Err(refuse(msg))
+            }
+        }
+    }
+
+    /// The supersession chain from `cid` to its current successor.
+    pub fn chain(&self, cid: &str) -> Chain {
+        let mut ch = Chain {
+            model: cid.into(),
+            successor: None,
+            current: None,
+            chain: vec![cid.into()],
+            status: "not-superseded",
+        };
+        let Some(first) = self.models.get(cid).and_then(|m| m.superseded_by.clone()) else {
+            return ch;
+        };
+        ch.successor = Some(first.clone());
+        let mut seen: BTreeSet<String> = [cid.to_string()].into();
+        let mut next = first;
+        loop {
+            if seen.contains(&next) {
+                ch.chain.push(next);
+                ch.status = "cycle";
+                return ch;
+            }
+            if ch.chain.len() > MAX_CHAIN {
+                ch.status = "truncated";
+                return ch;
+            }
+            ch.chain.push(next.clone());
+            seen.insert(next.clone());
+            match self.models.get(&next) {
+                None => {
+                    ch.status = "successor-deleted";
+                    return ch;
+                }
+                Some(m) => match &m.superseded_by {
+                    Some(n) => next = n.clone(),
+                    None => {
+                        ch.current = Some(next);
+                        ch.status = "complete";
+                        return ch;
+                    }
+                },
+            }
+        }
+    }
+
+    /// Collections with a `hasMember` edge to `id`.
+    pub fn collections_of(&self, id: &str) -> Vec<String> {
+        let mut out: Vec<String> = self
+            .relations
+            .values()
+            .filter(|r| r.predicate == predicate::HAS_MEMBER && r.object == id)
+            .filter_map(|r| self.collections.get(&r.subject).map(|c| c.name.clone()))
+            .collect();
+        out.sort();
+        out.dedup();
+        out
+    }
+
+    /// Every ancestor of `cid` through recorded parents (cycle-safe).
+    fn ancestry(&self, cid: &str) -> BTreeSet<String> {
+        let mut seen = BTreeSet::new();
+        let mut queue: VecDeque<String> = [cid.to_string()].into();
+        while let Some(cur) = queue.pop_front() {
+            for p in self
+                .models
+                .get(&cur)
+                .map(|m| m.parents.as_slice())
+                .unwrap_or(&[])
+            {
+                if seen.insert(p.clone()) {
+                    queue.push_back(p.clone());
+                }
+            }
+        }
+        seen
+    }
+}
+
+pub(crate) fn sort_edges(edges: &mut [(&String, &Relation)]) {
+    edges.sort_by(|a, b| (canon::time_key(&a.1.at), a.0).cmp(&(canon::time_key(&b.1.at), b.0)));
+}
+
+fn tool_written_refusal(p: &predicate::Predicate) -> Error {
+    refuse(match p.name {
+        "from" | "to" | "feeds" => format!(
+            "predicate {:?} is recorded only by sim_bind, together with the binding it describes; the local store keeps no bindings (system.bind binds library models)",
+            p.name
+        ),
+        "produced" => format!(
+            "predicate {:?} is recorded only by sim_prompt and sim_reroll, for the result a prompt actually returned; store.link cannot assert it",
+            p.name
+        ),
+        predicate::SUPERSEDED_BY => format!(
+            "predicate {:?} is recorded only by store.supersede (sim_supersede_model); call store.supersede {{old, new}} instead",
+            p.name
+        ),
+        predicate::MIGRATED_FROM => format!(
+            "predicate {:?} is recorded only by store.accept_migration, which checks that the edge it carries is offered; call store.migration_offers and store.accept_migration instead",
+            p.name
+        ),
+        _ => format!(
+            "predicate {:?} is recorded only by {}; store.link cannot assert it",
+            p.name,
+            p.written_by.join(" and ")
+        ),
+    })
+}
+
+/// A model's supersession chain (sim's `SupersessionChain`).
+#[derive(Debug, Clone, Serialize)]
+pub struct Chain {
+    pub model: String,
+    pub successor: Option<String>,
+    /// The terminal successor, only when `status` is "complete".
+    pub current: Option<String>,
+    pub chain: Vec<String>,
+    /// complete | not-superseded | cycle | truncated | successor-deleted
+    pub status: &'static str,
+}
+
+impl Chain {
+    fn note(&self) -> String {
+        let last = self.chain.last().cloned().unwrap_or_default();
+        match self.status {
+            "cycle" => format!(
+                "the supersession chain from {} cycles ({}), so it has no current successor and nothing can be migrated; store.supersede one of these onto a model outside the cycle",
+                self.model,
+                self.chain.join(" → ")
+            ),
+            "truncated" => format!(
+                "the supersession chain from {} is longer than {MAX_CHAIN} hops (stopped at {last}); store.supersede {{old: {}, new: <latest>}} points it straight at the current version",
+                self.model, self.model
+            ),
+            "successor-deleted" => format!(
+                "the current successor of {}, {last}, is no longer stored, so nothing can be migrated to it; store.supersede it onto a stored model",
+                self.model
+            ),
+            _ => String::new(),
+        }
+    }
+}
+
+/// The store: a backend plus a lock that serializes this process's writes.
+/// Every operation reads what it needs from the backend, so two handles on
+/// one directory see each other's writes (last writer wins between
+/// processes).
+pub struct Store {
+    backend: Box<dyn StoreBackend>,
+    write: Mutex<()>,
+}
+
+impl Store {
+    pub fn new(backend: impl StoreBackend + 'static) -> Self {
+        Self {
+            backend: Box::new(backend),
+            write: Mutex::new(()),
+        }
+    }
+
+    pub fn memory() -> Self {
+        Self::new(MemoryBackend::new())
+    }
+
+    pub fn filesystem(root: impl Into<PathBuf>) -> Self {
+        Self::new(FsBackend::new(root))
+    }
+
+    pub fn location(&self) -> String {
+        self.backend.location()
+    }
+
+    fn lock(&self) -> std::sync::MutexGuard<'_, ()> {
+        self.write.lock().unwrap_or_else(|e| e.into_inner())
+    }
+
+    fn load<T: DeserializeOwned + Default>(&self, key: &str) -> Result<T> {
+        match self.backend.get(key)? {
+            None => Ok(T::default()),
+            Some(b) => {
+                serde_json::from_slice(&b).map_err(|e| Error::Parse(format!("store {key}: {e}")))
+            }
+        }
+    }
+
+    fn save<T: Serialize>(&self, key: &str, v: &T) -> Result<()> {
+        let mut text = serde_json::to_string_pretty(v).expect("serializable");
+        text.push('\n');
+        self.backend.put(key, text.as_bytes())
+    }
+
+    fn save_models(&self, models: &BTreeMap<String, ModelMeta>) -> Result<()> {
+        self.save(INDEX, &json!({ "models": models }))
+    }
+
+    fn save_relations(&self, relations: &BTreeMap<String, Relation>) -> Result<()> {
+        self.save(EDGES, &json!({ "relations": relations }))
+    }
+
+    /// Reads the index, the edges and the collections, and lists the maps.
+    pub fn snapshot(&self) -> Result<Snapshot> {
+        let index: IndexFile = self.load(INDEX)?;
+        let edges: EdgesFile = self.load(EDGES)?;
+        let cols: CollectionsFile = self.load(COLLECTIONS)?;
+        Ok(Snapshot {
+            models: index.models,
+            relations: edges.relations,
+            collections: cols.collections,
+            has_map: self.list_maps()?.into_iter().collect(),
+        })
+    }
+
+    // ---- models ----
+
+    /// Seals and stores a document. Idempotent by CID: a second put of the
+    /// same net returns `existed: true` and keeps the first metadata (a
+    /// missing title or parent list is filled in).
+    pub fn put_model(
+        &self,
+        doc: &Document,
+        title: Option<&str>,
+        parents: Option<Vec<String>>,
+    ) -> Result<Value> {
+        let _g = self.lock();
+        let mut v = doc.to_value();
+        let cid = crate::cid::seal(&v)?;
+        if let Value::Object(m) = &mut v {
+            m.insert("@id".into(), json!(cid));
+        }
+        let snap = self.snapshot()?;
+        let mut models = snap.models.clone();
+        // Parents: as given, else the document's own `parents` field.
+        let mut parents = parents.unwrap_or_else(|| {
+            doc.extra
+                .get("parents")
+                .and_then(Value::as_array)
+                .map(|a| {
+                    a.iter()
+                        .filter_map(|p| p.as_str().map(str::to_string))
+                        .collect()
+                })
+                .unwrap_or_default()
+        });
+        for p in &parents {
+            if !canon::is_model_cid(p) {
+                return Err(Error::BadArgs(format!(
+                    "parent {p:?} is not a model CID (z…, as file.cid returns)"
+                )));
+            }
+        }
+        let mut notes = vec![];
+        let mut dedup = BTreeSet::new();
+        parents.retain(|p| {
+            if p == &cid {
+                notes.push(format!("{p} is this model itself; not recorded as its parent"));
+                return false;
+            }
+            if snap.ancestry(p).contains(&cid) {
+                notes.push(format!(
+                    "{p} descends from this model; recording it as a parent would close a cycle, so it was not"
+                ));
+                return false;
+            }
+            dedup.insert(p.clone())
+        });
+        if self.backend.get(&model_key(&cid))?.is_none() {
+            let mut text = serde_json::to_string_pretty(&v).expect("json");
+            text.push('\n');
+            self.backend.put(&model_key(&cid), text.as_bytes())?;
+        }
+        let existed = models.contains_key(&cid);
+        let meta = models.entry(cid.clone()).or_insert_with(|| ModelMeta {
+            created: canon::now_ms(),
+            ..Default::default()
+        });
+        let before = meta.clone();
+        if meta.title.is_empty() {
+            meta.title = title
+                .map(str::to_string)
+                .or_else(|| {
+                    doc.extra
+                        .get("name")
+                        .and_then(Value::as_str)
+                        .map(str::to_string)
+                })
+                .unwrap_or_default();
+        }
+        if meta.parents.is_empty() {
+            meta.parents = parents;
+        } else if !parents.is_empty() && meta.parents != parents {
+            notes.push("this model's parents were recorded when it was first stored; the first record stands".into());
+        }
+        meta.places = doc.places.len();
+        meta.transitions = doc.transitions.len();
+        let meta = meta.clone();
+        if !existed || meta != before {
+            self.save_models(&models)?;
+        }
+        let mut out = json!({
+            "cid": cid,
+            "existed": existed,
+            "title": meta.title,
+            "parents": meta.parents,
+            "created": meta.created,
+        });
+        if !notes.is_empty() {
+            out["notes"] = json!(notes);
+        }
+        Ok(out)
+    }
+
+    /// The stored document (with `@id` = its CID).
+    pub fn get_model(&self, cid: &str) -> Result<Value> {
+        let bytes = self.backend.get(&model_key(cid))?.ok_or_else(|| {
+            Error::NotFound(format!("no model {cid} in the local store (store.list)"))
+        })?;
+        serde_json::from_slice(&bytes).map_err(|e| Error::Parse(format!("stored model {cid}: {e}")))
+    }
+
+    pub fn model_meta(&self, cid: &str) -> Result<Option<ModelMeta>> {
+        Ok(self.load::<IndexFile>(INDEX)?.models.remove(cid))
+    }
+
+    /// Removes a model. Refused for a licensed model (the dedication is
+    /// irrevocable) and, unless `force`, for one any edge names. Edges are
+    /// immutable records and are kept either way; re-storing the same net
+    /// revives them.
+    pub fn delete_model(&self, cid: &str, force: bool) -> Result<Value> {
+        let _g = self.lock();
+        let snap = self.snapshot()?;
+        let meta = snap.models.get(cid).ok_or_else(|| {
+            Error::NotFound(format!("no model {cid} in the local store (store.list)"))
+        })?;
+        if let Some(l) = &meta.license {
+            return Err(refuse(format!(
+                "model {cid} was dedicated to the commons under {l}; the dedication is irrevocable, so the model stays"
+            )));
+        }
+        let edges = snap.edges_of(cid);
+        if !edges.is_empty() && !force {
+            let ids: Vec<&str> = edges.iter().take(5).map(|(id, _)| id.as_str()).collect();
+            return Err(refuse(format!(
+                "model {cid} is named by {} edge(s) ({}{}); pass force: true to delete it anyway (the edges stay, naming a model that is no longer stored)",
+                edges.len(),
+                ids.join(", "),
+                if edges.len() > 5 { ", …" } else { "" }
+            )));
+        }
+        let referenced_by: Vec<&String> = snap
+            .models
+            .iter()
+            .filter(|(_, m)| m.superseded_by.as_deref() == Some(cid))
+            .map(|(id, _)| id)
+            .collect();
+        let mut models = snap.models.clone();
+        models.remove(cid);
+        self.backend.delete(&model_key(cid))?;
+        self.save_models(&models)?;
+        Ok(json!({
+            "deleted": cid,
+            "dangling_edges": edges.len(),
+            "successor_of": referenced_by,
+        }))
+    }
+
+    // ---- relations ----
+
+    /// `store.link`: [`Snapshot::check_link`], then reuse an existing edge
+    /// with the same triple or store a new one stamped now.
+    pub fn link(&self, subject: &str, pred: &str, object: &str) -> Result<Value> {
+        let _g = self.lock();
+        let snap = self.snapshot()?;
+        snap.check_link(subject, pred, object)?;
+        self.put_edge_locked(snap, subject, pred, object, canon::rfc3339(canon::now_ms()))
+    }
+
+    /// Records an edge as one of sim's tools would (`writer` must be in
+    /// the predicate's `writtenBy`), with the zero time, so its id depends
+    /// on its ends alone. Both ends must be stored entities of the
+    /// predicate's kinds. This is the door for a local prover
+    /// (`sim_prove`) to record structural edges.
+    pub fn put_edge_as(
+        &self,
+        writer: &str,
+        subject: &str,
+        pred: &str,
+        object: &str,
+    ) -> Result<Value> {
+        let _g = self.lock();
+        let snap = self.snapshot()?;
+        let p = predicate::lookup(pred)
+            .filter(|p| p.stored_as.is_none())
+            .ok_or_else(|| {
+                refuse(format!(
+                    "predicate {pred:?} is not a stored registered predicate"
+                ))
+            })?;
+        if !p.writable_by(writer) {
+            return Err(refuse(format!(
+                "predicate {pred:?} is not written by {writer}"
+            )));
+        }
+        snap.check_end("subject", subject, p.name, p.domain)?;
+        if let Range::Kinds(k) = p.range {
+            snap.check_end("object", object, p.name, k)?;
+        }
+        self.put_edge_locked(snap, subject, pred, object, canon::ZERO_TIME.into())
+    }
+
+    fn put_edge_locked(
+        &self,
+        snap: Snapshot,
+        subject: &str,
+        pred: &str,
+        object: &str,
+        at: String,
+    ) -> Result<Value> {
+        let axis = predicate::axis_of(pred);
+        if let Some(id) = snap.find(subject, pred, object) {
+            return Ok(
+                json!({"id": id, "subject": subject, "predicate": pred, "object": object, "axis": axis, "existing": true}),
+            );
+        }
+        let rel = Relation::new(subject, pred, object, at);
+        let id = rel.id();
+        let mut relations = snap.relations;
+        relations.insert(id.clone(), rel);
+        self.save_relations(&relations)?;
+        Ok(
+            json!({"id": id, "subject": subject, "predicate": pred, "object": object, "axis": axis, "existing": false}),
+        )
+    }
+
+    /// Every relation touching `id`, optionally one predicate's.
+    pub fn edges(&self, id: &str, pred: Option<&str>) -> Result<Vec<Value>> {
+        let snap = self.snapshot()?;
+        if let Some(p) = pred {
+            check_filter_predicate(&snap, p, false)?;
+        }
+        Ok(snap
+            .edges_of(id)
+            .into_iter()
+            .filter(|(_, r)| pred.is_none_or(|p| r.predicate == p))
+            .map(|(rid, r)| r.to_json(rid))
+            .collect())
+    }
+
+    /// One hop from `id`, read through the registry as sim_neighbors does:
+    /// no predicate = the objects of every edge out of `id`; an inverse
+    /// name reads its stored predicate backwards; a symmetric one counts
+    /// both directions. `direction` ("out" default, "in", "both") turns
+    /// the reading round or widens it. Ordered by time, then edge id; not
+    /// de-duplicated.
+    pub fn neighbors(
+        &self,
+        id: &str,
+        pred: Option<&str>,
+        direction: Option<&str>,
+    ) -> Result<Vec<String>> {
+        let snap = self.snapshot()?;
+        let pred = pred.filter(|p| !p.is_empty());
+        if let Some(p) = pred {
+            check_filter_predicate(&snap, p, true)?;
+        }
+        let (stored, mut fwd, mut back) = match pred.and_then(predicate::lookup) {
+            Some(p) if p.stored_as.is_some() => (p.stored_as, false, true),
+            Some(p) if p.symmetric => (Some(p.name), true, true),
+            Some(p) => (Some(p.name), true, false),
+            None => (pred, true, false),
+        };
+        match direction.unwrap_or("out") {
+            "out" => {}
+            "in" => std::mem::swap(&mut fwd, &mut back),
+            "both" => (fwd, back) = (true, true),
+            d => {
+                return Err(Error::BadArgs(format!(
+                    "direction {d:?} is not one of out, in, both"
+                )))
+            }
+        }
+        let mut hits: Vec<(&String, &Relation, String)> = vec![];
+        let mut counted = BTreeSet::new();
+        for (rid, r) in &snap.relations {
+            if stored.is_some_and(|p| r.predicate != p) {
+                continue;
+            }
+            if fwd && r.subject == id {
+                counted.insert(rid);
+                hits.push((rid, r, r.object.clone()));
+            }
+            if back && r.object == id && !counted.contains(rid) {
+                hits.push((rid, r, r.subject.clone()));
+            }
+        }
+        hits.sort_by(|a, b| (canon::time_key(&a.1.at), a.0).cmp(&(canon::time_key(&b.1.at), b.0)));
+        Ok(hits.into_iter().map(|(_, _, n)| n).collect())
+    }
+
+    // ---- collections ----
+
+    /// Creates (or finds: the id is the name's) a collection.
+    pub fn create_collection(&self, name: &str) -> Result<Value> {
+        if name.is_empty() {
+            return Err(Error::BadArgs(
+                "name is empty; a collection is named, and the name is its content id".into(),
+            ));
+        }
+        let _g = self.lock();
+        let mut cols: CollectionsFile = self.load(COLLECTIONS)?;
+        let c = Collection { name: name.into() };
+        let bytes = canon::go_json(&serde_json::to_value(&c).expect("a string"));
+        if bytes.len() > MAX_ENTITY_BYTES {
+            return Err(Error::BadArgs(format!(
+                "collection rejected: {} bytes exceeds the {MAX_ENTITY_BYTES} byte limit",
+                bytes.len()
+            )));
+        }
+        let id = c.id();
+        let existed = cols.collections.contains_key(&id);
+        if !existed {
+            cols.collections.insert(id.clone(), c);
+            self.save(COLLECTIONS, &cols)?;
+        }
+        Ok(json!({"id": id, "name": name, "existed": existed}))
+    }
+
+    /// A collection id from an id or a name.
+    pub fn resolve_collection(&self, id_or_name: &str) -> Result<String> {
+        let cols: CollectionsFile = self.load(COLLECTIONS)?;
+        if cols.collections.contains_key(id_or_name) {
+            return Ok(id_or_name.into());
+        }
+        let id = Collection {
+            name: id_or_name.into(),
+        }
+        .id();
+        if cols.collections.contains_key(&id) {
+            return Ok(id);
+        }
+        Err(Error::NotFound(format!(
+            "no collection {id_or_name:?} (by id or name); store.collection_create makes one"
+        )))
+    }
+
+    // ---- licenses and versions ----
+
+    /// Dedicates a model to the commons. Irrevocable: a second license,
+    /// even the same one, is refused.
+    pub fn set_license(&self, cid: &str, license: &str) -> Result<Value> {
+        let _g = self.lock();
+        let mut index: IndexFile = self.load(INDEX)?;
+        let meta = index.models.get_mut(cid).ok_or_else(|| {
+            Error::NotFound(format!("no model {cid} in the local store (store.list)"))
+        })?;
+        if let Some(l) = &meta.license {
+            return Err(refuse(format!(
+                "model {cid} is already dedicated under {l}, and a commons dedication is irrevocable"
+            )));
+        }
+        if !LICENSES.contains(&license) {
+            return Err(Error::BadArgs(format!(
+                "license must be one of {}",
+                LICENSES.join(", ")
+            )));
+        }
+        meta.license = Some(license.into());
+        self.save_models(&index.models)?;
+        Ok(json!({"cid": cid, "license": license}))
+    }
+
+    /// Marks `old` as replaced by `new` and records the `supersededBy`
+    /// edge (zero time, so a retry converges on one edge). Re-pointing is
+    /// allowed; cycles are reported by the chain walk, not refused.
+    pub fn supersede(&self, old: &str, new: &str) -> Result<Value> {
+        if old == new {
+            return Err(refuse("a model cannot supersede itself"));
+        }
+        let snap = self.snapshot()?;
+        for (end, id) in [("model", old), ("successor", new)] {
+            if !snap.models.contains_key(id) {
+                return Err(Error::NotFound(format!(
+                    "{end} {id} is not a stored model (store.put stores one)"
+                )));
+            }
+        }
+        {
+            let _g = self.lock();
+            let mut index: IndexFile = self.load(INDEX)?;
+            if let Some(m) = index.models.get_mut(old) {
+                m.superseded_by = Some(new.into());
+            }
+            self.save_models(&index.models)?;
+        }
+        let edge = self.put_edge_as(
+            predicate::WRITER_SUPERSEDE,
+            old,
+            predicate::SUPERSEDED_BY,
+            new,
+        )?;
+        let snap = self.snapshot()?;
+        let (mut offered, mut stays) = (0, 0);
+        for (_, r) in snap.edges_of(old) {
+            if Fate::of(&r.predicate) == Fate::Offered {
+                offered += 1;
+            } else {
+                stays += 1;
+            }
+        }
+        Ok(json!({
+            "old": old,
+            "new": new,
+            "edge": edge["id"],
+            "chain": snap.chain(old),
+            "edges": {"offered": offered, "stays": stays},
+            "note": "the old model's edges stay where they are; store.migration_offers lists those that can be carried to the successor",
+        }))
+    }
+
+    /// What supersession does to every edge touching `cid` (sim's
+    /// `MigrationOffers`, unpaged): offered taxonomic edges with their
+    /// proposed form on the current successor and the link check on it
+    /// now; tool-written, structural and unregistered edges stay.
+    pub fn migration_offers(&self, cid: &str, pred: Option<&str>) -> Result<Value> {
+        let snap = self.snapshot()?;
+        let ch = migration_chain(&snap, cid)?;
+        if let Some(p) = pred {
+            check_filter_predicate(&snap, p, false)?;
+        }
+        let complete = ch.status == "complete";
+        let target = ch
+            .current
+            .clone()
+            .unwrap_or_else(|| "the current successor".into());
+        let mut rows = vec![];
+        let (mut offered, mut stays) = (0, 0);
+        for (eid, r) in snap.edges_of(cid) {
+            if pred.is_some_and(|p| r.predicate != p) {
+                continue;
+            }
+            let fate = Fate::of(&r.predicate);
+            let mut row = r.to_json(eid);
+            row["class"] = json!(fate.name());
+            if fate != Fate::Offered {
+                stays += 1;
+                row["disposition"] = json!("stays");
+                row["reason"] = json!(stay_reason(r, cid, &target));
+                rows.push(row);
+                continue;
+            }
+            offered += 1;
+            row["disposition"] = json!("offered");
+            let migrations = migrations_of(&snap, eid);
+            row["migrations"] = json!(migrations);
+            if !complete {
+                row["status"] = json!("no-target");
+                rows.push(row);
+                continue;
+            }
+            let (ps, po) = (
+                swap_end(&r.subject, cid, &target),
+                swap_end(&r.object, cid, &target),
+            );
+            row["proposed"] = json!({"subject": ps, "predicate": r.predicate, "object": po});
+            row["check"] = match snap.check_link(&ps, &r.predicate, &po) {
+                Ok(()) => json!({"result": "passes"}),
+                Err(e) => json!({"result": "refused", "message": e.to_string()}),
+            };
+            let accepted = migrations.iter().any(|m| {
+                snap.relations
+                    .get(m["migrated"].as_str().unwrap_or(""))
+                    .is_some_and(|mr| mr.same_triple(&ps, &r.predicate, &po))
+            });
+            row["status"] = json!(if accepted { "accepted" } else { "pending" });
+            rows.push(row);
+        }
+        let note = if complete {
+            format!(
+                "{cid}'s edges stay where they are; accepting an offer (store.accept_migration) adds the proposed edge on {target} with a migratedFrom edge pointing back"
+            )
+        } else {
+            ch.note()
+        };
+        Ok(json!({
+            "model": cid,
+            "successor": ch.successor,
+            "current": ch.current,
+            "chain": ch.chain,
+            "chainStatus": ch.status,
+            "predicate": pred,
+            "note": note,
+            "edges": rows,
+            "counts": {"offered": offered, "stays": stays, "total": offered + stays},
+        }))
+    }
+
+    /// Carries offered edges of a superseded model forward to its current
+    /// successor (sim's `AcceptMigration`): every edge is checked before
+    /// anything is written, and one refusal refuses the call. Each accepted
+    /// edge is written with the zero time (reusing an existing edge with
+    /// the same triple), then a `migratedFrom` edge from it to the old
+    /// edge, so a re-run converges on the same ids. `edges` defaults to
+    /// every pending offer.
+    pub fn accept_migration(
+        &self,
+        old: &str,
+        successor: Option<&str>,
+        edges: Option<Vec<String>>,
+    ) -> Result<Value> {
+        let snap = self.snapshot()?;
+        let ch = migration_chain(&snap, old)?;
+        if ch.status != "complete" {
+            return Err(refuse(format!("{} Nothing was migrated.", ch.note())));
+        }
+        let target = ch.current.clone().expect("complete chain");
+        if let Some(s) = successor.filter(|s| *s != target) {
+            return Err(refuse(format!(
+                "the current successor of {old} is {target} (chain {}), not {s}; accept against {target}. Nothing was migrated.",
+                ch.chain.join(" → ")
+            )));
+        }
+        let ids = match edges {
+            Some(ids) => {
+                if ids.is_empty() || ids.len() > MAX_ACCEPTS {
+                    return Err(Error::BadArgs(format!(
+                        "edges must list 1 to {MAX_ACCEPTS} relation ids from store.migration_offers; got {}. Nothing was migrated",
+                        ids.len()
+                    )));
+                }
+                for (i, id) in ids.iter().enumerate() {
+                    if !canon::is_sha24(id) {
+                        return Err(Error::BadArgs(format!(
+                            "edges[{i}] is {id:?}, not a relation id (24 lowercase hex characters); nothing was migrated"
+                        )));
+                    }
+                    if let Some(j) = ids[..i].iter().position(|x| x == id) {
+                        return Err(Error::BadArgs(format!(
+                            "edges[{i}] repeats edges[{j}] ({id}); list each edge once. Nothing was migrated"
+                        )));
+                    }
+                }
+                ids
+            }
+            None => {
+                let offers = self.migration_offers(old, None)?;
+                let pending: Vec<String> = offers["edges"]
+                    .as_array()
+                    .into_iter()
+                    .flatten()
+                    .filter(|r| r["status"] == "pending" && r["check"]["result"] == "passes")
+                    .filter_map(|r| r["id"].as_str().map(str::to_string))
+                    .collect();
+                if pending.is_empty() {
+                    return Err(refuse(format!(
+                        "{old} has no pending offer that passes the link check; store.migration_offers lists them. Nothing was migrated"
+                    )));
+                }
+                pending
+            }
+        };
+        let mut refusals = vec![];
+        let mut olds = vec![];
+        for id in &ids {
+            let Some(r) = snap.relations.get(id) else {
+                refusals.push(format!(
+                    "edge {id} is not a stored relation; pass an edge id store.migration_offers listed"
+                ));
+                continue;
+            };
+            if !r.touches(old) {
+                refusals.push(format!(
+                    "edge {id} does not touch {old}: it relates {} and {}",
+                    r.subject, r.object
+                ));
+                continue;
+            }
+            if Fate::of(&r.predicate) != Fate::Offered {
+                refusals.push(format!(
+                    "edge {id} stays with {old} and is never migrated — {}",
+                    stay_reason(r, old, &target)
+                ));
+                continue;
+            }
+            let (ps, po) = (
+                swap_end(&r.subject, old, &target),
+                swap_end(&r.object, old, &target),
+            );
+            if let Err(e) = snap.check_link(&ps, &r.predicate, &po) {
+                refusals.push(format!(
+                    "edge {id} cannot be migrated: the edge it would become ({ps} {} {po}) is refused by the same check store.link applies: {e}",
+                    r.predicate
+                ));
+                continue;
+            }
+            olds.push((id.clone(), ps, r.predicate.clone(), po));
+        }
+        if !refusals.is_empty() {
+            return Err(refuse(format!(
+                "nothing was migrated: {} of the {} edges you listed cannot be accepted — {}",
+                refusals.len(),
+                ids.len(),
+                refusals.join("; ")
+            )));
+        }
+        let _g = self.lock();
+        let mut relations = self.snapshot()?.relations;
+        let mut migrated = vec![];
+        for (id, ps, p, po) in olds {
+            let found = relations
+                .iter()
+                .find(|(_, r)| r.same_triple(&ps, &p, &po))
+                .map(|(k, _)| k.clone());
+            let existing = found.is_some();
+            let mid = found.unwrap_or_else(|| {
+                let rel = Relation::new(&ps, &p, &po, canon::ZERO_TIME.into());
+                let mid = rel.id();
+                relations.insert(mid.clone(), rel);
+                mid
+            });
+            let prov = Relation::new(&mid, predicate::MIGRATED_FROM, &id, canon::ZERO_TIME.into());
+            let pid = prov.id();
+            relations.entry(pid.clone()).or_insert(prov);
+            migrated.push(
+                json!({"edge": id, "migrated": mid, "provenance": pid, "existing": existing}),
+            );
+        }
+        self.save_relations(&relations)?;
+        Ok(json!({"model": old, "successor": target, "chain": ch.chain, "migrated": migrated}))
+    }
+
+    // ---- maps ----
+
+    /// Stores a key→value table; the id is sim's (`{"Data": data}`'s
+    /// canonical bytes), so key order does not matter.
+    pub fn put_map(&self, data: &Value) -> Result<Value> {
+        if !data.is_object() {
+            return Err(Error::BadArgs(
+                "data must be a JSON object (key → value)".into(),
+            ));
+        }
+        let bytes = canon::go_json(&json!({ "Data": data }));
+        if bytes.len() > MAX_ENTITY_BYTES {
+            return Err(Error::BadArgs(format!(
+                "map rejected: {} bytes exceeds the {MAX_ENTITY_BYTES} byte limit",
+                bytes.len()
+            )));
+        }
+        let id = canon::sha24(bytes.as_bytes());
+        let _g = self.lock();
+        let existed = self.backend.get(&map_key(&id))?.is_some();
+        if !existed {
+            self.backend.put(&map_key(&id), bytes.as_bytes())?;
+        }
+        Ok(json!({"id": id, "existed": existed, "keys": data.as_object().map_or(0, |m| m.len())}))
+    }
+
+    /// The table stored under `id` (its `Data`).
+    pub fn get_map(&self, id: &str) -> Result<Value> {
+        let bytes = self
+            .backend
+            .get(&map_key(id))?
+            .ok_or_else(|| Error::NotFound(format!("no map {id:?} (store.map_list)")))?;
+        let v: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| Error::Parse(format!("stored map {id}: {e}")))?;
+        Ok(v.get("Data").cloned().unwrap_or(Value::Null))
+    }
+
+    pub fn list_maps(&self) -> Result<Vec<String>> {
+        Ok(self
+            .backend
+            .list("maps/")?
+            .into_iter()
+            .filter_map(|k| {
+                k.strip_prefix("maps/")
+                    .and_then(|n| n.strip_suffix(".json"))
+                    .map(str::to_string)
+            })
+            .collect())
+    }
+}
+
+/// A predicate filter must be registered and stored, or used by an edge.
+/// An inverse-only name (narrower) is refused where `inverse` is false:
+/// it is never stored, so filtering stored edges by it finds nothing.
+fn check_filter_predicate(snap: &Snapshot, p: &str, inverse: bool) -> Result<()> {
+    match predicate::lookup(p) {
+        Some(pr) if pr.stored_as.is_some() && !inverse => Err(Error::BadArgs(format!(
+            "predicate {p:?} is {} read backwards and is never stored, so no edge carries it; pass predicate {:?}, which lists those edges in either direction",
+            pr.stored_as.unwrap_or_default(),
+            pr.stored_as.unwrap_or_default()
+        ))),
+        Some(_) => Ok(()),
+        None if snap.relations.values().any(|r| r.predicate == p) => Ok(()),
+        None => Err(Error::BadArgs(format!(
+            "predicate {p:?} is not registered and no stored edge uses it; registered predicates are {}",
+            predicate::registered_names()
+        ))),
+    }
+}
+
+/// The model check and chain walk shared by offers and accept.
+fn migration_chain(snap: &Snapshot, cid: &str) -> Result<Chain> {
+    match snap.kind_of(cid) {
+        None => {
+            return Err(Error::NotFound(format!(
+                "model {cid} is not stored: no entity has that id (store.list)"
+            )))
+        }
+        Some(Kind::Model) => {}
+        Some(k) => {
+            return Err(refuse(format!(
+                "{cid} is {} {}, not a model; migration offers are about models superseded with store.supersede",
+                predicate::article(k.name()),
+                k.name()
+            )))
+        }
+    }
+    let ch = snap.chain(cid);
+    if ch.status == "not-superseded" {
+        return Err(refuse(format!(
+            "model {cid} is not superseded: its metadata names no successor, so none of its edges has anywhere to go; store.supersede {{old, new}} records one"
+        )));
+    }
+    Ok(ch)
+}
+
+fn swap_end(end: &str, a: &str, t: &str) -> String {
+    if end == a { t } else { end }.to_string()
+}
+
+/// Earlier acceptances of an edge: `migratedFrom` edges pointing at it.
+fn migrations_of(snap: &Snapshot, eid: &str) -> Vec<Value> {
+    snap.relations
+        .iter()
+        .filter(|(_, r)| r.predicate == predicate::MIGRATED_FROM && r.object == eid)
+        .map(|(pid, r)| {
+            let m = snap.relations.get(&r.subject);
+            json!({
+                "migrated": r.subject,
+                "provenance": pid,
+                "subject": m.map(|m| &m.subject),
+                "predicate": m.map(|m| &m.predicate),
+                "object": m.map(|m| &m.object),
+            })
+        })
+        .collect()
+}
+
+fn stay_reason(r: &Relation, a: &str, t: &str) -> String {
+    let (s2, o2) = (swap_end(&r.subject, a, t), swap_end(&r.object, a, t));
+    match Fate::of(&r.predicate) {
+        Fate::Structural => format!(
+            "structural: proved against {a}'s exact structure; it says nothing about {t}. A prover (sim_prove {s2} {} {o2}) records a new edge only if it finds a witness",
+            r.predicate
+        ),
+        Fate::Unregistered => format!(
+            "predicate {:?} predates the registry and is not offered; store.link under a registered predicate ({}) asserts the successor's edge afresh",
+            r.predicate,
+            predicate::linkable_names()
+        ),
+        _ => match r.predicate.as_str() {
+            predicate::SUPERSEDED_BY => {
+                "version history: supersededBy stays with the models it relates".into()
+            }
+            _ => format!(
+                "recorded only by {}; it stays with {a}",
+                predicate::lookup(&r.predicate)
+                    .map(|p| p.written_by.join(" and "))
+                    .unwrap_or_default()
+            ),
+        },
+    }
+}
+
+// ---- the process-wide handle ----
+
+static GLOBAL: Mutex<Option<(Option<PathBuf>, Arc<Store>)>> = Mutex::new(None);
+
+thread_local! {
+    static OVERRIDE: std::cell::RefCell<Option<Arc<Store>>> = const { std::cell::RefCell::new(None) };
+}
+
+/// The store the `store.*` commands use: this thread's override if set,
+/// else the process-wide store under `<data_dir>/store/` (re-created when
+/// `PFLOW_NATIVE_HOME` changes), else (the web build, no data dir) a
+/// process-wide memory store.
+pub fn open() -> Arc<Store> {
+    if let Some(s) = OVERRIDE.with(|o| o.borrow().clone()) {
+        return s;
+    }
+    let dir = crate::outbound::data_dir().map(|d| d.join("store"));
+    let mut g = GLOBAL.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some((d, s)) = &*g {
+        if *d == dir {
+            return s.clone();
+        }
+    }
+    let s = Arc::new(match &dir {
+        Some(d) => Store::filesystem(d),
+        None => Store::memory(),
+    });
+    *g = Some((dir, s.clone()));
+    s
+}
+
+/// Makes `store` this thread's store (tests inject a memory or temporary
+/// directory store this way); `None` clears the override. Returns the
+/// previous override.
+pub fn set_thread_store(store: Option<Arc<Store>>) -> Option<Arc<Store>> {
+    OVERRIDE.with(|o| std::mem::replace(&mut *o.borrow_mut(), store))
+}
