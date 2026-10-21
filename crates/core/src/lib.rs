@@ -16,6 +16,7 @@ pub mod layout;
 pub mod registry;
 pub mod session;
 pub mod sim;
+pub mod stochastic;
 pub mod sweep;
 
 pub use artifact::{Artifact, ArtifactData};
