@@ -11,7 +11,7 @@ How to read it:
 - **Source:** where the feature lives today. `pv:` means `petri-view.js` line numbers; `sim_*` is the MCP tool name.
 - **Native:** the registry command(s) and/or the view that will carry the feature (see `ARCHITECTURE.md`).
 - **Backing:** the pflow-rs crate that does the work. **port** means pflow-rs has no equivalent yet; **remote** means it calls sim.pflow.xyz.
-- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0.
+- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0.
 
 ## Phases
 
@@ -80,7 +80,7 @@ How to read it:
 | Place checkboxes on plot, legend toggle, hover | pv:593 | TimeSeries view; `sim.ode {places}` / `opt.rate_scan {places}` filter | app | 3 | 🟡 legend toggle + hover; places filter in core |
 | Rate scan (steady state vs rate) | pv:5268 | `opt.rate_scan {transition, from, to, steps≤25, t_end=50}` → TimeSeries(x=rate) | pflow-solver | 3 | ✅ value at t_end, as the editor (not detected equilibrium) |
 | Sweep (one place across rates) | pv:5268 | `opt.sweep {transition, place, from, to, steps≤25}` → TimeSeries overlay, group `k=<rate>` | pflow-solver | 3 | ✅ runs resampled onto one time grid |
-| Phase plot | pv:5268 | Phase view over a TimeSeries | app | 3 | |
+| Phase plot | pv:5268 | Results → Phase (any TimeSeries) | app | 3 | ✅ |
 | CSV / JSON download, "copy MCP call" | pv:5615–5620 | `export.artifact {format}`, `command.copy_call` | core | 1 | 🟡 csv/json |
 | SSA / SDE engines (library only in JS) | petri-ssa.js, petri-sde.js | `sim.ssa {t_end, seed, runs, points}`, `sim.sde {…, dt}` → TimeSeries, mean ± sd band when runs > 1 | pflow-solver ssa (portable, byte-exact) / ssa::sde | 3 | ✅ SDE refuses gated nets, as go-pflow |
 | Rate fitting (library only in JS) | petri-learn.js:1863 | `opt.fit` | pflow-learn | 5 | |
@@ -145,15 +145,15 @@ How to read it:
 | View | Fed by | Export | Phase | Status |
 |---|---|---|---|---|
 | Net graph (+ marking, enabled, overlays) | document | SVG (core), PNG (app), JSON | 1 | ✅ (overlays 4) |
-| Time series (lines; mean±sd bands; overlays) | ODE, SSA, scenario, compare, pipeline, crosscheck | CSV, JSON, SVG | 1 | ✅ lines, CSV/JSON |
-| Phase plot (X vs Y) | any TimeSeries | SVG, CSV | 3 | |
-| Heatmap | param_heatmap | CSV, JSON, SVG | 3 | 🟡 artifact + CSV/JSON (`opt.heatmap`) |
-| Scatter / Pareto | optimize | CSV, JSON | 3 | 🟡 artifact + CSV/JSON (`opt.optimize`) |
-| Matrix table (incidence, P/T invariants) | analysis | CSV, JSON | 4 | |
+| Time series (lines; mean±sd bands; overlays) | ODE, SSA, scenario, compare, pipeline, crosscheck | CSV, JSON, SVG | 1 | ✅ lines, CSV/JSON | ✅ bands, overlay groups (sweeps colored by group), hover, legend toggle; CSV/JSON/SVG 
+| Phase plot (X vs Y) | any TimeSeries | SVG, CSV | 3 | | ✅ view (export the source series as CSV) 
+| Heatmap | param_heatmap | CSV, JSON, SVG | 3 | 🟡 artifact + CSV/JSON (`opt.heatmap`) | ✅ view with color bar + hover; CSV/JSON/SVG 
+| Scatter / Pareto | optimize | CSV, JSON | 3 | 🟡 artifact + CSV/JSON (`opt.optimize`) | ✅ view with Pareto front + hover; CSV/JSON/SVG 
+| Matrix table (incidence, P/T invariants) | analysis | CSV, JSON | 4 | | 🟡 view ready (phase 4 produces the data) 
 | Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | |
 | Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | |
 | Tornado / ranked bars | diagnose, evaluate | CSV | 4 | |
-| Table (conformance, calibrate, dataset) | data | CSV | 5 | |
+| Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate tables today) 
 | System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | |
 | Side-by-side mapping | prove, diff | SVG | 6–7 | |
 

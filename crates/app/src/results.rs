@@ -22,20 +22,37 @@ pub enum Mode {
 #[derive(Default)]
 pub struct ResultsState {
     pub selected: Option<String>,
-    newest_seen: Option<String>,
+    /// Artifact ids already shown in the list.
+    known: std::collections::HashSet<String>,
     mode: Mode,
     views: HashMap<String, ViewState>,
 }
 
 pub fn ui(app: &mut App, ui: &mut egui::Ui) {
-    // Follow new results.
-    let newest = app.sess.artifacts.last().map(|a| a.id.clone());
-    if newest != app.results.newest_seen {
-        if newest.is_some() {
-            app.results.selected = newest.clone();
-            app.results.mode = Mode::Chart;
-        }
-        app.results.newest_seen = newest;
+    // Follow new results. A command that stores several (a chart plus its
+    // table or report) gets its chart selected.
+    let fresh: Vec<&Artifact> = app
+        .sess
+        .artifacts
+        .iter()
+        .filter(|a| !app.results.known.contains(&a.id))
+        .collect();
+    if !fresh.is_empty() {
+        let pick = fresh
+            .iter()
+            .find(|a| {
+                matches!(
+                    a.data,
+                    ArtifactData::TimeSeries { .. }
+                        | ArtifactData::Heatmap { .. }
+                        | ArtifactData::Scatter { .. }
+                )
+            })
+            .or(fresh.last())
+            .map(|a| a.id.clone());
+        app.results.known.extend(fresh.iter().map(|a| a.id.clone()));
+        app.results.selected = pick;
+        app.results.mode = Mode::Chart;
     }
     if app
         .results

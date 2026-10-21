@@ -44,6 +44,32 @@ The canvas snaps nodes to the 10-unit grid used by pflow.xyz (View → Snap to G
 
 **Content IDs.** `file.cid` computes a document's pflow.xyz CID and `file.seal` stores it as `@id`. Both use URDNA2015 → CIDv1 and are byte-identical to pflow.xyz's Go sealer on its parity goldens. Opening and saving a file keeps its CID.
 
+## Simulation workbench
+
+Results land in the **Results** tab, one view per kind:
+- time series with ± bands and overlays, plus phase-plot and Δ-table modes
+- heatmaps
+- Pareto scatters
+- tables
+- reports
+
+Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simulation command. Its forms fill transition and place arguments from what you have selected.
+
+| Command | What |
+|---|---|
+| `sim.ode` | mass-action ODE (pflow-solver); solver options, place filter, initial/final/Δ |
+| `sim.equilibrium` | integrate to steady state |
+| `sim.ssa`, `sim.sde` | Gillespie SSA / chemical Langevin, seeded, with mean ± sd over runs |
+| `sim.scenario`, `sim.compare` | sim.pflow.xyz-style what-ifs: marking/rate/schedule overrides, metrics, contention; N scenarios on one seed |
+| `sim.crosscheck` | SSA vs ODE vs conservation laws (P-invariants), with a verdict |
+| `sim.evaluate` | rank the moves enabled for a player by rollouts (games such as tic-tac-toe) |
+| `opt.rate_scan`, `opt.sweep` | pflow.xyz's Rate Scan and Sweep |
+| `opt.heatmap` | two rates on a grid, showing one place's final value |
+| `opt.optimize` | Monte-Carlo over rate ranges, with a Pareto front over objectives |
+
+![Scenario compare with ± bands](docs/screenshot-compare.png)
+![Rate heatmap](docs/screenshot-heatmap.png)
+
 ## Agents: CLI, control channel, MCP
 
 ```bash

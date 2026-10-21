@@ -19,6 +19,15 @@ pub struct ViewState {
     pub phase_y: usize,
 }
 
+/// A JSON number: integers as integers, the rest through [`fmt`].
+pub fn fmt_json(n: &serde_json::Number) -> String {
+    match (n.as_i64(), n.as_u64()) {
+        (Some(i), _) => i.to_string(),
+        (_, Some(u)) => u.to_string(),
+        _ => n.as_f64().map(fmt).unwrap_or_else(|| n.to_string()),
+    }
+}
+
 pub fn fmt(v: f64) -> String {
     let a = v.abs();
     if a == 0.0 {
@@ -230,7 +239,12 @@ pub fn timeseries(
             [v - b, v + b]
         })
     }));
-    let yr = (yr.0.min(0.0), yr.1 * 1.04);
+    // Counts never go negative: a ± band must not drag the axis below 0.
+    let nonneg = visible
+        .iter()
+        .all(|&k| series[k].values.iter().all(|v| *v >= 0.0));
+    let lo = if nonneg { 0.0 } else { yr.0.min(0.0) };
+    let yr = (lo, yr.1 * 1.04);
     let ax = Axes {
         plot,
         x: range(x.iter().copied()),
@@ -244,8 +258,8 @@ pub fn timeseries(
             // Band as vertical quads between consecutive samples.
             for i in 1..x.len() {
                 let quad = vec![
-                    ax.to_point(x[i - 1], s.values[i - 1] - band[i - 1]),
-                    ax.to_point(x[i], s.values[i] - band[i]),
+                    ax.to_point(x[i - 1], (s.values[i - 1] - band[i - 1]).max(ax.y.0)),
+                    ax.to_point(x[i], (s.values[i] - band[i]).max(ax.y.0)),
                     ax.to_point(x[i], s.values[i] + band[i]),
                     ax.to_point(x[i - 1], s.values[i - 1] + band[i - 1]),
                 ];
@@ -603,9 +617,7 @@ pub fn table(ui: &mut egui::Ui, columns: &[String], rows: &[Vec<Value>]) {
                     for row in rows.iter().take(2000) {
                         for v in row {
                             match v {
-                                Value::Number(n) => ui.monospace(
-                                    n.as_f64().map(fmt).unwrap_or_else(|| n.to_string()),
-                                ),
+                                Value::Number(n) => ui.monospace(fmt_json(n)),
                                 Value::String(s) => ui.label(s),
                                 Value::Bool(b) => ui.label(if *b { "✔" } else { "" }),
                                 Value::Null => ui.weak("—"),
@@ -686,11 +698,7 @@ fn json_tree(ui: &mut egui::Ui, key: Option<&str>, v: &Value, depth: usize) {
                 });
         }
         Value::Number(n) => {
-            ui.monospace(format!(
-                "{}{}",
-                label(key),
-                n.as_f64().map(fmt).unwrap_or_else(|| n.to_string())
-            ));
+            ui.monospace(format!("{}{}", label(key), fmt_json(n)));
         }
         other => {
             ui.monospace(format!("{}{}", label(key), other));

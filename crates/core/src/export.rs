@@ -517,6 +517,7 @@ fn timeseries_svg(
         })
         .fold(0.0_f64, f64::max)
         .max(1e-9);
+    // Counts never go negative; only negative data moves the axis down.
     let ymin = series
         .iter()
         .flat_map(|se| se.values.iter().copied())
@@ -539,7 +540,7 @@ fn timeseries_svg(
                 .zip(&se.values)
                 .zip(band)
                 .rev()
-                .map(|((&xv, &yv), &bv)| format!("{:.2},{:.2}", sx(xv), sy(yv - bv)))
+                .map(|((&xv, &yv), &bv)| format!("{:.2},{:.2}", sx(xv), sy((yv - bv).max(ymin))))
                 .collect();
             let _ = write!(
                 s,
