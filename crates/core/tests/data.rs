@@ -46,14 +46,25 @@ fn load_csv_and_jsonl_logs() {
 fn exported_log_csv_reimports_and_conforms() {
     let mut s = Session::default();
     run(&mut s, "file.open_example", json!({"name": "coffee-shop"}));
-    let g = run(&mut s, "data.generate", json!({"cases": 20, "seed": 3, "max_steps": 30}));
+    let g = run(
+        &mut s,
+        "data.generate",
+        json!({"cases": 20, "seed": 3, "max_steps": 30}),
+    );
     let id = g["artifact"].as_str().unwrap().to_string();
-    let csv = run(&mut s, "export.artifact", json!({"id": id, "format": "csv"}));
+    let csv = run(
+        &mut s,
+        "export.artifact",
+        json!({"id": id, "format": "csv"}),
+    );
     let csv = csv.as_str().unwrap();
     assert!(csv.starts_with("case,activity,time"), "{}", &csv[..40]);
     let r = run(&mut s, "data.load_log", json!({"text": csv}));
     assert_eq!(r["summary"]["events"], g["summary"]["events"]);
     let a = run(&mut s, "data.conformance", json!({"log": r["artifact"]}));
     let b = run(&mut s, "data.conformance", json!({"log": id}));
-    assert_eq!(a["fitness"], b["fitness"], "re-imported log replays identically");
+    assert_eq!(
+        a["fitness"], b["fitness"],
+        "re-imported log replays identically"
+    );
 }
