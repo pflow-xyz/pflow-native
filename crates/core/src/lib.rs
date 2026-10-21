@@ -16,6 +16,7 @@ pub mod layout;
 pub mod registry;
 pub mod session;
 pub mod sim;
+pub mod stochastic;
 
 pub use artifact::{Artifact, ArtifactData};
 pub use doc::{Arc, Document, NodeKind, Place, Transition};

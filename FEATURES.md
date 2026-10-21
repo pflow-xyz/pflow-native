@@ -82,7 +82,7 @@ How to read it:
 | Sweep (one place across rates) | pv:5268 | `opt.sweep` → overlay | pflow-solver | 3 | |
 | Phase plot | pv:5268 | Phase view over a TimeSeries | app | 3 | |
 | CSV / JSON download, "copy MCP call" | pv:5615–5620 | `export.artifact {format}`, `command.copy_call` | core | 1 | 🟡 csv/json |
-| SSA / SDE engines (library only in JS) | petri-ssa.js, petri-sde.js | `sim.ssa`, `sim.sde` | pflow-solver ssa / ssa::sde | 3 | |
+| SSA / SDE engines (library only in JS) | petri-ssa.js, petri-sde.js | `sim.ssa {t_end, seed, runs, points}`, `sim.sde {…, dt}` → TimeSeries, mean ± sd band when runs > 1 | pflow-solver ssa (portable, byte-exact) / ssa::sde | 3 | ✅ SDE refuses gated nets, as go-pflow |
 | Rate fitting (library only in JS) | petri-learn.js:1863 | `opt.fit` | pflow-learn | 5 | |
 
 ### A4. I/O & sharing
@@ -109,11 +109,11 @@ How to read it:
 | diff | structural diff | `compose.diff {a,b}` | port (pflow-mcp diff.rs) | Diff overlay, Table | 6 |
 | components, compose | template library, port fusion | `compose.components`, `compose.fuse` | pflow-compose templates | Net | 6 |
 | code_to_flow, prompt, reroll, get_artifact | LLM derivation | `remote.sim.prompt` … | remote | Net | 7 |
-| scenario | seeded SSA/ODE what-if | `sim.scenario {scenario}` | pflow-solver ssa + **port** (contention/depletion) | TimeSeries + bands, Table | 3 |
-| compare | N scenarios, shared seed | `sim.compare {scenarios}` | same | TimeSeries overlay | 3 |
+| scenario | seeded SSA/ODE what-if | `sim.scenario {scenario}`: marking, rates, schedule, hours, samples, realizations, seed, summary, engine; `params` refused | pflow-solver stochastic (contention, depletion, metrics, schedules) | TimeSeries + bands, Table | 3 ✅ (no `neverFired`; starts from the current marking) |
+| compare | N scenarios, shared seed | `sim.compare {scenarios, seed}` | same | TimeSeries overlay (group = scenario), Table | 3 ✅ (scenarios must share hours/samples) |
 | receipt | signed run certificate | `sim.receipt` | port (ed25519) | Report | 7 |
-| evaluate | score moves by rollouts | `sim.evaluate {player}` | pflow-solver ssa | Table (ranked) | 3 |
-| crosscheck | SSA vs ODE vs conservation | `sim.crosscheck` | pflow-solver + pflow-reachability | TimeSeries overlay, Report | 3 |
+| evaluate | score moves by rollouts | `sim.evaluate {player, objective, rollouts, seed, horizon, depth}` (play method) | metamodel firing + pflow-solver stochastic | Table (ranked) | 3 ✅ (player = role or id prefix, objective inferred from `win_*`; no eliminate/incidence/search) |
+| crosscheck | SSA vs ODE vs conservation | `sim.crosscheck {t_end, runs, seed, points}` | pflow-solver ssa + ODE; Farkas P-invariants in core | TimeSeries overlay (ssa/ode), Report | 3 ✅ (no move-ranking check) |
 | dataset | synthetic event log | `data.generate {cases, seed}` | pflow-solver ssa + pflow-eventlog | Table, CSV export | 5 |
 | run_pipeline | bound models, loop fixed point | `compose.run_pipeline` | port | TimeSeries per model, Graph | 6 |
 | diagnose | resource/rate influence, knee, lumpability | `analysis.diagnose` | pflow-results sensitivity + port | Tornado (bars), curve, Report | 4 |
@@ -158,7 +158,7 @@ How to read it:
 
 ## D. Gaps in pflow-rs (work that lands upstream, not here)
 
-1. Stochastic analysis over `ssa`: contention, depletion, supply kinds, schedules/stages. Source: go-pflow `stochastic`.
+1. ~~Stochastic analysis over `ssa`: contention, depletion, supply kinds, schedules/stages.~~ Landed as `pflow_solver::stochastic`; `sim.scenario` uses it.
 2. Siphon and trap search. Home: pflow-reachability.
 3. Exact automorphisms, canonical labelling, color refinement. Source: sim `orbits.go`, `classify.go`.
 4. Morphism prover/checker. Source: sim `pkg/morphism`.

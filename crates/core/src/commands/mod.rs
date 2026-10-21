@@ -15,6 +15,7 @@ pub mod macros;
 pub mod net;
 pub mod settings;
 pub mod sim;
+pub mod stochastic;
 pub mod view;
 
 pub const ALL: &[&[CommandSpec]] = &[
@@ -26,6 +27,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     net::SET,
     details::SET,
     sim::SET,
+    stochastic::SET,
     view::SET,
     settings::SET,
     export::SET,
