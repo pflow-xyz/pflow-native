@@ -13,6 +13,7 @@ pub mod cid;
 pub mod commands;
 pub mod compose;
 pub mod conformance;
+pub mod control_auth;
 pub mod doc;
 pub mod eventlog;
 pub mod export;

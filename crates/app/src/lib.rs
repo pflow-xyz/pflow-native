@@ -617,7 +617,14 @@ impl App {
         #[cfg(not(target_arch = "wasm32"))]
         {
             if let Some(addr) = self.control_addr.take() {
-                match control::Control::start(&addr, ctx.clone()) {
+                // A fresh token per launch, in an owner-only file: without it
+                // nothing on this machine (or a web page) can drive the app.
+                let started = pflow_native_core::control_auth::new_token().and_then(|token| {
+                    let c = control::Control::start(&addr, ctx.clone(), token.clone())?;
+                    pflow_native_core::control_auth::write_control_file(&c.addr, &token)?;
+                    Ok(c)
+                });
+                match started {
                     Ok(c) => {
                         self.status = Ok(format!("Agents can attach: control port {}", c.addr));
                         self.control = Some(c);
@@ -631,29 +638,77 @@ impl App {
                 .map(|c| c.drain(64))
                 .unwrap_or_default();
             for req in reqs {
-                let id = req.body.get("id").cloned().unwrap_or(Value::Null);
-                let r = if let Some(steps) = req.body.get("batch") {
-                    self.sess
-                        .execute("command.batch", json!({ "steps": steps }))
-                } else if let Some(cmd) = req.body.get("command").and_then(Value::as_str) {
-                    let args = req.body.get("args").cloned().unwrap_or(Value::Null);
-                    let r = self.sess.execute(cmd, args.clone());
-                    self.console.record(cmd, &args, &r);
-                    r
-                } else {
-                    Err(pflow_native_core::Error::BadArgs(
-                        "expected \"command\" or \"batch\"".into(),
-                    ))
-                };
-                let reply = match r {
-                    Ok(v) => json!({ "id": id, "ok": true, "result": v }),
-                    Err(e) => json!({ "id": id, "ok": false, "error": e.to_string() }),
-                };
+                let reply = self.handle_control(&req.body);
                 let _ = req.reply.send(reply);
             }
         }
         #[cfg(target_arch = "wasm32")]
         let _ = ctx;
+    }
+
+    /// One control-port request (already authenticated by its token): a
+    /// command or a batch, with the confirm-before-send rule applied, as
+    /// the JSON reply line.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    pub fn handle_control(&mut self, body: &Value) -> Value {
+        let id = body.get("id").cloned().unwrap_or(Value::Null);
+        let r = if let Some(steps) = body.get("batch") {
+            match steps.as_array().and_then(|st| {
+                st.iter()
+                    .find(|x| self.is_remote_send(x["command"].as_str().unwrap_or(""), &x["args"]))
+            }) {
+                Some(x) => Err(pflow_native_core::Error::Invalid(format!(
+                    "{} sends to a remote service and needs the user's confirmation in the app; \
+                     send it on its own, not in a batch",
+                    x["command"].as_str().unwrap_or("?")
+                ))),
+                None => self
+                    .sess
+                    .execute("command.batch", json!({ "steps": steps })),
+            }
+        } else if let Some(cmd) = body.get("command").and_then(Value::as_str) {
+            let args = body.get("args").cloned().unwrap_or(Value::Null);
+            if self.is_remote_send(cmd, &args) {
+                // The confirm-before-send rule holds on this path too:
+                // run it as a preview and ask the user in the app.
+                let mut preview_args = args.clone();
+                preview_args["send"] = json!(false);
+                let r = self.sess.execute(cmd, preview_args);
+                self.console.record(cmd, &args, &r);
+                r.map(|mut v| {
+                    if v.get("preview").is_some() {
+                        self.dialogs.confirm_send = Some((cmd.to_string(), args.clone(), v["preview"].clone()));
+                        v["pending_confirmation"] = json!(true);
+                        v["note"] = json!("Not sent: the request is waiting for the user to press Send in the app.");
+                    }
+                    v
+                })
+            } else {
+                let r = self.sess.execute(cmd, args.clone());
+                self.console.record(cmd, &args, &r);
+                r
+            }
+        } else {
+            Err(pflow_native_core::Error::BadArgs(
+                "expected \"command\" or \"batch\"".into(),
+            ))
+        };
+        match r {
+            Ok(v) => json!({ "id": id, "ok": true, "result": v }),
+            Err(e) => json!({ "id": id, "ok": false, "error": e.to_string() }),
+        }
+    }
+
+    /// A request that would send to a remote service: a command that takes
+    /// a `send` argument, called with `send: true`.
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
+    fn is_remote_send(&self, cmd: &str, args: &Value) -> bool {
+        args.get("send").and_then(Value::as_bool) == Some(true)
+            && self
+                .sess
+                .registry()
+                .find(cmd)
+                .is_some_and(|c| c.args.iter().any(|a| a.name == "send"))
     }
 
     fn apply_theme(&mut self, ctx: &egui::Context) {
@@ -740,5 +795,65 @@ impl eframe::App for App {
         if self.screenshot_pending && self.screenshot_done.load(Ordering::SeqCst) {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod control_policy_tests {
+    use super::*;
+
+    fn app() -> App {
+        App::new(
+            Options {
+                fresh: true,
+                ..Options::default()
+            },
+            None,
+            None,
+        )
+    }
+
+    /// A remote send that arrives over the control port is not sent: it is
+    /// previewed and waits for the user's Send in the app.
+    #[test]
+    fn port_sends_wait_for_the_user() {
+        let mut a = app();
+        let r = a.handle_control(
+            &json!({"id": 1, "command": "remote.pflow.save", "args": {"send": true}}),
+        );
+        assert_eq!(r["ok"], true, "{r}");
+        assert_eq!(r["result"]["sent"], false);
+        assert_eq!(r["result"]["pending_confirmation"], true);
+        let (cmd, args, _) = a
+            .dialogs
+            .confirm_send
+            .clone()
+            .expect("confirmation pending");
+        assert_eq!(cmd, "remote.pflow.save");
+        assert_eq!(args["send"], true, "Send re-runs with the caller's args");
+    }
+
+    #[test]
+    fn port_batches_cannot_carry_remote_sends() {
+        let mut a = app();
+        let r = a.handle_control(&json!({"id": 2, "batch": [
+            {"command": "net.add_place", "args": {"x": 0, "y": 0}},
+            {"command": "remote.gist", "args": {"send": true}}
+        ]}));
+        assert_eq!(r["ok"], false, "{r}");
+        assert!(r["error"].as_str().unwrap().contains("confirmation"));
+        assert!(a.dialogs.confirm_send.is_none());
+    }
+
+    #[test]
+    fn ordinary_commands_run_directly() {
+        let mut a = app();
+        let r = a.handle_control(
+            &json!({"id": 3, "command": "net.add_place", "args": {"x": 5, "y": 5}}),
+        );
+        assert_eq!(r["ok"], true, "{r}");
+        let r = a.handle_control(&json!({"id": 4, "command": "remote.pflow.share", "args": {}}));
+        assert_eq!(r["ok"], true, "pure commands are unaffected: {r}");
+        assert!(a.dialogs.confirm_send.is_none());
     }
 }

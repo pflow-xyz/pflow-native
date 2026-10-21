@@ -17,17 +17,19 @@ USAGE:
   pflow-native-cli list [PREFIX]                     commands with args schemas (JSON)
   pflow-native-cli exec [-i NET] [-o OUT] ID [ARGS]  run one command; ARGS is a JSON object
   pflow-native-cli batch [-i NET] [-o OUT] STEPS     run [{command,args}] (file or - for stdin) as one undo step
-  pflow-native-cli control [-i NET]                  JSON-lines channel on stdin/stdout:
+  pflow-native-cli control [-i NET] [-o OUT]         JSON-lines channel on stdin/stdout:
                                                        {\"id\":1,\"command\":\"net.info\",\"args\":{}}
                                                        -> {\"id\":1,\"ok\":true,\"result\":...}
-  pflow-native-cli mcp [--attach ADDR | --headless] [-i NET]
+  pflow-native-cli mcp [--attach ADDR | --headless] [-i NET] [-o OUT]
                                                      MCP server on stdio (list_commands, execute, batch,
                                                      get_state, screenshot). Attaches to a running app's
-                                                     control port ($PFLOW_NATIVE_ADDR or 127.0.0.1:7979) when
-                                                     one is up, else runs headless; -i implies headless.
+                                                     control port ($PFLOW_NATIVE_ADDR or 127.0.0.1:7979, with
+                                                     the token from the app's control.json) when one is up,
+                                                     else runs headless. -i alone implies headless; with
+                                                     --attach it opens NET in the app.
 
   -i NET   open this pflow JSON file first (file.open)
-  -o OUT   save the document here afterwards (file.save)
+  -o OUT   save the document here afterwards (file.save; for control/mcp: when stdin closes)
 ";
 
 fn main() -> ExitCode {
@@ -85,7 +87,12 @@ fn main() -> ExitCode {
                 }
             }
         }
-        "control" => return control(&mut sess),
+        "control" => {
+            let code = control(&mut sess);
+            return save_on_exit(code, output.as_deref(), |args| {
+                sess.execute("file.save", args).map_err(|e| e.to_string())
+            });
+        }
         "mcp" => {
             let addr = attach
                 .clone()
@@ -103,7 +110,22 @@ fn main() -> ExitCode {
                     Err(_) => None,
                 }
             };
-            return mcp::serve(backend.unwrap_or(mcp::Backend::Headless(Box::new(sess))));
+            let mut be = backend.unwrap_or(mcp::Backend::Headless(Box::new(sess)));
+            // `-i NET` with `--attach`: open it in the app (one undo step
+            // there), instead of silently dropping it.
+            if let (Some(path), Some(_)) = (&input, be.attached()) {
+                let abs = std::fs::canonicalize(path)
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|_| path.clone());
+                if let Err(e) = be.exec("file.open", json!({ "path": abs })) {
+                    eprintln!("error: opening {path} in the app: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            let mut be = mcp::serve(be);
+            return save_on_exit(ExitCode::SUCCESS, output.as_deref(), |args| {
+                be.exec("file.save", args)
+            });
         }
         "-h" | "--help" | "help" => {
             print!("{USAGE}");
@@ -130,6 +152,25 @@ fn main() -> ExitCode {
         }
         Err(e) => {
             eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+/// `-o OUT` for the long-running subcommands: save when stdin closes.
+fn save_on_exit(
+    code: ExitCode,
+    output: Option<&str>,
+    mut save: impl FnMut(Value) -> Result<Value, String>,
+) -> ExitCode {
+    let Some(path) = output else { return code };
+    let abs = std::path::absolute(path)
+        .map(|p| p.display().to_string())
+        .unwrap_or_else(|_| path.to_string());
+    match save(json!({ "path": abs })) {
+        Ok(_) => code,
+        Err(e) => {
+            eprintln!("error: saving {path}: {e}");
             ExitCode::FAILURE
         }
     }

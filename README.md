@@ -107,6 +107,13 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 - `GITHUB_TOKEN`: a GitHub token with the `gist` scope.
 - `SIM_PFLOW_TOKEN`: a sim OAuth access token, valid for 24 h.
 
+Each credential goes only to its own hosts, over HTTPS: `PFLOW_XYZ_TOKEN` to `pflow.xyz`; `GITHUB_TOKEN` to `api.github.com` and `pflow.xyz`; `SIM_PFLOW_TOKEN` to `sim.pflow.xyz`. A caller-supplied `server` or `endpoint` that is not one of them is refused before anything is built or sent.
+
+**Who can send.**
+- **The app** asks you every time.
+- **The control port** is open only to whoever holds the per-launch token, which the app writes to `<data_dir>/control.json` (owner-only). Sends that arrive there still wait for your **Send** in the app. Batches over the port may not contain sends.
+- **`pflow-native-cli control` and headless `mcp`** run over stdio and are started by you. They are trusted: a `send: true` there sends without a dialog, still only to the allowlisted hosts.
+
 **Datasets stay server-computed.** sim stores only results it computed itself. pflow-native can ask it to compute (scenario, dataset, calibrate, publish), but never uploads locally computed datasets; `remote.sim.call` refuses `sim_map_put`. Models are not datasets and can be published.
 
 ![Confirm before sending](docs/screenshot-confirm-send.png)

@@ -27,6 +27,9 @@ fn creds() {
         std::env::set_var("PFLOW_XYZ_TOKEN", PFLOW_TOKEN);
         std::env::set_var("SIM_PFLOW_TOKEN", SIM_TOKEN);
         std::env::set_var("GITHUB_TOKEN", GH_TOKEN);
+        // The mock server is on loopback; credentials otherwise only go to
+        // their real HTTPS hosts (outbound::credential_hosts).
+        std::env::set_var("PFLOW_NATIVE_CREDENTIAL_HOSTS", "127.0.0.1");
         std::env::set_var(
             "PFLOW_NATIVE_HOME",
             std::env::temp_dir().join("pflow-native-remote-test-none"),
@@ -235,7 +238,19 @@ fn list_reads_my_diagrams_into_a_table() {
             .to_string(),
         )
     });
-    let r = run(&mut s, "remote.pflow.list", json!({"server": base}));
+    // It sends a credential, so without `send` it is only a preview.
+    let p = run(&mut s, "remote.pflow.list", json!({"server": base}));
+    assert_eq!(p["sent"], false, "{p}");
+    assert_no_secrets(&p);
+    assert!(
+        rx.try_recv().is_err(),
+        "a preview must not reach the server"
+    );
+    let r = run(
+        &mut s,
+        "remote.pflow.list",
+        json!({"server": base, "send": true}),
+    );
     let req = rx.recv().unwrap();
     assert_eq!(
         (req.method.as_str(), req.path.as_str()),
@@ -684,4 +699,46 @@ fn sim_call_refuses_uploading_local_data() {
         json!({"tool": "sim_conformance", "args": {"id": "m1", "log": "case_id,activity,timestamp\n"}}),
     );
     assert_eq!(p["sent"], false);
+}
+
+/// A caller-chosen server or endpoint never receives a credential: the
+/// command refuses before any request is built or sent (preview or send).
+#[test]
+fn credentials_never_go_to_a_caller_chosen_host() {
+    let mut s = sir();
+    let evil = "https://attacker.example";
+    for (cmd, args) in [
+        ("remote.pflow.list", json!({"server": evil, "send": true})),
+        ("remote.pflow.list", json!({"server": evil})),
+        ("remote.pflow.save", json!({"server": evil, "send": true})),
+        (
+            "remote.pflow.delete",
+            json!({"cid": "z4EBabc", "server": evil, "send": true}),
+        ),
+        (
+            "remote.gist",
+            json!({"endpoint": format!("{evil}/gists"), "send": true}),
+        ),
+        (
+            "remote.sim.call",
+            json!({"tool": "sim_list_models", "endpoint": format!("{evil}/mcp"), "send": true}),
+        ),
+        (
+            "remote.sim.call",
+            json!({"tool": "sim_list_models", "endpoint": "http://localhost:9/mcp"}),
+        ),
+        (
+            "remote.pflow.list",
+            json!({"server": "https://pflow.xyz@attacker.example", "send": true}),
+        ),
+    ] {
+        let e = s
+            .execute(cmd, args.clone())
+            .expect_err(&format!("{cmd} {args}"))
+            .to_string();
+        assert!(e.contains("refusing to send"), "{cmd}: {e}");
+        for t in [PFLOW_TOKEN, SIM_TOKEN, GH_TOKEN] {
+            assert!(!e.contains(t), "credential in error: {e}");
+        }
+    }
 }

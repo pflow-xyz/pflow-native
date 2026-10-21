@@ -180,6 +180,90 @@ pub fn credential(name: &str) -> Option<String> {
     v.get(name).and_then(Value::as_str).map(str::to_string)
 }
 
+/// The hosts each credential may be sent to (HTTPS only). A credential is
+/// never attached to a request for any other host, whatever URL a caller
+/// supplies: pflow.xyz verifies its bearer against GitHub, so a GitHub token
+/// may go to both.
+pub fn credential_hosts(name: &str) -> &'static [&'static str] {
+    match name {
+        "PFLOW_XYZ_TOKEN" => &["pflow.xyz"],
+        "GITHUB_TOKEN" => &["api.github.com", "pflow.xyz"],
+        "SIM_PFLOW_TOKEN" => &["sim.pflow.xyz"],
+        _ => &[],
+    }
+}
+
+/// Extra hosts a credential may go to, for tests against a local mock
+/// server: `PFLOW_NATIVE_CREDENTIAL_HOSTS="127.0.0.1:4321,localhost:9000"`
+/// (host[:port], http or https). Only the user's own environment can set it.
+const EXTRA_HOSTS_ENV: &str = "PFLOW_NATIVE_CREDENTIAL_HOSTS";
+
+/// (scheme, host, port) of a URL, or why it is not acceptable for a
+/// credentialed request (no userinfo, a host present, lowercase compare).
+fn authority(url: &str) -> std::result::Result<(String, String, Option<u16>), String> {
+    let (scheme, rest) = url
+        .split_once("://")
+        .ok_or_else(|| format!("{url:?} is not an absolute URL"))?;
+    let scheme = scheme.to_ascii_lowercase();
+    let auth = rest.split(['/', '?', '#']).next().unwrap_or("");
+    if auth.contains('@') {
+        return Err(format!("{url:?} embeds credentials in its address"));
+    }
+    if auth.is_empty() {
+        return Err(format!("{url:?} has no host"));
+    }
+    let (host, port) = match auth.rsplit_once(':') {
+        Some((h, p)) if !h.ends_with(']') || h.starts_with('[') => match p.parse::<u16>() {
+            Ok(port) => (h.to_string(), Some(port)),
+            Err(_) => return Err(format!("{url:?} has a malformed port")),
+        },
+        _ => (auth.to_string(), None),
+    };
+    Ok((scheme, host.to_ascii_lowercase(), port))
+}
+
+/// Whether `name`'s credential may be sent to `url`.
+pub fn credential_allowed(name: &str, url: &str) -> std::result::Result<(), String> {
+    let (scheme, host, port) =
+        authority(url).map_err(|e| format!("refusing to send {name}: {e}"))?;
+    let hostport = match port {
+        Some(p) => format!("{host}:{p}"),
+        None => host.clone(),
+    };
+    let extra: Vec<String> = std::env::var(EXTRA_HOSTS_ENV)
+        .map(|v| {
+            v.split(',')
+                .map(|h| h.trim().to_ascii_lowercase())
+                .filter(|h| !h.is_empty())
+                .collect()
+        })
+        .unwrap_or_default();
+    if extra.iter().any(|h| *h == hostport || *h == host) && (scheme == "https" || scheme == "http")
+    {
+        return Ok(());
+    }
+    let allowed = credential_hosts(name);
+    if scheme == "https" && port.is_none_or(|p| p == 443) && allowed.contains(&host.as_str()) {
+        return Ok(());
+    }
+    Err(format!(
+        "refusing to send {name} to {scheme}://{hostport}: it only goes over HTTPS to {allowed:?}"
+    ))
+}
+
+/// `name`'s credential for a request to `url`: `Ok(None)` when it is not
+/// configured, an error when it is configured but `url` is not one of its
+/// hosts (so a caller-chosen server can never receive it).
+pub fn credential_for(name: &str, url: &str) -> Result<Option<String>> {
+    match credential(name) {
+        None => Ok(None),
+        Some(v) => {
+            credential_allowed(name, url).map_err(Error::BadArgs)?;
+            Ok(Some(v))
+        }
+    }
+}
+
 /// Which credentials are configured (names and source only).
 pub fn credential_status(names: &[&str]) -> Value {
     json!(names
@@ -195,6 +279,26 @@ pub fn credential_status(names: &[&str]) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn credentials_go_only_to_their_hosts() {
+        assert!(credential_allowed("GITHUB_TOKEN", "https://api.github.com/gists").is_ok());
+        assert!(credential_allowed("GITHUB_TOKEN", "https://pflow.xyz/api/diagrams").is_ok());
+        assert!(credential_allowed("PFLOW_XYZ_TOKEN", "https://pflow.xyz:443/api/save").is_ok());
+        assert!(credential_allowed("SIM_PFLOW_TOKEN", "https://sim.pflow.xyz/mcp").is_ok());
+        for bad in [
+            "http://pflow.xyz/api/diagrams",          // not HTTPS
+            "https://pflow.xyz.attacker.example/api", // suffix trick
+            "https://attacker.example/api/diagrams",
+            "https://pflow.xyz@attacker.example/", // userinfo trick
+            "https://pflow.xyz:8443/api",          // other port
+            "https://sim.pflow.xyz/mcp",           // wrong credential for host
+        ] {
+            assert!(credential_allowed("PFLOW_XYZ_TOKEN", bad).is_err(), "{bad}");
+        }
+        assert!(credential_allowed("SIM_PFLOW_TOKEN", "https://pflow.xyz/").is_err());
+        assert!(credential_allowed("UNKNOWN", "https://pflow.xyz/").is_err());
+    }
 
     #[test]
     fn previews_redact_secrets_and_send_nothing() {

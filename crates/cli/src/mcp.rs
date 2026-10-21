@@ -5,7 +5,6 @@
 
 use std::io::{self, BufRead, BufReader, Write};
 use std::net::{TcpStream, ToSocketAddrs};
-use std::process::ExitCode;
 use std::time::{Duration, Instant};
 
 use pflow_native_core::Session;
@@ -17,6 +16,8 @@ pub enum Backend {
     Headless(Box<Session>),
     Remote {
         addr: String,
+        /// The app's per-launch control token (see `core::control_auth`).
+        token: String,
         reader: BufReader<TcpStream>,
         writer: TcpStream,
         next_id: u64,
@@ -24,7 +25,18 @@ pub enum Backend {
 }
 
 impl Backend {
+    /// Attaches to the app at `addr` with its control token (from
+    /// `$PFLOW_NATIVE_CONTROL_TOKEN` or the app's `<data_dir>/control.json`).
     pub fn connect(addr: &str) -> io::Result<Self> {
+        let token = pflow_native_core::control_auth::read_token(addr).ok_or_else(|| {
+            io::Error::other(format!(
+                "no control token for {addr}: is the app running? (looked in {} and ${})",
+                pflow_native_core::control_auth::control_file()
+                    .map(|p| p.display().to_string())
+                    .unwrap_or_else(|| "<no data dir>".into()),
+                pflow_native_core::control_auth::TOKEN_ENV
+            ))
+        })?;
         let sock = addr
             .to_socket_addrs()?
             .next()
@@ -32,6 +44,7 @@ impl Backend {
         let stream = TcpStream::connect_timeout(&sock, Duration::from_millis(300))?;
         Ok(Backend::Remote {
             addr: addr.to_string(),
+            token,
             reader: BufReader::new(stream.try_clone()?),
             writer: stream,
             next_id: 0,
@@ -53,9 +66,10 @@ impl Backend {
                 writer,
                 next_id,
                 addr,
+                token,
             } => {
                 *next_id += 1;
-                let req = json!({ "id": *next_id, "command": cmd, "args": args });
+                let req = json!({ "token": token, "id": *next_id, "command": cmd, "args": args });
                 writeln!(writer, "{req}")
                     .and_then(|_| writer.flush())
                     .map_err(|e| format!("app at {addr} went away: {e}"))?;
@@ -276,7 +290,9 @@ fn handle(be: &mut Backend, req: &Value) -> Option<Value> {
     })
 }
 
-pub fn serve(mut be: Backend) -> ExitCode {
+/// Serves MCP on stdio until stdin closes, then hands the backend back (so
+/// the caller can save with `-o`).
+pub fn serve(mut be: Backend) -> Backend {
     match be.attached() {
         Some(addr) => eprintln!("pflow-native mcp: attached to the app at {addr}"),
         None => eprintln!("pflow-native mcp: headless session"),
@@ -301,5 +317,5 @@ pub fn serve(mut be: Backend) -> ExitCode {
             }
         }
     }
-    ExitCode::SUCCESS
+    be
 }

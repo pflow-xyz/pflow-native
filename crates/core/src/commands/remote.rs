@@ -39,7 +39,7 @@ use serde_json::{json, Map, Value};
 
 use crate::artifact::ArtifactData;
 use crate::doc::Document;
-use crate::outbound::{credential, send_or_preview, Outbound};
+use crate::outbound::{credential_for, send_or_preview, Outbound};
 use crate::registry::{always, arg, b, opt, s, ArgSpec, ArgType::*, CommandSpec};
 use crate::session::{Session, Step};
 use crate::simclient::{self, Client, Transport};
@@ -110,10 +110,10 @@ pub const SET: &[CommandSpec] = &[
         id: "remote.pflow.list",
         label: "My Diagrams (pflow.xyz)",
         help: "List the signed-in user's diagrams on pflow.xyz (GET /api/diagrams; needs PFLOW_XYZ_TOKEN). \
-               Read-only; stores a table artifact.",
+               It sends your token, so it previews unless send; stores a table artifact.",
         menu: "Share",
         shortcut: None,
-        args: &[SERVER],
+        args: &[SERVER, SEND],
         enabled: always,
         run: pflow_list,
         journal: false,
@@ -322,18 +322,26 @@ fn server(a: &Value) -> String {
         .to_string()
 }
 
-/// The first configured credential of `names`, with its name.
-fn first_credential(names: &[&'static str]) -> Option<(&'static str, String)> {
-    names.iter().find_map(|n| credential(n).map(|v| (*n, v)))
+/// The first configured credential of `names` that may go to `url`, with
+/// its name. A configured credential whose hosts do not include `url`'s is
+/// refused outright (`outbound::credential_for`): a caller-supplied
+/// `server` / `endpoint` can never receive a token.
+fn first_credential(names: &[&'static str], url: &str) -> Result<Option<(&'static str, String)>> {
+    for n in names {
+        if let Some(v) = credential_for(n, url)? {
+            return Ok(Some((*n, v)));
+        }
+    }
+    Ok(None)
 }
 
 /// pflow.xyz verifies its bearer against GitHub, so a GitHub token works.
-fn pflow_token() -> Option<(&'static str, String)> {
-    first_credential(&["PFLOW_XYZ_TOKEN", "GITHUB_TOKEN"])
+fn pflow_token(url: &str) -> Result<Option<(&'static str, String)>> {
+    first_credential(&["PFLOW_XYZ_TOKEN", "GITHUB_TOKEN"], url)
 }
 
-fn gist_token() -> Option<(&'static str, String)> {
-    first_credential(&["GITHUB_TOKEN", "PFLOW_XYZ_TOKEN"])
+fn gist_token(url: &str) -> Result<Option<(&'static str, String)>> {
+    first_credential(&["GITHUB_TOKEN", "PFLOW_XYZ_TOKEN"], url)
 }
 
 fn bearer(req: Outbound, tok: &Option<(&'static str, String)>) -> Outbound {
@@ -368,11 +376,9 @@ fn pflow_save(sess: &mut Session, a: &Value) -> Result<Value> {
     let server = server(a);
     let doc = sess.doc.to_value();
     let expected = crate::cid::seal(&doc)?;
-    let tok = pflow_token();
-    let req = bearer(
-        Outbound::new("POST", format!("{server}/api/save")).json(doc),
-        &tok,
-    );
+    let url = format!("{server}/api/save");
+    let tok = pflow_token(&url)?;
+    let req = bearer(Outbound::new("POST", url).json(doc), &tok);
     let mut out = send_or_preview(&req, sending(a), "Saving to pflow.xyz is outbound.")?;
     out["credential"] = json!(tok.as_ref().map(|t| t.0));
     if tok.is_none() {
@@ -417,16 +423,24 @@ fn pflow_save(sess: &mut Session, a: &Value) -> Result<Value> {
 
 fn pflow_list(sess: &mut Session, a: &Value) -> Result<Value> {
     let server = server(a);
-    let tok = pflow_token().ok_or_else(|| {
+    let url = format!("{server}/api/diagrams");
+    let tok = pflow_token(&url)?.ok_or_else(|| {
         Error::BadArgs(
             "My Diagrams needs PFLOW_XYZ_TOKEN (or GITHUB_TOKEN): see remote.credentials".into(),
         )
     })?;
+    let name = tok.0;
     let req = bearer(
-        Outbound::new("GET", format!("{server}/api/diagrams")).header("Accept", "application/json"),
+        Outbound::new("GET", url).header("Accept", "application/json"),
         &Some(tok),
     );
-    // A read of the user's own list: sent without `send`.
+    // It sends a credential, so it is a credentialed request like any write:
+    // previewed (and confirmed in the app) unless `send` is set.
+    if !sending(a) {
+        let mut out = req.preview("Listing My Diagrams sends your token to pflow.xyz.");
+        out["credential"] = json!(name);
+        return Ok(out);
+    }
     let resp = req.send()?;
     let diagrams = resp
         .get("diagrams")
@@ -457,13 +471,14 @@ fn pflow_delete(_: &mut Session, a: &Value) -> Result<Value> {
     let server = server(a);
     let cid = s(a, "cid").unwrap_or_default();
     check_cid(cid)?;
-    let tok = pflow_token();
+    let url = format!("{server}/o/{cid}");
+    let tok = pflow_token(&url)?;
     if tok.is_none() && sending(a) {
         return Err(Error::BadArgs(
             "deleting from pflow.xyz needs PFLOW_XYZ_TOKEN (or GITHUB_TOKEN)".into(),
         ));
     }
-    let req = bearer(Outbound::new("DELETE", format!("{server}/o/{cid}")), &tok);
+    let req = bearer(Outbound::new("DELETE", url), &tok);
     let mut out = send_or_preview(
         &req,
         sending(a),
@@ -525,7 +540,7 @@ fn gist(sess: &mut Session, a: &Value) -> Result<Value> {
         s(a, "description").unwrap_or(GIST_DESCRIPTION),
         b(a, "public").unwrap_or(true),
     );
-    let tok = gist_token();
+    let tok = gist_token(&endpoint)?;
     if tok.is_none() && sending(a) {
         return Err(Error::BadArgs(
             "creating a Gist needs GITHUB_TOKEN (or PFLOW_XYZ_TOKEN) with the gist scope".into(),
@@ -730,8 +745,8 @@ impl Plan {
     }
 }
 
-fn sim_token() -> Option<String> {
-    credential("SIM_PFLOW_TOKEN")
+fn sim_token(endpoint: &str) -> Result<Option<String>> {
+    credential_for("SIM_PFLOW_TOKEN", endpoint)
 }
 
 /// The steps a plan runs: sim_create_model first when it needs the open net.
@@ -750,14 +765,14 @@ fn create_args(sess: &Session) -> Result<Value> {
 }
 
 /// The HTTP request one tools/call is, for previews.
-fn call_request(endpoint: &str, id: u64, tool: &str, args: &Value) -> Outbound {
+fn call_request(endpoint: &str, id: u64, tool: &str, args: &Value) -> Result<Outbound> {
     let mut req = Outbound::new("POST", endpoint)
         .header("Accept", simclient::ACCEPT)
         .json(simclient::tool_call(id, tool, args.clone()));
-    if let Some(t) = sim_token() {
+    if let Some(t) = sim_token(endpoint)? {
         req = req.secret("Authorization", &format!("Bearer {t}"));
     }
-    req
+    Ok(req)
 }
 
 /// Previews the plan, or runs it in one MCP session.
@@ -767,7 +782,7 @@ fn run_plan(sess: &mut Session, a: &Value, cmd: &str, plan: Plan) -> Result<Valu
     let open = b(a, "open").unwrap_or(false);
     if !sending(a) {
         let first = &steps[0];
-        let req = call_request(&endpoint, 2, &first.0, &first.1);
+        let req = call_request(&endpoint, 2, &first.0, &first.1)?;
         let mut out = req.preview(&format!(
             "Calling sim.pflow.xyz's {} is outbound (it may store, publish or spend compute).",
             plan.tool
@@ -779,13 +794,13 @@ fn run_plan(sess: &mut Session, a: &Value, cmd: &str, plan: Plan) -> Result<Valu
         out["session"] = json!(
             "each send runs initialize + notifications/initialized first, then the steps in one MCP session"
         );
-        out["credential"] = json!(sim_token().map(|_| "SIM_PFLOW_TOKEN"));
+        out["credential"] = json!(sim_token(&endpoint)?.map(|_| "SIM_PFLOW_TOKEN"));
         if open {
             out["open"] = json!("open applies only with send");
         }
         return Ok(out);
     }
-    let client = simclient::connect(&endpoint, sim_token())?;
+    let client = simclient::connect(&endpoint, sim_token(&endpoint)?)?;
     run_steps(sess, a, cmd, client, plan, steps, open)
 }
 

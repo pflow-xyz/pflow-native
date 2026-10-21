@@ -151,11 +151,21 @@ screenshot (`--screenshot`).
   - `control` is the JSON-lines channel: `{"id","command","args"}` →
     `{"id","ok","result"|"error"}`.
   - `mcp` is a hand-rolled JSON-RPC 2.0 server over stdio. Its tools are
-    `list_commands`, `execute` and `batch` (one long-lived session), plus
-    `get_document` / `load_document`.
+    `list_commands`, `execute`, `batch` (one long-lived session), `get_state`
+    and `screenshot` (attached mode only).
 - **Control port** (`crates/app/src/control.rs`): the app serves the same JSON-lines
   protocol on `127.0.0.1:7979`. Requests are handed to the UI thread and run between
-  frames through `Session::execute`.
+  frames (`App::handle_control`).
+  - **Authentication:** every request carries the per-launch token from
+    `<data_dir>/control.json`, which is owner-only (`core::control_auth`).
+    A missing or wrong token closes the connection, and so does anything that
+    looks like HTTP.
+  - **Confirmation:** a command with a `send` argument, called with `send: true`,
+    runs as a preview and waits for the user's Send in the app. Batches may not
+    contain sends.
+  - **Credentials:** `outbound::credential_for` attaches a credential only for its
+    allowlisted HTTPS hosts, so no path can deliver a token to a caller-chosen
+    server.
   - `mcp` attaches to that port when it is up, falling back to headless. The
     `Backend` enum in `crates/cli/src/mcp.rs` holds both cases.
   - Attached, the `screenshot` tool returns the live window as a PNG.
