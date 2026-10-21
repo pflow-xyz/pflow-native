@@ -188,6 +188,9 @@ pub struct Session {
     pub macros: BTreeMap<String, Vec<Step>>,
     /// Journal length when `macro.record` started.
     pub recording: Option<usize>,
+    /// Named models besides the open one (`model.*`): what systems bind,
+    /// diffs compare, and composition draws from. Not part of undo.
+    pub models: BTreeMap<String, Document>,
     /// What the canvas emphasizes (`view.highlight`).
     pub highlight: Option<Highlight>,
     /// Nodes (and the arcs between them) from `edit.copy` / `edit.cut`.
@@ -234,6 +237,7 @@ impl Session {
             journal: vec![],
             macros: BTreeMap::new(),
             recording: None,
+            models: BTreeMap::new(),
             highlight: None,
             clipboard: None,
             has_ui: false,

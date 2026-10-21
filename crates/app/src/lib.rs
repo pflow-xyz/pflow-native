@@ -58,6 +58,7 @@ pub struct Options {
 const KEY_DOC: &str = "pflow-native/doc";
 const KEY_PATH: &str = "pflow-native/path";
 const KEY_SETTINGS: &str = "pflow-native/settings";
+const KEY_MODELS: &str = "pflow-native/models";
 
 pub struct App {
     pub sess: Session,
@@ -124,6 +125,17 @@ impl App {
         if let Some(st) = restore.and_then(|s| s.get_string(KEY_SETTINGS)) {
             if let Ok(v) = serde_json::from_str::<Value>(&st) {
                 app.run("view.set", v);
+            }
+        }
+        if let Some(Ok(Value::Object(models))) = restore
+            .and_then(|s| s.get_string(KEY_MODELS))
+            .map(|t| serde_json::from_str::<Value>(&t))
+        {
+            for (name, doc) in models {
+                app.run(
+                    "model.import",
+                    json!({ "name": name, "json": doc, "overwrite": true }),
+                );
             }
         }
         let autosaved = restore.and_then(|s| s.get_string(KEY_DOC));
@@ -646,6 +658,13 @@ impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         storage.set_string(KEY_DOC, self.sess.doc.to_json_pretty());
         storage.set_string(KEY_PATH, self.sess.path.clone().unwrap_or_default());
+        let models: serde_json::Map<String, Value> = self
+            .sess
+            .models
+            .iter()
+            .map(|(k, d)| (k.clone(), d.to_value()))
+            .collect();
+        storage.set_string(KEY_MODELS, Value::Object(models).to_string());
         storage.set_string(
             KEY_SETTINGS,
             serde_json::to_string(&self.sess.view.settings).unwrap_or_default(),

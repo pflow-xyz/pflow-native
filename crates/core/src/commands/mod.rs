@@ -14,6 +14,7 @@ pub mod export;
 pub mod file;
 pub mod fileio;
 pub mod macros;
+pub mod models;
 pub mod net;
 pub mod opt;
 pub mod overlay;
@@ -39,6 +40,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     settings::SET,
     data::SET,
     export::SET,
+    models::SET,
     macros::SET,
     command::SET,
 ];

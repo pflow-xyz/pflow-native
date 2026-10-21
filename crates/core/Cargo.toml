@@ -18,6 +18,7 @@ pflow-results.workspace = true
 pflow-eventlog.workspace = true
 pflow-mining.workspace = true
 pflow-learn.workspace = true
+pflow-compose.workspace = true
 serde.workspace = true
 # float_roundtrip: parse floats exactly, as Go does, so CIDs of documents
 # with fractional numbers match pflow.xyz.
