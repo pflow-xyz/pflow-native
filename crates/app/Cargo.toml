@@ -1,0 +1,24 @@
+[package]
+name = "pflow-native"
+description = "Native Petri-net editor and simulator on pflow-rs (egui/eframe)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[[bin]]
+name = "pflow-native"
+path = "src/main.rs"
+
+[dependencies]
+pflow-native-core.workspace = true
+serde_json.workspace = true
+eframe = "0.37"
+
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rfd = "0.17"
+image = { version = "0.25", default-features = false, features = ["png"] }
+
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "0.4"
+web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement"] }

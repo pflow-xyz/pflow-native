@@ -1,0 +1,153 @@
+//! `pflow-native-cli`: the headless front end. Every subcommand drives the
+//! same registry the app's menus do.
+
+mod mcp;
+
+use std::io::{self, BufRead, Read, Write};
+use std::process::ExitCode;
+
+use pflow_native_core::commands::command::parse_steps;
+use pflow_native_core::Session;
+use serde_json::{json, Value};
+
+const USAGE: &str = "\
+pflow-native-cli — drive the pflow-native command registry headless
+
+USAGE:
+  pflow-native-cli list [PREFIX]                     commands with args schemas (JSON)
+  pflow-native-cli exec [-i NET] [-o OUT] ID [ARGS]  run one command; ARGS is a JSON object
+  pflow-native-cli batch [-i NET] [-o OUT] STEPS     run [{command,args}] (file or - for stdin) as one undo step
+  pflow-native-cli control [-i NET]                  JSON-lines channel on stdin/stdout:
+                                                       {\"id\":1,\"command\":\"net.info\",\"args\":{}}
+                                                       -> {\"id\":1,\"ok\":true,\"result\":...}
+  pflow-native-cli mcp [-i NET]                      MCP server on stdio (list_commands, execute, batch, ...)
+
+  -i NET   open this pflow JSON file first (file.open)
+  -o OUT   save the document here afterwards (file.save)
+";
+
+fn main() -> ExitCode {
+    let mut args: Vec<String> = std::env::args().skip(1).collect();
+    let input = take_flag(&mut args, "-i");
+    let output = take_flag(&mut args, "-o");
+    let Some(sub) = (!args.is_empty()).then(|| args.remove(0)) else {
+        eprint!("{USAGE}");
+        return ExitCode::from(2);
+    };
+    let mut sess = Session::default();
+    if let Some(path) = &input {
+        if let Err(e) = sess.execute("file.open", json!({ "path": path })) {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    }
+    let result = match sub.as_str() {
+        "list" => sess.execute(
+            "command.list",
+            args.first().map_or(Value::Null, |p| json!({ "prefix": p })),
+        ),
+        "exec" => match args.first() {
+            None => {
+                eprint!("{USAGE}");
+                return ExitCode::from(2);
+            }
+            Some(id) => match args.get(1).map(|a| serde_json::from_str(a)) {
+                Some(Err(e)) => {
+                    eprintln!("error: ARGS is not JSON: {e}");
+                    return ExitCode::from(2);
+                }
+                parsed => sess.execute(id, parsed.and_then(Result::ok).unwrap_or(Value::Null)),
+            },
+        },
+        "batch" => {
+            let src = match args.first().map(String::as_str) {
+                None | Some("-") => {
+                    let mut s = String::new();
+                    io::stdin().read_to_string(&mut s).map(|_| s)
+                }
+                Some(path) => std::fs::read_to_string(path),
+            };
+            let steps = src
+                .map_err(|e| e.to_string())
+                .and_then(|s| serde_json::from_str::<Value>(&s).map_err(|e| e.to_string()))
+                .and_then(|v| parse_steps(&v).map_err(|e| e.to_string()));
+            match steps {
+                Ok(steps) => sess.batch(&steps),
+                Err(e) => {
+                    eprintln!("error: {e}");
+                    return ExitCode::from(2);
+                }
+            }
+        }
+        "control" => return control(&mut sess),
+        "mcp" => return mcp::serve(&mut sess),
+        "-h" | "--help" | "help" => {
+            print!("{USAGE}");
+            return ExitCode::SUCCESS;
+        }
+        other => {
+            eprintln!("unknown subcommand {other:?}\n\n{USAGE}");
+            return ExitCode::from(2);
+        }
+    };
+    match result {
+        Ok(v) => {
+            match v {
+                Value::String(s) => println!("{s}"),
+                v => println!("{}", serde_json::to_string_pretty(&v).unwrap()),
+            }
+            if let Some(path) = output {
+                if let Err(e) = sess.execute("file.save", json!({ "path": path })) {
+                    eprintln!("error: {e}");
+                    return ExitCode::FAILURE;
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
+    }
+}
+
+fn take_flag(args: &mut Vec<String>, flag: &str) -> Option<String> {
+    let i = args.iter().position(|a| a == flag)?;
+    args.remove(i);
+    (i < args.len()).then(|| args.remove(i))
+}
+
+/// One request per line: `{"id", "command", "args"}` or `{"id", "batch": [...]}`.
+fn control(sess: &mut Session) -> ExitCode {
+    let stdin = io::stdin();
+    let mut out = io::stdout().lock();
+    for line in stdin.lock().lines() {
+        let Ok(line) = line else { break };
+        if line.trim().is_empty() {
+            continue;
+        }
+        let reply = match serde_json::from_str::<Value>(&line) {
+            Err(e) => json!({ "id": null, "ok": false, "error": format!("bad JSON: {e}") }),
+            Ok(req) => {
+                let id = req.get("id").cloned().unwrap_or(Value::Null);
+                let r = if let Some(steps) = req.get("batch") {
+                    parse_steps(steps).and_then(|s| sess.batch(&s))
+                } else if let Some(cmd) = req.get("command").and_then(Value::as_str) {
+                    sess.execute(cmd, req.get("args").cloned().unwrap_or(Value::Null))
+                } else {
+                    Err(pflow_native_core::Error::BadArgs(
+                        "expected \"command\" or \"batch\"".into(),
+                    ))
+                };
+                match r {
+                    Ok(v) => json!({ "id": id, "ok": true, "result": v }),
+                    Err(e) => json!({ "id": id, "ok": false, "error": e.to_string() }),
+                }
+            }
+        };
+        if writeln!(out, "{reply}").and_then(|_| out.flush()).is_err() {
+            break;
+        }
+    }
+    ExitCode::SUCCESS
+}

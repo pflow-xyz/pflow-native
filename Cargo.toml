@@ -1,0 +1,26 @@
+[workspace]
+resolver = "2"
+members = ["crates/core", "crates/app", "crates/cli"]
+default-members = ["crates/core", "crates/app", "crates/cli"]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/pflow-xyz/pflow-native"
+homepage = "https://pflow.xyz"
+
+[workspace.dependencies]
+# pflow-rs, pinned. To build against a sibling checkout instead, see
+# .cargo/config.toml.example.
+pflow-core = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
+pflow-parser = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
+pflow-metamodel = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
+pflow-solver = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
+serde = { version = "1", features = ["derive"] }
+serde_json = { version = "1", features = ["preserve_order"] }
+thiserror = "2"
+pflow-native-core = { path = "crates/core" }
+
+[profile.dev.package."*"]
+opt-level = 2

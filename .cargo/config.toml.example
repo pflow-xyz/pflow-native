@@ -1,0 +1,7 @@
+# Copy to .cargo/config.toml to build against a sibling ../pflow-rs checkout
+# instead of the pinned git revision.
+[patch."https://github.com/pflow-xyz/pflow-rs"]
+pflow-core = { path = "../pflow-rs/crates/pflow-core" }
+pflow-parser = { path = "../pflow-rs/crates/pflow-parser" }
+pflow-metamodel = { path = "../pflow-rs/crates/pflow-metamodel" }
+pflow-solver = { path = "../pflow-rs/crates/pflow-solver" }

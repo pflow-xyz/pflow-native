@@ -1,0 +1,150 @@
+# pflow-native architecture
+
+pflow-native is a native (and later web) Petri-net workbench built on pflow-rs.
+Its long-run scope is parity with the **pflow.xyz editor** and the
+**sim.pflow.xyz MCP tool surface**, plus views for all the data those produce.
+`FEATURES.md` is the feature-by-feature matrix. This file describes the
+structure designed to hold all of it.
+
+The patterns are borrowed from storytold/vectorcraft and photocraft (MIT/Apache).
+They were re-implemented here, not copied.
+
+## Layers
+
+Nothing below `app` may depend on egui, eframe, winit or rfd, so everything an
+agent can do runs headless and builds for `wasm32-unknown-unknown`.
+
+```
+pflow-rs crates (pinned git rev; sibling-path [patch] for development)
+  └─ pflow-native-core        L1  Document, Session, Registry, Artifacts, core command sets
+       └─ pflow-native-analysis   L2  (phase 3+) command sets over pflow-reachability / verify /
+       │                              validation / compose / learn / mining / eventlog / results
+       └─ pflow-native-remote     L2  (phase 7) bridge to sim.pflow.xyz for store/publish/LLM tools
+            └─ pflow-native (app)     L3  eframe UI: views render artifacts, every action -> registry
+            └─ pflow-native-cli       L3  list / exec / batch / control (JSON lines) / mcp (stdio)
+```
+
+## The document is pure data
+
+`Document` is the pflow.xyz editor JSON ("Shape A"). It is held in ordered `Vec`s so a
+load/save round trip keeps the file's own order and its unknown top-level fields.
+It knows nothing about selection, views or simulation state.
+
+`Session` wraps it with the following:
+
+| Field | What |
+|---|---|
+| `doc`, `path`, `revision`, `saved_revision` | the net and its dirty tracking |
+| `marking` | runtime token-game state (per place, per color) |
+| `selection`, `tool`, `view` | editing state, as plain data the CLI and MCP can read and set |
+| `undo` / `redo` | whole-snapshot history (`doc`, `marking`, `selection`). Nets are small, so snapshots beat inverse ops for simplicity and correctness |
+| `journal` | every top-level journaled command, i.e. what macros are cut from |
+| `macros` | named step lists (`macro.*`) |
+| `artifacts` | typed results of analysis commands (see below) |
+
+## One command registry
+
+Every action is a `CommandSpec`:
+
+```rust
+CommandSpec {
+    id: "net.add_place",          // <namespace>.<verb>
+    label: "Add Place",
+    menu: &["Net"],               // where the app puts it ("" = not in a menu)
+    shortcut: Some("P"),
+    args: &[ArgSpec { name, ty, required, help }],  // validated; unknown keys refused
+    enabled: fn(&Session) -> Result<(), String>,    // greys out menus, refuses calls
+    run: fn(&mut Session, &Value) -> Result<Value>,
+    journal: bool,                // false for queries: not journaled or recorded
+}
+```
+
+- `Session::execute(id, args)` is the only entry point. The same call runs a menu
+  click, a keyboard shortcut, a canvas gesture (on release), a CLI `exec`, a
+  control-channel line and an MCP `execute`.
+- The app adds no command of its own. Native file dialogs only *collect a path*,
+  then run `file.open {path}`.
+- Command sets are contributed per namespace (`fn commands() -> &'static [CommandSpec]`)
+  and assembled into one `Registry`. A crate that adds an area such as
+  `analysis.*` exports its set. The assembling binary passes the full registry
+  to `Session`.
+- `command.batch {steps}` runs steps as **one undo step** and rolls everything
+  back if any step fails. MCP `batch` uses it.
+
+| Namespace | Holds (phase) |
+|---|---|
+| `file.*` | new/open/save/load_json/export_json (1); examples gallery, permalink/CID import (2) |
+| `edit.*` | undo/redo/select/delete (1); copy/paste/duplicate/align/snap (2) |
+| `net.*` | add/move/connect/delete/set_* (1); colors/roles/arc kinds/layout/rename (2) |
+| `view.*`, `tool.*` | zoom/pan/fit/tool selection, open/close views (1) |
+| `sim.*` | token game: enabled/fire/reset/step/auto (1); ODE (1); SSA, scenarios, compare, equilibrium, crosscheck, dataset (3) |
+| `analysis.*` | reachability graph, invariants, incidence, verify, validate, diagnose, sensitivity, siphons/traps (4) |
+| `data.*` | event logs, conformance, conformance stream, calibrate, mining (5) |
+| `opt.*` | param heatmap, optimize/Pareto, fit (3, 5) |
+| `compose.*` | components, compose, extend, diff, bind, systems, pipelines (6) |
+| `store.*`, `remote.*` | local CID store, sim.pflow.xyz bridge (publish, collections, links, prove, LLM prompt) (7) |
+| `export.*` | json/svg/csv (1), png (app), artifact export in every format (3+) |
+| `macro.*` | record/stop/play/list/get/delete (1) |
+| `command.*` | batch, list (1) |
+
+## Artifacts → views
+
+Anything that produces data deposits a typed **artifact** in the session, then
+returns its JSON:
+
+```rust
+enum ArtifactData {
+    TimeSeries { t, series: [(name, values, band?)] },  // ODE, SSA mean±sd, scenario overlays
+    Heatmap    { x_label, y_label, xs, ys, z },         // param_heatmap
+    Matrix     { rows, cols, values },                  // incidence, P/T invariants
+    Graph      { nodes, edges },                        // reachability graph, systems, knowledge graph
+    Trace      { steps: [(transition, marking)] },      // firing traces, witnesses, conformance replay
+    Table      { columns, rows },                       // conformance per trace, calibrate evidence
+    Scatter    { points, pareto },                      // optimize
+    Report     (Value),                                 // verify verdicts, diagnose readings
+}
+```
+
+In the app, a **view** is a renderer for one artifact kind (plus the net canvas,
+inspector, JSON editor and console). Views open as tabs via `view.open {kind,
+artifact?}`, so layout is driven by commands like everything else.
+
+| View | Renders | Phase |
+|---|---|---|
+| Net canvas | the document + marking, overlays (enabled, invariants, siphons, orbits) | 1 (overlays 4) |
+| Inspector | selected node/arc properties → `net.set_*` | 1 |
+| Time series | `TimeSeries` (lines, bands, overlays) | 1 |
+| Phase plot | two series of a `TimeSeries` against each other | 3 |
+| Heatmap | `Heatmap` | 3 |
+| Matrix table | `Matrix` | 4 |
+| Graph | `Graph` (force/layered layout) | 4 |
+| Trace / timeline | `Trace`, replayable on the canvas | 4 |
+| Table | `Table` | 5 |
+| Scatter | `Scatter` with Pareto front | 3 |
+| JSON | document source, editable through `file.load_json` | 2 |
+| Console | journal, last results, command palette | 1 |
+
+`export.artifact {id, format}` writes any artifact as JSON or CSV, and as SVG
+where it has a picture. SVG is written by core with no egui, so a headless agent
+gets the same picture the app shows. PNG comes from the app's own window
+screenshot (`--screenshot`).
+
+## Front ends
+
+- **App** (`crates/app`, binary `pflow-native`):
+  - Menus and shortcuts are generated from the registry.
+  - Canvas gestures become commands. A drag shows a live offset and commits
+    one `net.move_by` on release.
+  - `--cmd ID[=JSON]` runs commands at startup. `--screenshot PATH` saves a
+    PNG after the first frames and exits.
+  - The wasm entry point is cfg-gated (Trunk, phase 2).
+- **CLI** (`crates/cli`, binary `pflow-native-cli`):
+  - `list` and `exec` run commands one-shot against a file.
+  - `batch` runs a JSON step list as one undo step.
+  - `control` is the JSON-lines channel: `{"id","command","args"}` →
+    `{"id","ok","result"|"error"}`.
+  - `mcp` is a hand-rolled JSON-RPC 2.0 server over stdio. Its tools are
+    `list_commands`, `execute` and `batch` (one long-lived session), plus
+    `get_document` / `load_document`.
+  - Phase 2: the app listens on a local control port, and `mcp` attaches to a
+    running app when one is up, falling back to headless.
