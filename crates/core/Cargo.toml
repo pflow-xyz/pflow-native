@@ -11,10 +11,8 @@ pflow-core.workspace = true
 pflow-parser.workspace = true
 pflow-metamodel.workspace = true
 pflow-solver.workspace = true
-pflow-reachability.workspace = true
 pflow-verify.workspace = true
 pflow-validation.workspace = true
-pflow-results.workspace = true
 pflow-eventlog.workspace = true
 pflow-mining.workspace = true
 pflow-learn.workspace = true
@@ -49,8 +47,9 @@ default = []
 # Network loading (file.open_url / file.open_cid). Native builds turn it on;
 # the wasm build leaves it off.
 http = ["dep:ureq"]
-# Groth16 proofs of firings (zk.*). Native builds turn it on; without it the
-# zk.* commands exist but refuse.
+# Groth16 proofs of firings (zk.*). Opt-in (the CLI's and app's `zk` features
+# forward here): the upstream circuit does not yet prove enabledness
+# (FEATURES.md §D 9). Without it the zk.* commands exist but refuse.
 zk = [
     "dep:pflow-zk",
     "dep:pflow-zk-arkworks",

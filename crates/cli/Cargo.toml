@@ -11,5 +11,10 @@ name = "pflow-native-cli"
 path = "src/main.rs"
 
 [dependencies]
-pflow-native-core = { workspace = true, features = ["http", "zk"] }
+pflow-native-core = { workspace = true, features = ["http"] }
 serde_json.workspace = true
+
+[features]
+# Groth16 firing proofs (zk.*). Opt-in: the upstream circuit does not yet
+# prove enabledness (FEATURES.md §D 9). `cargo build --features zk`.
+zk = ["pflow-native-core/zk"]

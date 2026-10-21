@@ -1,7 +1,20 @@
 # Copy to .cargo/config.toml to build against a sibling ../pflow-rs checkout
-# instead of the pinned git revision.
+# instead of the pinned git revision (e.g. to try an upstream branch).
+# Every pflow-rs crate in the dependency graph is listed, direct and
+# transitive, so none is left on the pinned revision by accident.
+# When a new pflow-rs crate shows up in Cargo.lock (source pflow-rs), add it here.
 [patch."https://github.com/pflow-xyz/pflow-rs"]
+pflow-compose = { path = "../pflow-rs/crates/pflow-compose" }
 pflow-core = { path = "../pflow-rs/crates/pflow-core" }
-pflow-parser = { path = "../pflow-rs/crates/pflow-parser" }
+pflow-eventlog = { path = "../pflow-rs/crates/pflow-eventlog" }
+pflow-learn = { path = "../pflow-rs/crates/pflow-learn" }
 pflow-metamodel = { path = "../pflow-rs/crates/pflow-metamodel" }
+pflow-mining = { path = "../pflow-rs/crates/pflow-mining" }
+pflow-parser = { path = "../pflow-rs/crates/pflow-parser" }
+pflow-reachability = { path = "../pflow-rs/crates/pflow-reachability" }
 pflow-solver = { path = "../pflow-rs/crates/pflow-solver" }
+pflow-tropical = { path = "../pflow-rs/crates/pflow-tropical" }
+pflow-validation = { path = "../pflow-rs/crates/pflow-validation" }
+pflow-verify = { path = "../pflow-rs/crates/pflow-verify" }
+pflow-zk = { path = "../pflow-rs/crates/pflow-zk" }
+pflow-zk-arkworks = { path = "../pflow-rs/crates/pflow-zk-arkworks" }

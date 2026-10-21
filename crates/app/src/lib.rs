@@ -726,7 +726,14 @@ impl App {
 
 impl eframe::App for App {
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
-        storage.set_string(KEY_DOC, self.sess.doc.to_json_pretty());
+        // With session rates, so fitted / calibrated rates survive a restart
+        // (file.load_json reads them back).
+        let doc = self
+            .sess
+            .execute("file.export_json", json!({ "rates": true }))
+            .map(|v| serde_json::to_string_pretty(&v).unwrap_or_default())
+            .unwrap_or_else(|_| self.sess.doc.to_json_pretty());
+        storage.set_string(KEY_DOC, doc);
         storage.set_string(KEY_PATH, self.sess.path.clone().unwrap_or_default());
         let models: serde_json::Map<String, Value> = self
             .sess

@@ -4,10 +4,11 @@
 //! multipliers that make the play scorer agree with exact minimax, sim's
 //! `sim_distill`). The engines live in [`crate::learn`].
 //!
-//! `apply: true` writes learned rates into the session rates. Session rates
-//! are not part of the undo snapshots, so that step is **not undoable**: the
-//! result carries `previous_rates` and the `restore` steps (`sim.set_rate`)
-//! that put them back.
+//! `apply: true` writes learned rates into the session rates as one undo
+//! step (`Session::set_rates` snapshots the rates). The result also carries
+//! `previous_rates` and the `restore` steps (`sim.set_rate`) that put them
+//! back. `file.save` writes session rates into the file, so applied rates
+//! persist.
 
 use std::collections::BTreeMap;
 
@@ -31,13 +32,13 @@ pub const SET: &[CommandSpec] = &[
                events (racing transitions split by completion share); session rate ≥ 100 = instant pickup, kept. \
                Activities map to transitions by id, else by id or label ignoring case. Stores a rate-evidence table \
                and a report (rates, unmapped activities, token-replay conformance). `apply` sets the session rates \
-               (not undoable: the result lists the previous rates and the steps that restore them).",
+               (one undo step; the result also lists the previous rates and the sim.set_rate steps that restore them).",
         menu: "Data",
         shortcut: None,
         args: &[
             arg("log", Str, "event-log artifact id (data.load_log, or a table with case/activity/time columns)"),
             opt("unit", Str, "model time unit the rates are per: hour (default, as sim), min, s, ms, day"),
-            opt("apply", Bool, "set the learned rates as session rates (default false; not undoable)"),
+            opt("apply", Bool, "set the learned rates as session rates (default false; one undo step)"),
             opt("conformance", Bool, "replay the log for fitness/precision (default true)"),
         ],
         enabled: always,
@@ -51,7 +52,7 @@ pub const SET: &[CommandSpec] = &[
                matches the observed series of a timeseries artifact (pflow-learn; pflow.xyz fitRates). Series are \
                matched to places by display name (S, CoffeeBeans.brown), base place id or place label, or through \
                `places`. Stores a report and an overlay (group \"data\" vs \"fit\"). `apply` sets the session rates \
-               (not undoable).",
+               (one undo step).",
         menu: "Workbench",
         shortcut: None,
         args: &[
@@ -64,7 +65,7 @@ pub const SET: &[CommandSpec] = &[
             opt("tolerance", Num, "convergence tolerance (default 1e-4, as pflow.xyz)"),
             opt("places", Json, "{series name: place} when series names are not place names"),
             opt("group", Str, "fit only series of this overlay group (default: ungrouped or \"data\")"),
-            opt("apply", Bool, "set the fitted rates as session rates (default false; not undoable)"),
+            opt("apply", Bool, "set the fitted rates as session rates (default false; one undo step)"),
             opt("solver", Str, "ODE method: tsit5 (default), rk45, rk4, euler, heun, midpoint, bs32"),
             opt("dt", Num, "initial step (default 0.01)"),
             opt("abstol", Num, "absolute tolerance (default 1e-6)"),
@@ -82,7 +83,7 @@ pub const SET: &[CommandSpec] = &[
                rollouts) ranks moves as exact minimax does, on positions from seeded random self-play. The game is \
                read from places named <player>_turn (moves consume the turn token and pass the turn), or from \
                `players`. Reports agreement before/after; stores a report and a per-position table. `apply` sets \
-               the multiplied rates (not undoable).",
+               the multiplied rates (one undo step).",
         menu: "Workbench",
         shortcut: None,
         args: &[
@@ -97,7 +98,7 @@ pub const SET: &[CommandSpec] = &[
             opt("realizations", Int, "rollouts per candidate move, 1..200 (default 40)"),
             opt("seed", Int, "self-play and rollout seed (default 11)"),
             opt("engine", Str, "ssa (the only engine here)"),
-            opt("apply", Bool, "multiply the groups' session rates by the fit (default false; not undoable)"),
+            opt("apply", Bool, "multiply the groups' session rates by the fit (default false; one undo step)"),
         ],
         enabled: always,
         run: distill,

@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 
 use crate::doc::Document;
-use crate::registry::{always, arg, opt, s, ArgType::*, CommandSpec};
+use crate::registry::{always, arg, b, opt, s, ArgType::*, CommandSpec};
 use crate::session::Session;
 use crate::{Error, Result};
 
@@ -83,14 +83,15 @@ pub const SET: &[CommandSpec] = &[
     CommandSpec {
         id: "file.save",
         label: "Save",
-        help: "Write the document as pflow.xyz JSON-LD to `path`, or to the file it came from.",
+        help: "Write the document as pflow.xyz JSON-LD to `path`, or to the file it came from. \
+               Session rates (set, fitted or calibrated) go into each transition's `rate` field \
+               unless rates: false; opening the file reads them back.",
         menu: "File",
         shortcut: Some("Cmd+S"),
-        args: &[opt(
-            "path",
-            Str,
-            "file to write; defaults to the current path",
-        )],
+        args: &[
+            opt("path", Str, "file to write; defaults to the current path"),
+            opt("rates", Bool, "write session rates as transition `rate` fields (default true)"),
+        ],
         enabled: always,
         run: save,
         journal: false,
@@ -116,10 +117,10 @@ pub const SET: &[CommandSpec] = &[
     CommandSpec {
         id: "file.export_json",
         label: "Export JSON",
-        help: "The document as pflow.xyz JSON-LD.",
+        help: "The document as pflow.xyz JSON-LD (with rates: true, session rates as transition `rate` fields).",
         menu: "",
         shortcut: None,
-        args: &[],
+        args: &[opt("rates", Bool, "include session rates (default false)")],
         enabled: always,
         run: export_json,
         journal: false,
@@ -127,13 +128,45 @@ pub const SET: &[CommandSpec] = &[
 ];
 
 /// Replaces the whole document, as one undoable edit.
+/// Moves numeric transition `rate` fields out of the document into a rate
+/// map (they are session rates: the editor keeps them beside the net, and
+/// `file.save` writes them back).
+pub(crate) fn take_rates(doc: &mut Document) -> std::collections::BTreeMap<String, f64> {
+    let mut out = std::collections::BTreeMap::new();
+    for t in &mut doc.transitions {
+        if let Some(r) = t.extra.get("rate").and_then(Value::as_f64) {
+            if r.is_finite() && r >= 0.0 {
+                t.extra.shift_remove("rate");
+                out.insert(t.id.clone(), r);
+            }
+        }
+    }
+    out
+}
+
+/// The document with the session's rates written into its transitions'
+/// `rate` fields (what `file.save` writes; pflow.xyz ignores the field, and
+/// `take_rates` reads it back on open).
+pub fn with_rates(doc: &Document, rates: &std::collections::BTreeMap<String, f64>) -> Document {
+    let mut d = doc.clone();
+    for t in &mut d.transitions {
+        if let Some(r) = rates.get(&t.id) {
+            t.extra.insert("rate".into(), serde_json::json!(r));
+        }
+    }
+    d
+}
+
 pub(crate) fn replace(s: &mut Session, doc: Document) -> Result<()> {
-    s.edit("replace document", |s| {
-        let mut doc = doc;
+    let mut doc = doc;
+    let file_rates = take_rates(&mut doc);
+    // Rates that arrive with the document undo with it.
+    s.edit_with_rates("replace document", |s| {
         doc.normalize_colors();
         s.doc = doc;
         s.selection.clear();
         s.rates.retain(|t, _| s.doc.transition(t).is_some());
+        s.rates.extend(file_rates);
         Ok(())
     })?;
     s.reset_marking();
@@ -193,7 +226,12 @@ fn save(sess: &mut Session, a: &Value) -> Result<Value> {
             .clone()
             .ok_or_else(|| Error::BadArgs("no path: the document was never saved".into()))?,
     };
-    std::fs::write(&path, sess.doc.to_json_pretty() + "\n")
+    let doc = if b(a, "rates").unwrap_or(true) {
+        with_rates(&sess.doc, &sess.rates)
+    } else {
+        sess.doc.clone()
+    };
+    std::fs::write(&path, doc.to_json_pretty() + "\n")
         .map_err(|e| Error::Io(format!("{path}: {e}")))?;
     sess.path = Some(path.clone());
     sess.saved_doc = sess.doc.clone();
@@ -209,11 +247,13 @@ fn load_json(sess: &mut Session, a: &Value) -> Result<Value> {
         // A source edit: same document, so keep the view, the results and
         // the token game where the places still exist.
         let marking = sess.marking.clone();
-        sess.edit("edit JSON", |s| {
-            let mut doc = doc;
+        let mut doc = doc;
+        let file_rates = take_rates(&mut doc);
+        sess.edit_with_rates("edit JSON", |s| {
             doc.normalize_colors();
             s.doc = doc;
             s.rates.retain(|t, _| s.doc.transition(t).is_some());
+            s.rates.extend(file_rates);
             Ok(())
         })?;
         sess.reset_marking();
@@ -231,6 +271,10 @@ fn load_json(sess: &mut Session, a: &Value) -> Result<Value> {
     Ok(summary(sess))
 }
 
-fn export_json(sess: &mut Session, _: &Value) -> Result<Value> {
-    Ok(sess.doc.to_value())
+fn export_json(sess: &mut Session, a: &Value) -> Result<Value> {
+    if b(a, "rates").unwrap_or(false) {
+        Ok(with_rates(&sess.doc, &sess.rates).to_value())
+    } else {
+        Ok(sess.doc.to_value())
+    }
 }

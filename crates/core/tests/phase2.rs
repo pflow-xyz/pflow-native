@@ -138,3 +138,55 @@ fn producer_consumer_gallery_net_runs_as_on_pflow_xyz() {
     run(&mut s, "sim.fire", json!({"id": "produce"}));
     assert_eq!(s.marking["buffer"], vec![1]);
 }
+
+#[test]
+fn session_rates_survive_save_and_open() {
+    let dir = std::env::temp_dir().join(format!("pn-rates-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let with = dir.join("with.json");
+    let without = dir.join("without.json");
+    let mut s = Session::default();
+    run(&mut s, "file.open_example", json!({"name": "sir"}));
+    run(
+        &mut s,
+        "sim.set_rate",
+        json!({"id": "infect", "rate": 0.004}),
+    );
+    run(&mut s, "file.save", json!({"path": with.to_str().unwrap()}));
+    run(
+        &mut s,
+        "file.save",
+        json!({"path": without.to_str().unwrap(), "rates": false}),
+    );
+    assert!(std::fs::read_to_string(&with)
+        .unwrap()
+        .contains("\"rate\": 0.004"));
+    assert!(!std::fs::read_to_string(&without)
+        .unwrap()
+        .contains("\"rate\""));
+
+    let mut t = Session::default();
+    run(&mut t, "file.open", json!({"path": with.to_str().unwrap()}));
+    assert_eq!(t.rates.get("infect"), Some(&0.004));
+    assert!(
+        t.doc
+            .transition("infect")
+            .unwrap()
+            .extra
+            .get("rate")
+            .is_none(),
+        "the rate lives in the session, not the document"
+    );
+    run(
+        &mut t,
+        "file.open",
+        json!({"path": without.to_str().unwrap()}),
+    );
+    run(&mut t, "edit.undo", Value::Null);
+    assert_eq!(
+        t.rates.get("infect"),
+        Some(&0.004),
+        "undoing an open restores its rates"
+    );
+    std::fs::remove_dir_all(dir).ok();
+}

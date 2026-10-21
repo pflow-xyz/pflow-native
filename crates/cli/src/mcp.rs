@@ -93,13 +93,30 @@ impl Backend {
 
 const PROTOCOL: &str = "2025-06-18";
 
-const INSTRUCTIONS: &str = "pflow-native: a Petri-net editor and simulator built on pflow-rs. \
-Everything is a registry command `<namespace>.<verb>` (file, edit, net, sim, view, export, artifact, macro, command). \
-Call list_commands first (optionally with a prefix like \"net.\"), then execute one command or batch several \
+/// What an agent should know first. The namespace list comes from the
+/// registry, so it cannot go stale as command sets are added.
+fn instructions() -> String {
+    let reg = pflow_native_core::registry::registry();
+    let mut ns: Vec<&str> = reg
+        .commands()
+        .iter()
+        .filter_map(|c| c.id.split('.').next())
+        .collect();
+    ns.dedup();
+    let mut seen = std::collections::BTreeSet::new();
+    ns.retain(|n| seen.insert(*n));
+    format!(
+        "pflow-native: a Petri-net editor and simulator built on pflow-rs. \
+Everything is a registry command `<namespace>.<verb>`; namespaces: {}. \
+Call list_commands first (optionally with a prefix like \"net.\" or \"analysis.\"), then execute one command or batch several \
 (a batch is one undo step and rolls back on the first failure). \
 The document is the pflow.xyz editor JSON; places/transitions are referenced by id. \
 Typical flow: net.add_place / net.add_transition / net.add_arc, then sim.enabled, sim.fire, sim.ode \
-(stores a time-series artifact; export.artifact {format:\"csv\"|\"svg\"}), file.save {path}.";
+(stores a time-series artifact; export.artifact {{format:\"csv\"|\"svg\"}}), file.save {{path}}. \
+Remote writes (remote.*) return a preview unless called with send: true; when attached to the app, a send waits for the user's confirmation there.",
+        ns.join(", ")
+    )
+}
 
 fn tools() -> Value {
     json!([
@@ -259,7 +276,7 @@ fn handle(be: &mut Backend, req: &Value) -> Option<Value> {
                 "protocolVersion": version,
                 "capabilities": { "tools": { "listChanged": false } },
                 "serverInfo": { "name": "pflow-native", "version": env!("CARGO_PKG_VERSION") },
-                "instructions": INSTRUCTIONS,
+                "instructions": instructions(),
             }))
         }
         "ping" => Ok(json!({})),

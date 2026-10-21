@@ -469,46 +469,52 @@ pub fn remap_log(log: &EventLog, mapping: &ActivityMap) -> EventLog {
 }
 
 /// Token-replay conformance of `log` (activities already transition ids,
-/// see [`remap_log`]) against the document's declared initial marking
-/// (pflow-mining): sim's headline `fitting_percent` (traces replayed with no
-/// missing token or activity), the harsher `token_fitness`, ETC precision,
-/// and the five worst traces.
+/// see [`remap_log`]) against the document's declared initial marking:
+/// sim's headline `fitting_percent` (traces replayed with no missing token
+/// or activity), the harsher `token_fitness`, ETC precision, and the five
+/// worst traces. It is the same gate-aware replay as `data.conformance`
+/// (`crate::conformance`), so read and inhibitor arcs count here too and the
+/// two commands agree. (pflow-mining's `check_conformance` at our pin treats
+/// an inhibitor as a consuming input and ignores read arcs.)
 pub fn conformance(doc: &Document, log: &EventLog) -> Result<Value> {
-    let json = serde_json::to_vec(&doc.to_value()).expect("serializable");
-    let mut net = pflow_core::from_json(&json).map_err(|e| Error::Parse(e.to_string()))?;
-    // pflow-mining maps activities by display label; ours are ids.
-    for (id, t) in net.transitions.iter_mut() {
-        t.label = id.clone();
-        t.label_text = None;
+    let c = crate::conformance::check(doc, log, None)?;
+    let r = &c.report;
+    let mut worst: Vec<Value> = vec![];
+    if let crate::artifact::ArtifactData::Table { columns, rows } = &c.table {
+        let col = |n: &str| columns.iter().position(|c| c == n);
+        if let (Some(case), Some(fit), Some(ok), Some(miss), Some(dev)) = (
+            col("example_case"),
+            col("fitness"),
+            col("fitting"),
+            col("missing"),
+            col("first_deviation"),
+        ) {
+            let mut bad: Vec<&Vec<Value>> = rows.iter().filter(|r| r[ok] == json!(false)).collect();
+            bad.sort_by(|a, b| {
+                let f = |r: &Vec<Value>| r[fit].as_f64().unwrap_or(0.0);
+                f(a).total_cmp(&f(b))
+            });
+            worst = bad
+                .into_iter()
+                .take(5)
+                .map(|row| {
+                    json!({
+                        "case": row[case],
+                        "fitness": row[fit],
+                        "missing_tokens": row[miss],
+                        "first_deviation": row[dev],
+                    })
+                })
+                .collect();
+        }
     }
-    let conf = pflow_mining::check_conformance(log, &net);
-    let prec = pflow_mining::check_precision(log, &net);
-    let clean = |t: &pflow_mining::TraceReplayResult| {
-        t.missing_tokens == 0 && t.missing_activities.is_empty()
-    };
-    let replayable = conf.trace_results.iter().filter(|t| clean(t)).count();
-    let mut worst: Vec<&pflow_mining::TraceReplayResult> = conf.trace_results.iter().collect();
-    worst.sort_by(|a, b| a.fitness.total_cmp(&b.fitness));
-    let worst: Vec<Value> = worst
-        .into_iter()
-        .take_while(|t| !clean(t))
-        .take(5)
-        .map(|t| {
-            json!({
-                "case": t.case_id,
-                "fitness": t.fitness,
-                "missing_tokens": t.missing_tokens,
-                "missing_activities": t.missing_activities,
-            })
-        })
-        .collect();
     Ok(json!({
-        "fitting_percent": 100.0 * replayable as f64 / conf.total_traces.max(1) as f64,
-        "token_fitness": conf.fitness,
-        "total_traces": conf.total_traces,
-        "precision": prec.precision,
+        "fitting_percent": r["fitting_percent"],
+        "token_fitness": r["token_fitness"],
+        "total_traces": r["total_traces"],
+        "precision": r["precision"],
         "worst_traces": worst,
-        "note": "fitting_percent (full replays from the document's initial marking) is the headline; token_fitness counts a resource pool's leftover tokens as remaining, so it under-reads nets with pools",
+        "note": "fitting_percent (full replays from the document's initial marking) is the headline; token_fitness counts a resource pool's leftover tokens as remaining, so it under-reads nets with pools. Same replay as data.conformance.",
     }))
 }
 

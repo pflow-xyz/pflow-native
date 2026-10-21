@@ -1,4 +1,4 @@
-.PHONY: build run test lint wasm-check web web-build screenshot mcp
+.PHONY: build build-zk run test test-zk lint wasm-check web web-build screenshot mcp
 
 build:
 	cargo build --release
@@ -12,6 +12,14 @@ test:
 lint:
 	cargo fmt --all --check
 	cargo clippy --workspace --all-targets -- -D warnings
+	cargo clippy --workspace --all-targets --features pflow-native-core/zk -- -D warnings
+
+# ZK firing proofs are opt-in (FEATURES.md §D 9).
+build-zk:
+	cargo build --release --features pflow-native/zk,pflow-native-cli/zk
+
+test-zk:
+	cargo test -p pflow-native-core --features zk --test provenance
 
 # Core + app must keep compiling for the browser.
 wasm-check:

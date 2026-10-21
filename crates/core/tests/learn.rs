@@ -548,3 +548,60 @@ fn applied_rates_are_one_undo_step() {
     s.execute("edit.redo", serde_json::Value::Null).unwrap();
     assert_eq!(s.rates["recover"], fitted);
 }
+
+/// calibrate and data.conformance read the same replay, so they agree on a
+/// gated net (an inhibitor that blocks a logged firing).
+#[test]
+fn calibrate_conformance_agrees_with_data_conformance_on_gates() {
+    let mut s = pflow_native_core::Session::default();
+    for (id, args) in [
+        (
+            "net.add_place",
+            serde_json::json!({"id": "a", "x": 0, "y": 0, "initial": 1}),
+        ),
+        (
+            "net.add_place",
+            serde_json::json!({"id": "b", "x": 100, "y": 0}),
+        ),
+        (
+            "net.add_place",
+            serde_json::json!({"id": "gate", "x": 50, "y": 60, "initial": 1}),
+        ),
+        (
+            "net.add_transition",
+            serde_json::json!({"id": "go", "x": 50, "y": 0}),
+        ),
+        (
+            "net.add_arc",
+            serde_json::json!({"source": "a", "target": "go"}),
+        ),
+        (
+            "net.add_arc",
+            serde_json::json!({"source": "go", "target": "b"}),
+        ),
+        (
+            "net.add_arc",
+            serde_json::json!({"source": "gate", "target": "go", "inhibit": true}),
+        ),
+    ] {
+        s.execute(id, args).unwrap();
+    }
+    let log = "case_id,activity,timestamp\n1,go,2026-10-01T08:00:00Z\n2,go,2026-10-01T08:05:00Z\n";
+    let l = s
+        .execute("data.load_log", serde_json::json!({"text": log}))
+        .unwrap();
+    let id = l["artifact"].as_str().unwrap().to_string();
+    let c = s
+        .execute("data.conformance", serde_json::json!({"log": id}))
+        .unwrap();
+    let k = s
+        .execute("data.calibrate", serde_json::json!({"log": id}))
+        .unwrap();
+    let kc = &k["conformance"];
+    assert_eq!(kc["fitting_percent"], c["fitting_percent"], "{kc} vs {c}");
+    assert_eq!(kc["token_fitness"], c["token_fitness"]);
+    assert_eq!(
+        c["fitting_percent"], 0.0,
+        "the inhibitor blocks every logged firing: {c}"
+    );
+}

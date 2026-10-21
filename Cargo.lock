@@ -3043,8 +3043,6 @@ dependencies = [
  "pflow-metamodel",
  "pflow-mining",
  "pflow-parser",
- "pflow-reachability",
- "pflow-results",
  "pflow-solver",
  "pflow-validation",
  "pflow-verify",
@@ -3076,18 +3074,6 @@ version = "0.3.0"
 source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
 dependencies = [
  "pflow-metamodel",
-]
-
-[[package]]
-name = "pflow-results"
-version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
-dependencies = [
- "pflow-core",
- "pflow-solver",
- "serde",
- "serde_json",
- "thiserror 2.0.21",
 ]
 
 [[package]]

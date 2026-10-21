@@ -160,7 +160,7 @@ fn legal_firing(doc: &Document, pre: &Marking, t: &str) -> Result<Marking> {
         .map_err(|e| Error::Invalid(format!("{t} cannot fire at that marking: {e}")))
 }
 
-const UNAVAILABLE: &str = "this build has no zero-knowledge prover (cargo feature \"zk\" on pflow-native-core: the CLI and the native app turn it on, the web build leaves it off)";
+const UNAVAILABLE: &str = "this build has no zero-knowledge prover: it is opt-in (build with `--features zk`, e.g. `make build-zk`), because the upstream circuit does not yet prove that a firing was enabled (FEATURES.md §D 9)";
 
 /// Whether this build can prove (greys out the `zk.*` commands).
 pub fn available() -> std::result::Result<(), String> {

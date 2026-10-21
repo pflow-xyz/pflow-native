@@ -16,13 +16,20 @@ agent can do runs headless and builds for `wasm32-unknown-unknown`.
 
 ```
 pflow-rs crates (pinned git rev; sibling-path [patch] for development)
-  └─ pflow-native-core        L1  Document, Session, Registry, Artifacts, core command sets
-       └─ pflow-native-analysis   L2  (phase 3+) command sets over pflow-reachability / verify /
-       │                              validation / compose / learn / mining / eventlog / results
-       └─ pflow-native-remote     L2  (phase 7) bridge to sim.pflow.xyz for store/publish/LLM tools
-            └─ pflow-native (app)     L3  eframe UI: views render artifacts, every action -> registry
-            └─ pflow-native-cli       L3  list / exec / batch / control (JSON lines) / mcp (stdio)
+  └─ pflow-native-core   (crates/core)  Document, Session, Registry, Artifacts, and every
+       │                                 command set: file/edit/net, sim/opt/analysis, data,
+       │                                 compose/system, store/remote/provenance/zk, … (one
+       │                                 module per area under src/commands/; the engines
+       │                                 beside them under src/). Features: `http` (remote
+       │                                 sends, URL loading), `zk` (Groth16 proofs).
+       ├─ pflow-native       (crates/app)  eframe UI: views render artifacts, every action -> registry;
+       │                                   control port for agents
+       └─ pflow-native-cli   (crates/cli)  list / exec / batch / control (JSON lines) / mcp (stdio)
 ```
+
+Areas once planned as separate crates (analysis, remote) live as modules of
+pflow-native-core: they share `Session` and the registry, and splitting them
+would only add plumbing.
 
 ## The document is pure data
 
