@@ -8,6 +8,7 @@ fn run(s: &mut Session, id: &str, args: Value) -> Value {
 
 #[test]
 fn every_gallery_example_loads_fires_and_simulates() {
+    assert_eq!(EXAMPLES.len(), 7, "the six pflow.xyz gallery nets + SIR");
     for (name, _) in EXAMPLES {
         let mut s = Session::default();
         run(&mut s, "file.open_example", json!({ "name": name }));

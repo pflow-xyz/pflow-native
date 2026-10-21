@@ -5,10 +5,32 @@ use crate::registry::{always, arg, opt, s, ArgType::*, CommandSpec};
 use crate::session::Session;
 use crate::{Error, Result};
 
+/// The pflow.xyz landing-page gallery (fetched by CID from pflow.xyz/o/),
+/// plus the SIR model used by the tests.
 pub const EXAMPLES: &[(&str, &str)] = &[
     (
         "coffee-shop",
         include_str!("../../../../examples/coffee-shop.json"),
+    ),
+    (
+        "tic-tac-toe",
+        include_str!("../../../../examples/tic-tac-toe.json"),
+    ),
+    (
+        "enzyme-kinetics",
+        include_str!("../../../../examples/enzyme-kinetics.json"),
+    ),
+    (
+        "predator-prey",
+        include_str!("../../../../examples/predator-prey.json"),
+    ),
+    (
+        "producer-consumer",
+        include_str!("../../../../examples/producer-consumer.json"),
+    ),
+    (
+        "usdc-bridge",
+        include_str!("../../../../examples/usdc-bridge.json"),
     ),
     ("sir", include_str!("../../../../examples/sir.json")),
 ];

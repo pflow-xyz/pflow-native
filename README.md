@@ -40,6 +40,10 @@ The canvas snaps nodes to the 10-unit grid used by pflow.xyz (View → Snap to G
 - **Run** lists the fireable transitions, the marking table and seeded random runs.
 - **Console** shows the journal and has a command line for any command.
 
+![Tic-tac-toe from the pflow.xyz gallery, sealed, with the JSON-LD pane](docs/screenshot-ttt.png)
+
+**Content IDs.** `file.cid` computes a document's pflow.xyz CID and `file.seal` stores it as `@id`. Both use URDNA2015 → CIDv1 and are byte-identical to pflow.xyz's Go sealer on its parity goldens. Opening and saving a file keeps its CID.
+
 ## Agents: CLI, control channel, MCP
 
 ```bash
