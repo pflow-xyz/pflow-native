@@ -21,6 +21,7 @@ pub mod overlay;
 pub mod settings;
 pub mod sim;
 pub mod stochastic;
+pub mod systems;
 pub mod view;
 
 pub const ALL: &[&[CommandSpec]] = &[
@@ -41,6 +42,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     data::SET,
     export::SET,
     models::SET,
+    systems::SET,
     macros::SET,
     command::SET,
 ];

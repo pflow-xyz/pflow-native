@@ -116,7 +116,7 @@ How to read it:
 | evaluate | score moves by rollouts | `sim.evaluate {player, objective, rollouts, seed, horizon, depth}` (play method) | metamodel firing + pflow-solver stochastic | Table (ranked) | 3 ✅ (player = role or id prefix, objective inferred from `win_*`; no eliminate/incidence/search) |
 | crosscheck | SSA vs ODE vs conservation | `sim.crosscheck {t_end, runs, seed, points}` | pflow-solver ssa + ODE; Farkas P-invariants in core | TimeSeries overlay (ssa/ode), Report | 3 ✅ (no move-ranking check) |
 | dataset | synthetic event log | `data.generate {cases, seed}` | pflow-solver ssa + pflow-eventlog | Table, CSV export | 5 |
-| run_pipeline | bound models, loop fixed point | `compose.run_pipeline` | port | TimeSeries per model, Graph | 6 |
+| run_pipeline | bound models, loop fixed point | `system.run {name \| bindings, hours, engine: ode\|ssa, seed, realizations, sweeps, tolerance, graph}` | port (`core::systems`) | TimeSeries overlay (group = model), Report (order, loop verdict, per-binding flows, assumptions), Graph | 6 ✅ topological order, delays, sim's sweep fixed point (bit-exact) + `tolerance`/`sweeps`; default engine `ode` (piecewise mass-action), `ssa` is sim's scenario engine |
 | diagnose | resource/rate influence, knee, lumpability | `analysis.diagnose` | pflow-results sensitivity + port | Tornado (bars), curve, Report | 4 |
 | invariants | P/T invariants, siphons/traps, deadlock witnesses | `analysis.invariants`, `analysis.siphons` | pflow-reachability (+ **port** siphons/traps) | Matrix, canvas overlay | 4 |
 | — (incidence) | incidence matrix | `analysis.incidence` | pflow-zk IncidenceMatrix / metamodel | Matrix | 4 |
@@ -129,8 +129,8 @@ How to read it:
 | query, edges, neighbors, link | knowledge-graph edges | `store.query`, `store.link` | local store / remote | Graph | 7 |
 | create_collection, license_model, supersede_model, migration_offers, accept_migration | collections, licenses, versioning | `store.*` / `remote.sim.*` | remote | Table | 7 |
 | map_put, map_get, map_list | content-addressed tables | `store.map_*` | local store | Table | 7 |
-| bind, get_binding, list_bindings | checked port bindings (units, delay) | `compose.bind` | **port** | Graph | 6 |
-| create_system, system | stored model+binding sets | `compose.system` | **port** | Graph (system) | 6 |
+| bind, get_binding, list_bindings | checked port bindings (units, delay) | `system.set_port`, `system.ports`, `system.bind`, `system.binding`, `system.bindings`, `system.unbind` | port (`core::systems`, binds-port-v1/v2/v3) | Report | 6 ✅ ports in the document's `"ports"` field; bindings by library name, not CID |
+| create_system, system | stored model+binding sets | `system.create`, `system.show`, `system.list`, `system.delete` | port | Graph (system) + Report | 6 🟡 checks, plan, loops, maxHours, per-port bound/candidates; no isomorphicTo/subnetOf edges or one-net shape (needs the phase-7 prover), no collection snapshots or `naming` |
 | conformance | fitness/precision/generalization/simplicity | `data.conformance {log}` | pflow-mining, pflow-eventlog | Table + residual on canvas | 5 |
 | conformance_stream | online replay, first divergence | `data.replay {events}` | pflow-mining | Trace + running-fitness TimeSeries | 5 |
 | calibrate | learn rates/delays from a log | `data.calibrate {log}` | pflow-learn, pflow-mining | Table (evidence), new model | 5 |
@@ -154,7 +154,7 @@ How to read it:
 | Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | |
 | Tornado / ranked bars | diagnose, evaluate | CSV | 4 | |
 | Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate tables today) 
-| System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | |
+| System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | 🟡 system + pipeline Graph artifacts (`system.show`, `system.run {graph}`); knowledge graph is phase 7 |
 | Side-by-side mapping | prove, diff | SVG | 6–7 | |
 
 ## D. Gaps in pflow-rs (work that lands upstream, not here)
@@ -163,6 +163,6 @@ How to read it:
 2. Siphon and trap search. Home: pflow-reachability.
 3. Exact automorphisms, canonical labelling, color refinement. Source: sim `orbits.go`, `classify.go`.
 4. Morphism prover/checker. Source: sim `pkg/morphism`.
-5. Port bindings, pipelines, loop fixed point. Source: sim `bindcheck`, `pipeline`, `loop`.
+5. Port bindings, pipelines, loop fixed point. Source: sim `bindcheck`, `pipeline`, `loop`. Landed here as `crates/core/src/systems.rs` (no `Session` dependency, ready to move upstream).
 6. pflow.xyz layout algorithms and URDNA2015 CID sealing. Both landed here instead (`crates/core/src/layout.rs`, `crates/core/src/cid.rs`; the latter is a port of pflow-xyz's json-gold behaviour, not a general JSON-LD library). Worth upstreaming.
 7. Deterministic ODE summation. `pflow_core::PetriNet` keeps transitions in a std `HashMap` with a random hasher, so `pflow_solver::Problem` sums derivatives in a different order each run, and results differ in the last bits between runs. Iterate in sorted order (or use a `BTreeMap`) upstream. Until then, tests compare ODE results with a tolerance.
