@@ -26,6 +26,7 @@ pub mod sim;
 pub mod simclient;
 pub mod statespace;
 pub mod stochastic;
+pub mod store;
 pub mod string_diagram;
 pub mod sweep;
 pub mod systems;
