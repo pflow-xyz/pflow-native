@@ -67,7 +67,7 @@ How to read it:
 | Command palette (not in pflow.xyz) | — | ⌘K over the whole registry; args form generated from each command's `ArgSpec`s | app | 2 | ✅ |
 | Agents drive the live window (not in pflow.xyz) | — | app control port `127.0.0.1:7979` (JSON lines); `pflow-native-cli mcp` attaches to it, `screenshot` tool | app + cli | 2 | ✅ |
 | Web build | — | Trunk (`make web`), eframe WebRunner, browser-storage autosave | app | 2 | ✅ (no file dialogs or HTTP fetch yet) |
-| String-diagram view + SVG | pv:6324; diagram-viewer.js | String-diagram view | port | 4 | |
+| String-diagram view + SVG | pv:6324; diagram-viewer.js | `view.string_diagram` → drawing artifact (`core::string_diagram`), SVG via `export.artifact`; the pv:6381 net layout is `string_diagram::net_layout` | port | 4 | 🟡 core: boxes, wires, ports, labels, back edges match the JS element for element (Béziers flattened, arrowhead outlined); net layout matches but is not yet a `net.layout` algorithm |
 
 ### A3. Simulation (editor)
 
