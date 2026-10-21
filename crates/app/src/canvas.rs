@@ -269,7 +269,11 @@ fn input(app: &mut App, ui: &egui::Ui, resp: &egui::Response, rect: Rect) {
             (Tool::Arc, None) => app.canvas.arc_from = None,
             (Tool::Token, Some(Hit::Node(id))) if app.sess.doc.place(id).is_some() => {
                 let delta = if secondary { -1 } else { 1 };
-                app.queue("net.add_tokens", json!({ "id": id, "delta": delta }));
+                let color = app.token_color.min(app.sess.doc.colors() - 1);
+                app.queue(
+                    "net.add_tokens",
+                    json!({ "id": id, "delta": delta, "color": color }),
+                );
             }
             (Tool::Delete, Some(Hit::Node(id))) => app.queue("edit.delete", json!({ "ids": [id] })),
             (Tool::Delete, Some(Hit::Arc(a, b))) => {
@@ -400,7 +404,7 @@ fn draw(app: &mut App, painter: &egui::Painter, rect: Rect, dark: bool, hover: O
             ));
         }
         let w = a.weight_sum();
-        if w != 1.0 {
+        if w != 1.0 || s.view.settings.show_unit_weights {
             let m = pts[n / 2];
             let txt = if w.fract() == 0.0 {
                 format!("{}", w as i64)

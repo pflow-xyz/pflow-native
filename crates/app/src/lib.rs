@@ -4,7 +4,11 @@
 //! session; the queue is drained at the end of each frame.
 
 mod canvas;
+#[cfg(not(target_arch = "wasm32"))]
+pub mod control;
+mod dialogs;
 mod inspector;
+mod json_pane;
 mod panels;
 mod plot;
 mod shortcuts;
@@ -13,7 +17,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
 use eframe::egui;
-use pflow_native_core::{Session, Step, Tool, UiRequest};
+use pflow_native_core::{Session, Step, Theme, Tool, UiRequest};
 use serde_json::{json, Value};
 
 pub use canvas::CanvasState;
@@ -40,7 +44,15 @@ pub struct Options {
     pub commands: Vec<Step>,
     /// Save a screenshot here after the first frames, then quit.
     pub screenshot: Option<String>,
+    /// Control port address (native); `None` disables it.
+    pub control: Option<String>,
+    /// Don't restore the autosaved document and settings.
+    pub fresh: bool,
 }
+
+const KEY_DOC: &str = "pflow-native/doc";
+const KEY_PATH: &str = "pflow-native/path";
+const KEY_SETTINGS: &str = "pflow-native/settings";
 
 pub struct App {
     pub sess: Session,
@@ -52,6 +64,15 @@ pub struct App {
     pub(crate) bottom: BottomTab,
     pub(crate) plot: plot::PlotState,
     pub(crate) console: panels::ConsoleState,
+    pub(crate) dialogs: dialogs::DialogState,
+    pub(crate) json: json_pane::JsonPaneState,
+    /// Color index the token tool adds/removes.
+    pub(crate) token_color: usize,
+    applied_theme: Option<Theme>,
+    clipboard_out: Option<String>,
+    #[cfg(not(target_arch = "wasm32"))]
+    control: Option<control::Control>,
+    control_addr: Option<String>,
     frame: u64,
     exit_after_screenshot: Option<String>,
     screenshot_done: Arc<AtomicBool>,
@@ -59,7 +80,11 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(opts: Options, services: Option<Box<dyn Services>>) -> Self {
+    pub fn new(
+        opts: Options,
+        services: Option<Box<dyn Services>>,
+        storage: Option<&dyn eframe::Storage>,
+    ) -> Self {
         let mut sess = Session::default();
         sess.has_ui = true;
         let mut app = Self {
@@ -74,14 +99,37 @@ impl App {
             bottom: BottomTab::Plot,
             plot: Default::default(),
             console: Default::default(),
+            dialogs: Default::default(),
+            json: Default::default(),
+            token_color: 0,
+            applied_theme: None,
+            clipboard_out: None,
+            #[cfg(not(target_arch = "wasm32"))]
+            control: None,
+            control_addr: opts.control.clone(),
             frame: 0,
             exit_after_screenshot: opts.screenshot,
             screenshot_done: Arc::new(AtomicBool::new(false)),
             screenshot_pending: false,
         };
-        match &opts.open {
-            Some(path) => app.run("file.open", json!({ "path": path })),
-            None => app.run("file.open_example", json!({ "name": "sir" })),
+        let restore = storage.filter(|_| !opts.fresh && app.exit_after_screenshot.is_none());
+        if let Some(st) = restore.and_then(|s| s.get_string(KEY_SETTINGS)) {
+            if let Ok(v) = serde_json::from_str::<Value>(&st) {
+                app.run("view.set", v);
+            }
+        }
+        let autosaved = restore.and_then(|s| s.get_string(KEY_DOC));
+        match (&opts.open, autosaved) {
+            (Some(path), _) => app.run("file.open", json!({ "path": path })),
+            (None, Some(doc)) => {
+                app.run("file.load_json", json!({ "json": doc }));
+                let path = restore
+                    .and_then(|s| s.get_string(KEY_PATH))
+                    .filter(|p| !p.is_empty());
+                app.sess.path = path;
+                app.status = Ok("Restored the autosaved document.".into());
+            }
+            (None, None) => app.run("file.open_example", json!({ "name": "sir" })),
         }
         for st in opts.commands {
             app.run(&st.command, st.args);
@@ -94,6 +142,9 @@ impl App {
         let r = self.sess.execute(id, args.clone());
         self.console.record(id, &args, &r);
         let quiet = id.starts_with("view.") || id == "tool.set" || id.starts_with("edit.select");
+        if let (Ok(Value::String(link)), "file.permalink") = (&r, id) {
+            self.clipboard_out = Some(link.clone());
+        }
         match r {
             Ok(_) if quiet => {}
             Ok(v) => self.status = Ok(summarize(id, &v)),
@@ -126,6 +177,38 @@ impl App {
     /// Runs a menu-style invocation (collects a path first if needed).
     pub(crate) fn menu(&mut self, id: &str) {
         self.invoke_from_menu(id);
+    }
+
+    /// Runs `id` the way a menu or the palette does: path arguments come
+    /// from a file dialog, other required arguments from a form.
+    pub(crate) fn invoke(&mut self, id: &'static str) {
+        let picker = matches!(
+            id,
+            "file.open" | "file.save" | "export.svg" | "view.screenshot"
+        );
+        let needs_form = self
+            .sess
+            .registry()
+            .find(id)
+            .is_some_and(|c| c.args.iter().any(|a| a.required));
+        if needs_form && !picker {
+            let prefill = match id {
+                "net.set_details" => json!({
+                    "name": self.sess.doc.extra.get("name"),
+                    "description": self.sess.doc.extra.get("description"),
+                }),
+                "net.set_colors" => json!({
+                    "token": self.sess.doc.token.iter()
+                        .map(|t| t.rsplit('/').next().unwrap_or(t).to_string())
+                        .collect::<Vec<_>>().join(", "),
+                }),
+                "file.open_cid" => json!({ "server": "https://pflow.xyz" }),
+                _ => Value::Null,
+            };
+            self.ask_args(id, &prefill);
+        } else {
+            self.invoke_from_menu(id);
+        }
     }
 
     /// Queues a command for the end of this frame.
@@ -190,8 +273,29 @@ impl App {
                         }
                         let r = ui.add_enabled(enabled, b).on_hover_text(c.help);
                         if r.clicked() {
-                            self.invoke_from_menu(c.id);
+                            self.invoke(c.id);
                             ui.close();
+                        }
+                    }
+                    if menu == "Help" {
+                        ui.separator();
+                        if ui
+                            .add(
+                                egui::Button::new("Command Palette…")
+                                    .shortcut_text(shortcuts::display("Cmd+K")),
+                            )
+                            .clicked()
+                        {
+                            self.dialogs.palette_open = true;
+                            ui.close();
+                        }
+                        if ui.button("Keyboard & Mouse…").clicked() {
+                            self.dialogs.help_open = true;
+                            ui.close();
+                        }
+                        if let Some(addr) = self.control_status() {
+                            ui.separator();
+                            ui.weak(addr);
                         }
                     }
                     if menu == "File" {
@@ -250,6 +354,18 @@ impl App {
                     .on_hover_text(format!("{} ({key})", tool_help(*t)));
                 if r.clicked() {
                     self.queue("tool.set", json!({ "tool": t.name() }));
+                }
+            }
+            if self.sess.tool == Tool::Token && self.sess.doc.colors() > 1 {
+                ui.separator();
+                for (i, t) in self.sess.doc.token.iter().enumerate() {
+                    let (r, g, b) = pflow_native_core::export::token_rgb(t, i);
+                    let name = t.rsplit('/').next().unwrap_or(t);
+                    let text = egui::RichText::new(format!("● {name}"))
+                        .color(egui::Color32::from_rgb(r, g, b));
+                    if ui.selectable_label(self.token_color == i, text).clicked() {
+                        self.token_color = i;
+                    }
                 }
             }
             ui.separator();
@@ -396,29 +512,123 @@ fn tool_help(t: Tool) -> &'static str {
     }
 }
 
+impl App {
+    fn control_status(&self) -> Option<String> {
+        #[cfg(not(target_arch = "wasm32"))]
+        if let Some(c) = &self.control {
+            return Some(format!("control port {}", c.addr));
+        }
+        None
+    }
+
+    /// Starts the control port on the first frame (it needs the egui
+    /// context to wake the UI), then answers what has arrived.
+    fn serve_control(&mut self, ctx: &egui::Context) {
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            if let Some(addr) = self.control_addr.take() {
+                match control::Control::start(&addr, ctx.clone()) {
+                    Ok(c) => {
+                        self.status = Ok(format!("Agents can attach: control port {}", c.addr));
+                        self.control = Some(c);
+                    }
+                    Err(e) => eprintln!("pflow-native: {e} (control port disabled)"),
+                }
+            }
+            let reqs = self
+                .control
+                .as_ref()
+                .map(|c| c.drain(64))
+                .unwrap_or_default();
+            for req in reqs {
+                let id = req.body.get("id").cloned().unwrap_or(Value::Null);
+                let r = if let Some(steps) = req.body.get("batch") {
+                    self.sess
+                        .execute("command.batch", json!({ "steps": steps }))
+                } else if let Some(cmd) = req.body.get("command").and_then(Value::as_str) {
+                    let args = req.body.get("args").cloned().unwrap_or(Value::Null);
+                    let r = self.sess.execute(cmd, args.clone());
+                    self.console.record(cmd, &args, &r);
+                    r
+                } else {
+                    Err(pflow_native_core::Error::BadArgs(
+                        "expected \"command\" or \"batch\"".into(),
+                    ))
+                };
+                let reply = match r {
+                    Ok(v) => json!({ "id": id, "ok": true, "result": v }),
+                    Err(e) => json!({ "id": id, "ok": false, "error": e.to_string() }),
+                };
+                let _ = req.reply.send(reply);
+            }
+        }
+        #[cfg(target_arch = "wasm32")]
+        let _ = ctx;
+    }
+
+    fn apply_theme(&mut self, ctx: &egui::Context) {
+        let want = self.sess.view.settings.theme;
+        if self.applied_theme != Some(want) {
+            ctx.set_theme(match want {
+                Theme::System => egui::ThemePreference::System,
+                Theme::Dark => egui::ThemePreference::Dark,
+                Theme::Light => egui::ThemePreference::Light,
+            });
+            self.applied_theme = Some(want);
+        }
+    }
+}
+
 impl eframe::App for App {
+    fn save(&mut self, storage: &mut dyn eframe::Storage) {
+        storage.set_string(KEY_DOC, self.sess.doc.to_json_pretty());
+        storage.set_string(KEY_PATH, self.sess.path.clone().unwrap_or_default());
+        storage.set_string(
+            KEY_SETTINGS,
+            serde_json::to_string(&self.sess.view.settings).unwrap_or_default(),
+        );
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.frame += 1;
+        self.serve_control(&ctx);
+        self.apply_theme(&ctx);
         shortcuts::handle(self, &ctx);
+        let settings = self.sess.view.settings;
 
         egui::Panel::top("menu").show(ui, |ui| {
             self.menu_bar(ui);
             self.toolbar(ui);
         });
         egui::Panel::bottom("status").show(ui, |ui| self.status_bar(ui));
-        egui::Panel::right("inspector")
-            .resizable(true)
-            .default_size(260.0)
-            .show(ui, |ui| inspector::ui(self, ui));
-        egui::Panel::bottom("bottom")
-            .resizable(true)
-            .default_size(260.0)
-            .show(ui, |ui| panels::bottom(self, ui));
+        if settings.inspector {
+            egui::Panel::right("inspector")
+                .resizable(true)
+                .default_size(260.0)
+                .show(ui, |ui| inspector::ui(self, ui));
+        }
+        if settings.bottom_panel {
+            egui::Panel::bottom("bottom")
+                .resizable(true)
+                .default_size(260.0)
+                .show(ui, |ui| panels::bottom(self, ui));
+        }
+        if settings.json_pane {
+            egui::Panel::left("json")
+                .resizable(true)
+                .default_size(380.0)
+                .show(ui, |ui| json_pane::ui(self, ui));
+        }
         egui::CentralPanel::default().show(ui, |ui| canvas::ui(self, ui));
+        dialogs::ui(self, &ctx);
 
         self.drain();
         self.handle_ui_requests(&ctx);
+        if let Some(text) = self.clipboard_out.take() {
+            ctx.copy_text(text);
+            self.status = Ok("Permalink copied to the clipboard.".into());
+        }
 
         // --screenshot: let layout and fonts settle, capture, then quit.
         if let Some(path) = self.exit_after_screenshot.clone() {

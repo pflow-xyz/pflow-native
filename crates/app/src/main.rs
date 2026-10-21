@@ -1,7 +1,8 @@
 //! `pflow-native`: the desktop app (and, built for wasm32, the web app).
 //!
 //! ```text
-//! pflow-native [NET.json] [--example NAME] [--cmd 'ID {json}']... [--screenshot OUT.png] [--size WxH]
+//! pflow-native [NET.json] [--example NAME] [--cmd 'ID {json}']... [--screenshot OUT.png]
+//!              [--size WxH] [--control ADDR | --no-control] [--fresh]
 //! ```
 
 #[cfg(not(target_arch = "wasm32"))]
@@ -26,7 +27,10 @@ fn main() -> eframe::Result {
         }
     }
 
-    let mut opts = Options::default();
+    let mut opts = Options {
+        control: Some(pflow_native::control::DEFAULT_ADDR.to_string()),
+        ..Options::default()
+    };
     let mut size = [1400.0_f32, 900.0];
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
@@ -61,6 +65,9 @@ fn main() -> eframe::Result {
                 );
             }
             "--screenshot" => opts.screenshot = args.next(),
+            "--control" => opts.control = args.next(),
+            "--no-control" => opts.control = None,
+            "--fresh" => opts.fresh = true,
             "--size" => {
                 let s = args.next().unwrap_or_default();
                 if let Some((w, h)) = s.split_once('x') {
@@ -68,7 +75,13 @@ fn main() -> eframe::Result {
                 }
             }
             "-h" | "--help" => {
-                println!("pflow-native [NET.json] [--example NAME] [--cmd 'ID {{json}}']... [--screenshot OUT.png] [--size WxH]");
+                println!(
+                    "pflow-native [NET.json] [--example NAME] [--cmd 'ID {{json}}']... \
+                     [--screenshot OUT.png] [--size WxH] [--control ADDR | --no-control] [--fresh]\n\n\
+                     --control ADDR  JSON-lines control port for agents (default {}; `pflow-native-cli mcp` attaches to it)\n\
+                     --fresh         ignore the autosaved document and settings",
+                    pflow_native::control::DEFAULT_ADDR
+                );
                 return Ok(());
             }
             path => opts.open = Some(path.to_string()),
@@ -83,7 +96,7 @@ fn main() -> eframe::Result {
     eframe::run_native(
         "pflow-native",
         native,
-        Box::new(move |_cc| Ok(Box::new(App::new(opts, Some(Box::new(Native)))))),
+        Box::new(move |cc| Ok(Box::new(App::new(opts, Some(Box::new(Native)), cc.storage)))),
     )
 }
 
@@ -101,7 +114,13 @@ fn main() {
             .start(
                 canvas,
                 web_options,
-                Box::new(|_cc| Ok(Box::new(pflow_native::App::new(Default::default(), None)))),
+                Box::new(|cc| {
+                    Ok(Box::new(pflow_native::App::new(
+                        Default::default(),
+                        None,
+                        cc.storage,
+                    )))
+                }),
             )
             .await
             .expect("failed to start eframe");

@@ -149,7 +149,7 @@ fn select_none(s: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!([]))
 }
 
-fn delete(s: &mut Session, a: &Value) -> Result<Value> {
+pub(crate) fn delete(s: &mut Session, a: &Value) -> Result<Value> {
     let ids = strs(a, "ids").unwrap_or_else(|| s.selection.clone());
     if ids.is_empty() {
         return Err(Error::BadArgs("nothing selected to delete".into()));

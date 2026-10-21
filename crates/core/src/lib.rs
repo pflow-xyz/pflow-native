@@ -18,7 +18,7 @@ pub mod sim;
 pub use artifact::{Artifact, ArtifactData};
 pub use doc::{Arc, Document, NodeKind, Place, Transition};
 pub use registry::{ArgSpec, ArgType, CommandSpec, Registry};
-pub use session::{Session, Step, Tool, UiRequest, View};
+pub use session::{Session, Settings, Step, Theme, Tool, UiRequest, View};
 pub use sim::{Marking, OdeResult};
 
 /// An error from a command, surfaced verbatim to whichever front end ran it.

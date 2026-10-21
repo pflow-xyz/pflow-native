@@ -34,6 +34,47 @@ pub struct View {
     /// so `view.fit` means the same thing headless.
     pub width: f64,
     pub height: f64,
+    #[serde(default)]
+    pub settings: Settings,
+}
+
+/// Display settings and panel layout: pure data, set through `view.set` /
+/// `view.toggle`, persisted by the app between runs.
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
+#[serde(default)]
+pub struct Settings {
+    /// "system", "dark" or "light".
+    pub theme: Theme,
+    /// Show weight badges on weight-1 arcs (pflow.xyz hides them).
+    pub show_unit_weights: bool,
+    /// The JSON-LD source pane, as pflow.xyz's editor pane.
+    pub json_pane: bool,
+    pub inspector: bool,
+    pub bottom_panel: bool,
+    /// Snap moved and new nodes to the 10-unit grid.
+    pub snap: bool,
+}
+
+impl Default for Settings {
+    fn default() -> Self {
+        Self {
+            theme: Theme::System,
+            show_unit_weights: false,
+            json_pane: false,
+            inspector: true,
+            bottom_panel: true,
+            snap: true,
+        }
+    }
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum Theme {
+    #[default]
+    System,
+    Dark,
+    Light,
 }
 
 impl Default for View {
@@ -44,6 +85,7 @@ impl Default for View {
             zoom: 1.0,
             width: 1000.0,
             height: 700.0,
+            settings: Settings::default(),
         }
     }
 }
@@ -118,7 +160,8 @@ pub struct Session {
     pub path: Option<String>,
     /// Bumped on every change to the document or marking.
     pub revision: u64,
-    pub saved_revision: u64,
+    /// The document as last opened or saved; dirty = differs from it.
+    pub saved_doc: Document,
     /// Mass-action rates by transition (session-only, as in pflow.xyz;
     /// absent = 1.0, 0 disables).
     pub rates: BTreeMap<String, f64>,
@@ -132,6 +175,8 @@ pub struct Session {
     pub macros: BTreeMap<String, Vec<Step>>,
     /// Journal length when `macro.record` started.
     pub recording: Option<usize>,
+    /// Nodes (and the arcs between them) from `edit.copy` / `edit.cut`.
+    pub clipboard: Option<Document>,
     /// Set by a front end that can fulfil [`UiRequest`]s (the app).
     pub has_ui: bool,
     /// Requests only a UI can carry out (screenshots); the app drains them.
@@ -156,6 +201,7 @@ impl Session {
     /// A session over a larger registry (core sets plus an extension's).
     pub fn with_registry(doc: Document, registry: &'static Registry) -> Self {
         let marking = sim::initial_marking(&doc);
+        let saved_doc = doc.clone();
         Self {
             registry,
             doc,
@@ -165,7 +211,7 @@ impl Session {
             tool: Tool::Select,
             path: None,
             revision: 0,
-            saved_revision: 0,
+            saved_doc,
             rates: BTreeMap::new(),
             artifacts: vec![],
             next_artifact: 0,
@@ -173,6 +219,7 @@ impl Session {
             journal: vec![],
             macros: BTreeMap::new(),
             recording: None,
+            clipboard: None,
             has_ui: false,
             ui_requests: vec![],
             undo: vec![],
@@ -297,7 +344,7 @@ impl Session {
     }
 
     pub fn is_dirty(&self) -> bool {
-        self.revision != self.saved_revision
+        self.doc != self.saved_doc
     }
 
     pub fn can_undo(&self) -> bool {

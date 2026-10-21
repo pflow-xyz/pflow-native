@@ -79,11 +79,14 @@ pub const SET: &[CommandSpec] = &[
         help: "Replace the document with a pflow.xyz JSON document (object or string). Undoable.",
         menu: "",
         shortcut: None,
-        args: &[arg(
-            "json",
-            Json,
-            "the document, as a JSON object or a string",
-        )],
+        args: &[
+            arg("json", Json, "the document, as a JSON object or a string"),
+            opt(
+                "live",
+                Bool,
+                "an edit of the current document (JSON pane): keep view, results and the marking of surviving places",
+            ),
+        ],
         enabled: always,
         run: load_json,
         journal: true,
@@ -130,7 +133,7 @@ fn summary(s: &Session) -> Value {
 fn new(s: &mut Session, _: &Value) -> Result<Value> {
     replace(s, Document::default())?;
     s.path = None;
-    s.saved_revision = s.revision;
+    s.saved_doc = s.doc.clone();
     Ok(summary(s))
 }
 
@@ -140,7 +143,7 @@ fn open(sess: &mut Session, a: &Value) -> Result<Value> {
     let doc = Document::from_json(&data)?;
     replace(sess, doc)?;
     sess.path = Some(path.to_string());
-    sess.saved_revision = sess.revision;
+    sess.saved_doc = sess.doc.clone();
     Ok(summary(sess))
 }
 
@@ -152,7 +155,7 @@ fn open_example(sess: &mut Session, a: &Value) -> Result<Value> {
         .ok_or_else(|| Error::NotFound(format!("no example {name:?}")))?;
     replace(sess, Document::from_json(src.as_bytes())?)?;
     sess.path = None;
-    sess.saved_revision = sess.revision;
+    sess.saved_doc = sess.doc.clone();
     Ok(summary(sess))
 }
 
@@ -171,7 +174,7 @@ fn save(sess: &mut Session, a: &Value) -> Result<Value> {
     std::fs::write(&path, sess.doc.to_json_pretty() + "\n")
         .map_err(|e| Error::Io(format!("{path}: {e}")))?;
     sess.path = Some(path.clone());
-    sess.saved_revision = sess.revision;
+    sess.saved_doc = sess.doc.clone();
     Ok(json!({ "path": path }))
 }
 
@@ -180,6 +183,28 @@ fn load_json(sess: &mut Session, a: &Value) -> Result<Value> {
         Value::String(t) => Document::from_json(t.as_bytes())?,
         v => Document::from_value(v)?,
     };
+    if a.get("live").and_then(Value::as_bool).unwrap_or(false) {
+        // A source edit: same document, so keep the view, the results and
+        // the token game where the places still exist.
+        let marking = sess.marking.clone();
+        sess.edit("edit JSON", |s| {
+            let mut doc = doc;
+            doc.normalize_colors();
+            s.doc = doc;
+            s.rates.retain(|t, _| s.doc.transition(t).is_some());
+            Ok(())
+        })?;
+        sess.reset_marking();
+        let n = sess.doc.colors();
+        for (id, v) in marking {
+            if let Some(slot) = sess.marking.get_mut(&id) {
+                if v.len() == n {
+                    *slot = v;
+                }
+            }
+        }
+        return Ok(summary(sess));
+    }
     replace(sess, doc)?;
     Ok(summary(sess))
 }

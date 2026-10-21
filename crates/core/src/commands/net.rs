@@ -22,7 +22,11 @@ pub const SET: &[CommandSpec] = &[
             opt("label", Str, "display label"),
             opt("initial", NumList, "initial tokens (per color)"),
             opt("capacity", NumList, "capacity per color, 0 = unbounded"),
-            opt("snap", Bool, "snap to the 10-unit grid (default true)"),
+            opt(
+                "snap",
+                Bool,
+                "snap to the 10-unit grid (default: the snap setting)",
+            ),
         ],
         enabled: always,
         run: add_place,
@@ -39,7 +43,11 @@ pub const SET: &[CommandSpec] = &[
             arg("y", Num, "y coordinate"),
             opt("id", Str, "id; generated as t<n> if absent"),
             opt("label", Str, "display label"),
-            opt("snap", Bool, "snap to the 10-unit grid (default true)"),
+            opt(
+                "snap",
+                Bool,
+                "snap to the 10-unit grid (default: the snap setting)",
+            ),
         ],
         enabled: always,
         run: add_transition,
@@ -102,7 +110,7 @@ pub const SET: &[CommandSpec] = &[
             arg("id", Str, "node id"),
             arg("x", Num, "x"),
             arg("y", Num, "y"),
-            opt("snap", Bool, "snap to the grid (default true)"),
+            opt("snap", Bool, "snap to the grid (default: the snap setting)"),
         ],
         enabled: always,
         run: move_to,
@@ -118,7 +126,11 @@ pub const SET: &[CommandSpec] = &[
             arg("dx", Num, "x offset"),
             arg("dy", Num, "y offset"),
             opt("ids", StrList, "node ids; defaults to the selection"),
-            opt("snap", Bool, "snap results to the grid (default true)"),
+            opt(
+                "snap",
+                Bool,
+                "snap results to the grid (default: the snap setting)",
+            ),
         ],
         enabled: always,
         run: move_by,
@@ -213,7 +225,7 @@ fn color_vec(v: Option<Vec<f64>>, n: usize, default: f64) -> Vec<f64> {
 }
 
 fn add_place(sess: &mut Session, a: &Value) -> Result<Value> {
-    let on = b(a, "snap").unwrap_or(true);
+    let on = b(a, "snap").unwrap_or(sess.view.settings.snap);
     let id = match s(a, "id") {
         Some(id) => {
             check_new_id(sess, id)?;
@@ -243,7 +255,7 @@ fn add_place(sess: &mut Session, a: &Value) -> Result<Value> {
 }
 
 fn add_transition(sess: &mut Session, a: &Value) -> Result<Value> {
-    let on = b(a, "snap").unwrap_or(true);
+    let on = b(a, "snap").unwrap_or(sess.view.settings.snap);
     let id = match s(a, "id") {
         Some(id) => {
             check_new_id(sess, id)?;
@@ -353,7 +365,7 @@ fn move_to(sess: &mut Session, a: &Value) -> Result<Value> {
     if sess.doc.kind_of(id).is_none() {
         return Err(Error::NotFound(format!("no node {id:?}")));
     }
-    let on = b(a, "snap").unwrap_or(true);
+    let on = b(a, "snap").unwrap_or(sess.view.settings.snap);
     let (x, y) = (snap(n(a, "x").unwrap(), on), snap(n(a, "y").unwrap(), on));
     sess.edit("move", |s| {
         set_pos(s, id, x, y);
@@ -366,7 +378,7 @@ fn move_by(sess: &mut Session, a: &Value) -> Result<Value> {
     if ids.is_empty() {
         return Err(Error::BadArgs("no nodes to move".into()));
     }
-    let on = b(a, "snap").unwrap_or(true);
+    let on = b(a, "snap").unwrap_or(sess.view.settings.snap);
     let (dx, dy) = (n(a, "dx").unwrap(), n(a, "dy").unwrap());
     let mut moves = vec![];
     for id in &ids {

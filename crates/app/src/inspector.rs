@@ -15,6 +15,7 @@ pub struct InspectorState {
     initial: String,
     capacity: String,
     weight: String,
+    id: String,
     pub focus_label: bool,
 }
 
@@ -84,11 +85,13 @@ fn sync(app: &mut App, key: &str, load: impl FnOnce(&mut InspectorState)) {
 fn place(app: &mut App, ui: &mut egui::Ui, id: &str) {
     let p = app.sess.doc.place(id).unwrap().clone();
     sync(app, id, |st| {
+        st.id = p.id.clone();
         st.label = p.label.clone().unwrap_or_default();
         st.initial = fmt_vec(&p.initial);
         st.capacity = fmt_vec(&p.capacity);
     });
-    ui.strong(format!("Place  {id}"));
+    ui.strong("Place");
+    id_field(app, ui, id);
     ui.label("Label");
     let focus = std::mem::take(&mut app.inspector.focus_label);
     if commit_edit(ui, &mut app.inspector.label, focus) {
@@ -136,8 +139,12 @@ fn place(app: &mut App, ui: &mut egui::Ui, id: &str) {
 
 fn transition(app: &mut App, ui: &mut egui::Ui, id: &str) {
     let t = app.sess.doc.transition(id).unwrap().clone();
-    sync(app, id, |st| st.label = t.label.clone().unwrap_or_default());
-    ui.strong(format!("Transition  {id}"));
+    sync(app, id, |st| {
+        st.id = t.id.clone();
+        st.label = t.label.clone().unwrap_or_default();
+    });
+    ui.strong("Transition");
+    id_field(app, ui, id);
     ui.label("Label");
     let focus = std::mem::take(&mut app.inspector.focus_label);
     if commit_edit(ui, &mut app.inspector.label, focus) {
@@ -211,6 +218,17 @@ fn arc_ui(app: &mut App, ui: &mut egui::Ui, a: &str, b: &str) {
     }
 }
 
+/// The node id, renamable (`net.rename`).
+fn id_field(app: &mut App, ui: &mut egui::Ui, id: &str) {
+    ui.label("Id");
+    if commit_edit(ui, &mut app.inspector.id, false) && app.inspector.id != id {
+        app.queue(
+            "net.rename",
+            json!({ "id": id, "new_id": app.inspector.id.trim() }),
+        );
+    }
+}
+
 fn document(app: &mut App, ui: &mut egui::Ui) {
     let d = &app.sess.doc;
     ui.strong("Document");
@@ -223,7 +241,10 @@ fn document(app: &mut App, ui: &mut egui::Ui) {
         d.transitions.len(),
         d.arcs.len()
     ));
-    if !d.token.is_empty() {
+    if let Some(desc) = d.extra.get("description").and_then(Value::as_str) {
+        ui.weak(desc);
+    }
+    ui.horizontal_wrapped(|ui| {
         ui.label("Token colors:");
         for (i, t) in d.token.iter().enumerate() {
             let (r, g, b) = pflow_native_core::export::token_rgb(t, i);
@@ -232,10 +253,31 @@ fn document(app: &mut App, ui: &mut egui::Ui) {
                 t.rsplit('/').next().unwrap_or(t),
             );
         }
+        if d.token.is_empty() {
+            ui.weak("(single)");
+        }
+    });
+    ui.horizontal(|ui| {
+        if ui.button("Details…").clicked() {
+            app.invoke("net.set_details");
+        }
+        if ui.button("Colors…").clicked() {
+            app.invoke("net.set_colors");
+        }
+    });
+    if app.sess.registry().find("net.layout").is_some() {
+        ui.label("Auto layout:");
+        ui.horizontal_wrapped(|ui| {
+            for name in ["sugiyama", "grid", "bipartite", "circular"] {
+                if ui.button(name).clicked() {
+                    app.queue("net.layout", json!({ "algorithm": name }));
+                }
+            }
+        });
     }
     ui.separator();
     ui.label("Select a node or arc to edit it.");
-    ui.label("Tip: everything here is a registry command — see Help → List Commands, or the Console tab.");
+    ui.label("Tip: every action is a registry command: ⌘K opens the palette; the Console tab runs any command with JSON args.");
 }
 
 impl App {

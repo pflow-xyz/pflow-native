@@ -57,6 +57,9 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
                 fire.push(id);
             }
         }
+        if i.consume_key(Modifiers::COMMAND, Key::K) {
+            fire.push("palette");
+        }
         if i.consume_key(Modifiers::NONE, Key::Backspace) {
             fire.push("edit.delete");
         }
@@ -79,6 +82,7 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
     });
     for id in fire {
         match id {
+            "palette" => app.dialogs.palette_open = !app.dialogs.palette_open,
             "toggle-play" => {
                 let t = if app.sess.tool == Tool::Fire {
                     "select"
