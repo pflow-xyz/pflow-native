@@ -173,6 +173,13 @@ impl App {
         if let (Ok(Value::String(link)), "file.permalink") = (&r, id) {
             self.clipboard_out = Some(link.clone());
         }
+        // A remote write that was only previewed: ask before sending.
+        if let Ok(v) = &r {
+            if v.get("sent") == Some(&Value::Bool(false)) && v.get("preview").is_some() {
+                self.dialogs.confirm_send =
+                    Some((id.to_string(), args.clone(), v["preview"].clone()));
+            }
+        }
         match r {
             Ok(_) if quiet => {}
             Ok(v) => self.status = Ok(summarize(id, &v)),

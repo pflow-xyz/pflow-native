@@ -16,6 +16,9 @@ pub struct DialogState {
     pub palette_open: bool,
     palette_query: String,
     pub help_open: bool,
+    /// A previewed remote write awaiting the user's go-ahead:
+    /// (command, args it ran with, the request preview).
+    pub confirm_send: Option<(String, Value, Value)>,
 }
 
 impl App {
@@ -88,6 +91,7 @@ fn build_args(spec: &CommandSpec, fields: &[String]) -> Result<Value, String> {
 }
 
 pub fn ui(app: &mut App, ctx: &egui::Context) {
+    confirm_send(app, ctx);
     args_dialog(app, ctx);
     palette(app, ctx);
     help(app, ctx);
@@ -260,4 +264,79 @@ fn help(app: &mut App, ctx: &egui::Context) {
             });
         });
     app.dialogs.help_open = open;
+}
+
+/// Outbound policy, app side: a remote write runs once as a preview; the
+/// user sees exactly what would leave the machine and must press Send.
+fn confirm_send(app: &mut App, ctx: &egui::Context) {
+    let Some((id, args, preview)) = app.dialogs.confirm_send.clone() else {
+        return;
+    };
+    let mut open = true;
+    let mut decision = None;
+    egui::Window::new("Send to a remote service?")
+        .open(&mut open)
+        .collapsible(false)
+        .anchor(egui::Align2::CENTER_CENTER, [0.0, 0.0])
+        .default_width(560.0)
+        .show(ctx, |ui| {
+            ui.label(format!(
+                "{id} wants to send this request. Nothing has been sent yet."
+            ));
+            ui.add_space(4.0);
+            let method = preview["method"].as_str().unwrap_or("?");
+            let url = preview["url"].as_str().unwrap_or("?");
+            ui.monospace(format!("{method} {url}"));
+            if let Some(h) = preview["headers"].as_array() {
+                for kv in h {
+                    if let (Some(k), Some(v)) = (
+                        kv.get(0).and_then(Value::as_str),
+                        kv.get(1).and_then(Value::as_str),
+                    ) {
+                        ui.monospace(format!("{k}: {v}"));
+                    }
+                }
+            }
+            if !preview["body"].is_null() {
+                let body = serde_json::to_string_pretty(&preview["body"]).unwrap_or_default();
+                let shown = if body.len() > 4000 {
+                    format!(
+                        "{}\n… ({} bytes)",
+                        &body[..body.floor_char_boundary(4000)],
+                        body.len()
+                    )
+                } else {
+                    body
+                };
+                egui::ScrollArea::vertical()
+                    .max_height(260.0)
+                    .show(ui, |ui| {
+                        ui.add(
+                            egui::TextEdit::multiline(&mut shown.as_str())
+                                .code_editor()
+                                .desired_width(f32::INFINITY),
+                        );
+                    });
+            }
+            ui.separator();
+            ui.horizontal(|ui| {
+                if ui.button("Send").clicked() {
+                    decision = Some(true);
+                }
+                if ui.button("Cancel").clicked() {
+                    decision = Some(false);
+                }
+            });
+        });
+    match decision {
+        Some(true) => {
+            let mut args = if args.is_object() { args } else { json!({}) };
+            args["send"] = json!(true);
+            app.dialogs.confirm_send = None;
+            app.queue(&id, args);
+        }
+        Some(false) => app.dialogs.confirm_send = None,
+        None if !open => app.dialogs.confirm_send = None,
+        None => {}
+    }
 }

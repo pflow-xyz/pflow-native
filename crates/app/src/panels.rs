@@ -190,6 +190,10 @@ fn workbench(app: &mut App, ui: &mut egui::Ui) {
         "Data",
         "Compose",
         "Systems",
+        "Store",
+        "Share",
+        "Remote",
+        "Provenance",
     ];
     egui::ScrollArea::vertical().show(ui, |ui| {
         for g in groups {
