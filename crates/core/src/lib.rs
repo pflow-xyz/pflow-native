@@ -10,10 +10,12 @@
 pub mod artifact;
 pub mod cid;
 pub mod commands;
+pub mod conformance;
 pub mod doc;
 pub mod eventlog;
 pub mod export;
 pub mod layout;
+pub mod mining;
 pub mod registry;
 pub mod session;
 pub mod sim;

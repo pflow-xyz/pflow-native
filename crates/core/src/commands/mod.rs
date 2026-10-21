@@ -6,6 +6,7 @@ use crate::registry::CommandSpec;
 pub mod cid;
 pub mod clipboard;
 pub mod command;
+pub mod conformance;
 pub mod data;
 pub mod details;
 pub mod edit;
@@ -36,6 +37,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     overlay::SET,
     settings::SET,
     data::SET,
+    conformance::SET,
     export::SET,
     macros::SET,
     command::SET,

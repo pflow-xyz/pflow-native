@@ -115,7 +115,7 @@ How to read it:
 | receipt | signed run certificate | `sim.receipt` | port (ed25519) | Report | 7 |
 | evaluate | score moves by rollouts | `sim.evaluate {player, objective, rollouts, seed, horizon, depth}` (play method) | metamodel firing + pflow-solver stochastic | Table (ranked) | 3 ✅ (player = role or id prefix, objective inferred from `win_*`; no eliminate/incidence/search) |
 | crosscheck | SSA vs ODE vs conservation | `sim.crosscheck {t_end, runs, seed, points}` | pflow-solver ssa + ODE; Farkas P-invariants in core | TimeSeries overlay (ssa/ode), Report | 3 ✅ (no move-ranking check) |
-| dataset | synthetic event log | `data.generate {cases, seed}` | pflow-solver ssa + pflow-eventlog | Table, CSV export | 5 |
+| dataset | synthetic event log | `data.generate {cases≤2000, seed, max_steps≤10000, rates}` → event-log table | pflow-solver portable SSA (xoshiro256**, `plog`) + pflow-eventlog | Table, CSV export | 5 ✅ (one seeded playout per case from the initial marking, to deadlock or `max_steps`; sim attributes cases per arrival through FIFO tokens. sim's epoch 2026-01-05T08:00Z, 1 model unit = 1 h) |
 | run_pipeline | bound models, loop fixed point | `compose.run_pipeline` | port | TimeSeries per model, Graph | 6 |
 | diagnose | resource/rate influence, knee, lumpability | `analysis.diagnose` | pflow-results sensitivity + port | Tornado (bars), curve, Report | 4 |
 | invariants | P/T invariants, siphons/traps, deadlock witnesses | `analysis.invariants`, `analysis.siphons` | pflow-reachability (+ **port** siphons/traps) | Matrix, canvas overlay | 4 |
@@ -131,8 +131,9 @@ How to read it:
 | map_put, map_get, map_list | content-addressed tables | `store.map_*` | local store | Table | 7 |
 | bind, get_binding, list_bindings | checked port bindings (units, delay) | `compose.bind` | **port** | Graph | 6 |
 | create_system, system | stored model+binding sets | `compose.system` | **port** | Graph (system) | 6 |
-| conformance | fitness/precision/generalization/simplicity | `data.conformance {log}` | pflow-mining, pflow-eventlog | Table + residual on canvas | 5 |
-| conformance_stream | online replay, first divergence | `data.replay {events}` | pflow-mining | Trace + running-fitness TimeSeries | 5 |
+| conformance | fitness/precision/generalization/simplicity | `data.conformance {log, max_traces}` | go-pflow v0.33 token replay (gate-aware) + ETC precision + sim `LogResidual`, ported onto the metamodel firing rule (`conformance.rs`; pflow-mining's copy at our pin predates the read/inhibitor fix) | Report, variant Table, Sets (residual on canvas via `artifact.show_set`) | 5 ✅ (activities match by id, then label, then either ignoring case; generalization and simplicity are computed here — sim names them but returns neither; a capacity refusal counts one missing) |
+| conformance_stream | online replay, first divergence | `data.replay {log \| events, case, repair_depth}` | port of sim `Monitor.Observe` (repair BFS ≤ 64, 5000 states) on the metamodel firing rule | Trace (one case, `sim.goto`), running-fitness TimeSeries, Report | 5 ✅ (no `keepSteps`: the TimeSeries is the per-event signal; no case-close final-marking check) |
+| — (discovery) | mine a net from a log | `data.discover {log, method, threshold}`: replaces the net (one undo step), Sugiyama layout | pflow-mining alpha / heuristic / sequential / common-path | Net, Report | 5 ✅ |
 | calibrate | learn rates/delays from a log | `data.calibrate {log}` | pflow-learn, pflow-mining | Table (evidence), new model | 5 |
 | optimize | Monte Carlo sweep, Pareto | `opt.optimize {parameters, objectives, samples≤2000, seed}` ✅ | pflow-solver | Scatter + Pareto, Table | 3 |
 | param_heatmap | two-rate grid → final value | `opt.heatmap {param_x,param_y,observable}` (≤ 40 × 40, `log`) ✅ | pflow-solver | Heatmap | 3 |
@@ -153,7 +154,7 @@ How to read it:
 | Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | |
 | Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | |
 | Tornado / ranked bars | diagnose, evaluate | CSV | 4 | |
-| Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate tables today) 
+| Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate; conformance variants, generated logs) 
 | System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | |
 | Side-by-side mapping | prove, diff | SVG | 6–7 | |
 
