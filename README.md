@@ -83,6 +83,16 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 ![Reachability graph](docs/screenshot-reachability.png)
 ![Reach witness replayed on tic-tac-toe](docs/screenshot-reach.png)
 
+## Composition and systems
+
+| Area | Commands |
+|---|---|
+| Library | `model.save / list / get / open / import / delete`, the Models tab ("current" = the open net) |
+| Composition | `compose.components` (sim's 7 components + pflow-compose templates), `compose.fuse` (attach ports onto your places), `compose.extend` (sim's edit ops as one undo step), `compose.diff` (change table, canvas highlight, side-by-side drawing) |
+| Systems | `system.set_port`, `system.bind` (unit / conversion / delay checks), `system.create` / `system.show` (graph), `system.run` (pipeline in topological order; delayed loops solved to a fixed point by sweeps) |
+
+![Fusing a service component onto the coffee shop](docs/screenshot-diff.png)
+
 ## Agents: CLI, control channel, MCP
 
 ```bash

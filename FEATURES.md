@@ -11,7 +11,7 @@ How to read it:
 - **Source:** where the feature lives today. `pv:` means `petri-view.js` line numbers; `sim_*` is the MCP tool name.
 - **Native:** the registry command(s) and/or the view that will carry the feature (see `ARCHITECTURE.md`).
 - **Backing:** the pflow-rs crate that does the work. **port** means pflow-rs has no equivalent yet; **remote** means it calls sim.pflow.xyz.
-- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0, phase 4 in v0.4.0, phase 5 in v0.5.0.
+- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0, phase 4 in v0.4.0, phase 5 in v0.5.0, phase 6 in v0.6.0.
 
 ## Phases
 
