@@ -83,7 +83,7 @@ How to read it:
 | Phase plot | pv:5268 | Results → Phase (any TimeSeries) | app | 3 | ✅ |
 | CSV / JSON download, "copy MCP call" | pv:5615–5620 | `export.artifact {format}`, `command.copy_call` | core | 1 | 🟡 csv/json |
 | SSA / SDE engines (library only in JS) | petri-ssa.js, petri-sde.js | `sim.ssa {t_end, seed, runs, points}`, `sim.sde {…, dt}` → TimeSeries, mean ± sd band when runs > 1 | pflow-solver ssa (portable, byte-exact) / ssa::sde | 3 | ✅ SDE refuses gated nets, as go-pflow |
-| Rate fitting (library only in JS) | petri-learn.js:1863 | `opt.fit` | pflow-learn | 5 | |
+| Rate fitting (library only in JS) | petri-learn.js:1863 | `opt.fit {data, parameters, method, loss, space, places, group, max_iters, tolerance, apply}`: observed series of a timeseries artifact (matched by display name, base place id or place label, or `places`) → Report (initial/fitted rates, loss before/after, iterations, converged) + TimeSeries overlay (group `data` vs `fit`) | pflow-learn `fit` over `LearnableProblem` (same mass-action law as `sim.ode`) | 5 | ✅ pflow.xyz defaults (nelder-mead, 1000 iters, tol 1e-4, mse); fits ln(rate) by default (`space: "linear"` = pflow.xyz); starts from the current marking; `apply` is not undoable (result carries `restore` steps) |
 | Equilibrium (not in the editor; pflow-rs) | — | `sim.equilibrium {t_max, tolerance}` → Report | pflow-solver `solve_until_equilibrium` | 3 | ✅ |
 
 ### A4. I/O & sharing
@@ -134,10 +134,10 @@ How to read it:
 | create_system, system | stored model+binding sets | `compose.system` | **port** | Graph (system) | 6 |
 | conformance | fitness/precision/generalization/simplicity | `data.conformance {log}` | pflow-mining, pflow-eventlog | Table + residual on canvas | 5 |
 | conformance_stream | online replay, first divergence | `data.replay {events}` | pflow-mining | Trace + running-fitness TimeSeries | 5 |
-| calibrate | learn rates/delays from a log | `data.calibrate {log}` | pflow-learn, pflow-mining | Table (evidence), new model | 5 |
+| calibrate | learn rates/delays from a log | `data.calibrate {log, unit, apply, conformance}`: activity → transition by id, else id/label ignoring case | port of sim `Calibrate` (sources by inter-arrival split by case starts, race-corrected services, pickups ≥ 100 kept) + pflow-mining replay/precision | Table (evidence) + Report | 5 ✅ (no delays: pflow.xyz documents declare none; rates go to the session, not a new model; `apply` not undoable; `unit` default hour as sim) |
 | optimize | Monte Carlo sweep, Pareto | `opt.optimize {parameters, objectives, samples≤2000, seed}` ✅ | pflow-solver | Scatter + Pareto, Table | 3 |
 | param_heatmap | two-rate grid → final value | `opt.heatmap {param_x,param_y,observable}` (≤ 40 × 40, `log`) ✅ | pflow-solver | Heatmap | 3 |
-| distill | fit rate multipliers to minimax | `opt.distill` | pflow-learn | Report | 5 |
+| distill | fit rate multipliers to minimax | `opt.distill {player, players, objective, groups, games, positions, iters, horizon, realizations, seed, apply}` | pflow-learn hinge rank loss + Nelder-Mead; exact minimax (memoized) and `sim.evaluate`'s SSA play scorer here | Report + per-position Table | 5 ✅ (game read from `<player>_turn` places, as pflow.xyz nets declare no game schema; default groups `moves`/`house`; ssa engine only; self-play RNG differs from sim, so positions differ for a seed) |
 | publish, publish_compare, my_sheets | Google Sheets | `remote.sim.publish` | remote | URL | 7 |
 | publish_app | host an HTML app | `remote.sim.publish_app` (wasm build) | remote | URL | 7 |
 
