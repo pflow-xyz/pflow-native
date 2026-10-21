@@ -137,7 +137,11 @@ screenshot (`--screenshot`).
     one `net.move_by` on release.
   - `--cmd ID[=JSON]` runs commands at startup. `--screenshot PATH` saves a
     PNG after the first frames and exits.
-  - The wasm entry point is cfg-gated (Trunk, phase 2).
+  - The wasm entry point is cfg-gated and built with Trunk (`make web-build`).
+    Autosave goes through eframe persistence, i.e. a file natively and browser storage on the web.
+  - Commands that take arguments open a form generated from their `ArgSpec`s,
+    and the ⌘K palette lists every command, so new commands need no UI code to
+    become usable.
 - **CLI** (`crates/cli`, binary `pflow-native-cli`):
   - `list` and `exec` run commands one-shot against a file.
   - `batch` runs a JSON step list as one undo step.
@@ -146,5 +150,9 @@ screenshot (`--screenshot`).
   - `mcp` is a hand-rolled JSON-RPC 2.0 server over stdio. Its tools are
     `list_commands`, `execute` and `batch` (one long-lived session), plus
     `get_document` / `load_document`.
-  - Phase 2: the app listens on a local control port, and `mcp` attaches to a
-    running app when one is up, falling back to headless.
+- **Control port** (`crates/app/src/control.rs`): the app serves the same JSON-lines
+  protocol on `127.0.0.1:7979`. Requests are handed to the UI thread and run between
+  frames through `Session::execute`.
+  - `mcp` attaches to that port when it is up, falling back to headless. The
+    `Backend` enum in `crates/cli/src/mcp.rs` holds both cases.
+  - Attached, the `screenshot` tool returns the live window as a PNG.
