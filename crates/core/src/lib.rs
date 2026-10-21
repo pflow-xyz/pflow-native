@@ -11,6 +11,7 @@ pub mod artifact;
 pub mod cid;
 pub mod commands;
 pub mod doc;
+pub mod eventlog;
 pub mod export;
 pub mod layout;
 pub mod registry;

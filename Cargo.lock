@@ -2500,6 +2500,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pflow-eventlog"
+version = "0.3.0"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+dependencies = [
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
+name = "pflow-learn"
+version = "0.3.0"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+dependencies = [
+ "pflow-core",
+ "pflow-metamodel",
+ "pflow-solver",
+]
+
+[[package]]
 name = "pflow-metamodel"
 version = "0.3.0"
 source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
@@ -2507,6 +2527,15 @@ dependencies = [
  "serde",
  "serde_json",
  "thiserror 2.0.21",
+]
+
+[[package]]
+name = "pflow-mining"
+version = "0.3.0"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+dependencies = [
+ "pflow-core",
+ "pflow-eventlog",
 ]
 
 [[package]]
@@ -2535,7 +2564,10 @@ name = "pflow-native-core"
 version = "0.3.0"
 dependencies = [
  "pflow-core",
+ "pflow-eventlog",
+ "pflow-learn",
  "pflow-metamodel",
+ "pflow-mining",
  "pflow-parser",
  "pflow-reachability",
  "pflow-results",

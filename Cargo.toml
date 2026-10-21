@@ -21,6 +21,9 @@ pflow-reachability = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98b
 pflow-verify = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
 pflow-validation = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
 pflow-results = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
+pflow-eventlog = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
+pflow-mining = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
+pflow-learn = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "98bfd8355d96991a66ac3e1d9c107a797813fff6" }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"

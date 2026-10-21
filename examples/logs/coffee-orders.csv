@@ -1,0 +1,13 @@
+case_id,activity,timestamp,resource
+1,CustomerArrives,2026-10-01T08:00:00Z,door
+1,BrewCoffee,2026-10-01T08:02:00Z,barista
+1,CustomerLeaves,2026-10-01T08:05:00Z,door
+2,CustomerArrives,2026-10-01T08:01:00Z,door
+2,BrewCoffee,2026-10-01T08:06:00Z,barista
+2,CustomerLeaves,2026-10-01T08:09:00Z,door
+3,CustomerArrives,2026-10-01T08:04:00Z,door
+3,RestockBeans,2026-10-01T08:07:00Z,barista
+3,BrewCoffee,2026-10-01T08:10:00Z,barista
+3,CustomerLeaves,2026-10-01T08:12:00Z,door
+4,CustomerArrives,2026-10-01T08:08:00Z,door
+4,CustomerLeaves,2026-10-01T08:09:00Z,door
