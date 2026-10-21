@@ -120,3 +120,21 @@ fn settings_toggle() {
     assert_eq!(s.doc.places[0].x, 13.0, "snap off");
     assert!(s.execute("view.set", json!({"theme": "neon"})).is_err());
 }
+
+#[test]
+fn producer_consumer_gallery_net_runs_as_on_pflow_xyz() {
+    let mut s = Session::default();
+    run(
+        &mut s,
+        "file.open_example",
+        json!({"name": "producer-consumer"}),
+    );
+    let en = run(&mut s, "sim.enabled", Value::Null);
+    assert_eq!(
+        en,
+        json!(["produce"]),
+        "the weight-0 read of `produced` is inert, as in pflow.xyz"
+    );
+    run(&mut s, "sim.fire", json!({"id": "produce"}));
+    assert_eq!(s.marking["buffer"], vec![1]);
+}

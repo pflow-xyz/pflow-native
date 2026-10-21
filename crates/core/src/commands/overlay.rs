@@ -179,6 +179,11 @@ fn goto(sess: &mut Session, a: &Value) -> Result<Value> {
                 )))
             }
         };
+    if let Some((p, _)) = marking.iter().find(|(_, v)| v.iter().any(|x| *x < 0)) {
+        return Err(Error::Invalid(format!(
+            "{label} is a coverability state: {p} is ω (unbounded), which no marking can hold"
+        )));
+    }
     let n_colors = sess.doc.colors();
     let mut mk = sess.marking.clone();
     for (place, v) in &marking {

@@ -1136,6 +1136,11 @@ pub fn drawing(
 
 // ---------------------------------------------------------------- graph
 
+/// Box width for a state label at zoom 1 (11 px proportional font).
+fn label_width(label: &str) -> f32 {
+    (label.chars().count() as f32 * 6.2 + 18.0).clamp(40.0, 420.0)
+}
+
 /// Layered layout (levels left to right): BFS depth from the initial node (data.initial, else the
 /// first), unreached nodes on a final layer, two barycenter passes.
 fn layer_graph(
@@ -1212,12 +1217,18 @@ fn layer_graph(
             }
         }
     }
+    // Columns as wide as the widest box (label width) plus a gap.
+    let col = nodes
+        .iter()
+        .map(|n| label_width(&n.label))
+        .fold(40.0_f32, f32::max)
+        + 50.0;
     let mut pos = vec![Pos2::ZERO; nodes.len()];
     for (d, l) in layers.iter().enumerate() {
         let w = l.len() as f32;
         for (k, &i) in l.iter().enumerate() {
             // Levels run left to right: the results panel is wide and short.
-            pos[i] = Pos2::new(d as f32 * 190.0, (k as f32 - (w - 1.0) / 2.0) * 44.0);
+            pos[i] = Pos2::new(d as f32 * col, (k as f32 - (w - 1.0) / 2.0) * 44.0);
         }
     }
     pos
@@ -1273,12 +1284,8 @@ pub fn graph(
         .enumerate()
         .map(|(i, n)| (n.id.as_str(), i))
         .collect();
-    let box_size = |n: &pflow_native_core::artifact::GraphNode| {
-        Vec2::new(
-            (n.label.chars().count() as f32 * 6.5 + 16.0).clamp(40.0, 160.0),
-            26.0,
-        ) * z
-    };
+    let box_size =
+        |n: &pflow_native_core::artifact::GraphNode| Vec2::new(label_width(&n.label), 26.0) * z;
     let edge_col = if dark {
         Color32::from_gray(120)
     } else {

@@ -46,6 +46,11 @@ pub fn ui(app: &mut App, ui: &mut egui::Ui) {
                     ArtifactData::TimeSeries { .. }
                         | ArtifactData::Heatmap { .. }
                         | ArtifactData::Scatter { .. }
+                        | ArtifactData::Graph { .. }
+                        | ArtifactData::Sets { .. }
+                        | ArtifactData::Trace { .. }
+                        | ArtifactData::Bars { .. }
+                        | ArtifactData::Drawing { .. }
                 )
             })
             .or(fresh.last())

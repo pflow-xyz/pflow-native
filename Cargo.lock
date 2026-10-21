@@ -2561,7 +2561,7 @@ dependencies = [
 
 [[package]]
 name = "pflow-native"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "eframe",
  "image",
@@ -2574,7 +2574,7 @@ dependencies = [
 
 [[package]]
 name = "pflow-native-cli"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "pflow-native-core",
  "serde_json",
@@ -2582,7 +2582,7 @@ dependencies = [
 
 [[package]]
 name = "pflow-native-core"
-version = "0.3.0"
+version = "0.4.0"
 dependencies = [
  "pflow-compose",
  "pflow-core",

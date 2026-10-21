@@ -38,7 +38,7 @@ pub struct Compiled {
 
 impl Compiled {
     pub fn new(doc: &Document) -> Result<Self> {
-        let json = serde_json::to_vec(&doc.to_value()).expect("serializable");
+        let json = serde_json::to_vec(&executable(doc).to_value()).expect("serializable");
         let (model, colors) =
             pflow_parser::model_from_json(&json).map_err(|e| Error::Parse(e.to_string()))?;
         Ok(Self { model, colors })
@@ -204,7 +204,7 @@ pub fn continuous(
     mk: &Marking,
     rates: &BTreeMap<String, f64>,
 ) -> Result<ContinuousNet> {
-    let json = serde_json::to_vec(&doc.to_value()).expect("serializable");
+    let json = serde_json::to_vec(&executable(doc).to_value()).expect("serializable");
     let net = pflow_core::from_json(&json).map_err(|e| Error::Parse(e.to_string()))?;
     let (net, cm) = if doc.colors() > 1 {
         net.expand_colors()
@@ -258,6 +258,26 @@ pub fn continuous(
         order,
         colors: cm,
     })
+}
+
+/// The document as the engines should see it. An arc whose weights are all
+/// zero constrains and moves nothing in pflow.xyz (its JS token game tests
+/// `tokens >= 0`), but pflow-metamodel reads weight 0 as "unset" and
+/// defaults it to 1 (`Arc::effective_weight`, go-pflow parity), which would
+/// make such nets dead (the gallery's producer-consumer). Dropping those
+/// arcs keeps pflow.xyz's meaning; inhibitor arcs are kept as written.
+/// See FEATURES.md §D 8.
+pub fn executable(doc: &Document) -> std::borrow::Cow<'_, Document> {
+    let inert = |a: &crate::doc::Arc| {
+        !a.inhibit && !a.weight.is_empty() && a.weight.iter().all(|w| *w == 0.0)
+    };
+    if doc.arcs.iter().any(inert) {
+        let mut d = doc.clone();
+        d.arcs.retain(|a| !inert(a));
+        std::borrow::Cow::Owned(d)
+    } else {
+        std::borrow::Cow::Borrowed(doc)
+    }
 }
 
 /// A pflow-solver method by name.

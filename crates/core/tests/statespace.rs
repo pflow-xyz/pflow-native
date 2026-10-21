@@ -228,13 +228,14 @@ fn bounded_producer_consumer_graph() {
     assert!(labels.contains(&"buffer=2 idle=1"), "{labels:?}");
     assert!(edges.iter().any(|e| e.label == "finish"));
 
-    // The bundled example's weight-0 arc gates `produce` on an empty place,
-    // so the token game has nothing enabled; the graph agrees.
+    // The bundled example's weight-0 arc is inert (as in pflow.xyz, see
+    // sim::executable), so `produce` is enabled; the graph agrees with the
+    // token game and every place is capacity-bounded.
     let mut ex = example("producer-consumer");
-    assert_eq!(run(&mut ex, "sim.enabled", json!({})), json!([]));
+    assert_eq!(run(&mut ex, "sim.enabled", json!({})), json!(["produce"]));
     let r = run(&mut ex, "analysis.reachability", json!({}));
-    assert_eq!(r["states"], 1);
-    assert_eq!(r["deadlocks"], json!(["s0"]));
+    assert!(r["states"].as_u64().unwrap() > 1, "{r}");
+    assert_eq!(r["bounded"], true);
 }
 
 #[test]

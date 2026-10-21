@@ -11,7 +11,7 @@ How to read it:
 - **Source:** where the feature lives today. `pv:` means `petri-view.js` line numbers; `sim_*` is the MCP tool name.
 - **Native:** the registry command(s) and/or the view that will carry the feature (see `ARCHITECTURE.md`).
 - **Backing:** the pflow-rs crate that does the work. **port** means pflow-rs has no equivalent yet; **remote** means it calls sim.pflow.xyz.
-- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0.
+- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0, phase 4 in v0.4.0.
 
 ## Phases
 
@@ -167,3 +167,4 @@ How to read it:
 5. Port bindings, pipelines, loop fixed point. Source: sim `bindcheck`, `pipeline`, `loop`.
 6. pflow.xyz layout algorithms and URDNA2015 CID sealing. Both landed here instead (`crates/core/src/layout.rs`, `crates/core/src/cid.rs`; the latter is a port of pflow-xyz's json-gold behaviour, not a general JSON-LD library). Worth upstreaming.
 7. Deterministic ODE summation. `pflow_core::PetriNet` keeps transitions in a std `HashMap` with a random hasher, so `pflow_solver::Problem` sums derivatives in a different order each run, and results differ in the last bits between runs. Iterate in sorted order (or use a `BTreeMap`) upstream. Until then, tests compare ODE results with a tolerance.
+8. Weight-0 arcs. pflow.xyz's JS treats an explicit weight `[0]` as "no requirement", while pflow-metamodel's `Arc::effective_weight` maps 0 to 1 (go-pflow's "unset" default). As a result, the gallery's producer-consumer net is dead in go-pflow/pflow-rs and live in pflow.xyz. `sim::executable` drops all-zero non-inhibitor arcs before compiling. Upstream should decide on one meaning, ideally by keeping "absent" and "0" distinct in the parser.
