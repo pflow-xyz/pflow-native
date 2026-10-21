@@ -166,6 +166,32 @@ pub fn data_dir() -> Option<PathBuf> {
     })
 }
 
+/// Writes `body` to `path` readable only by the user (0600, in a 0700
+/// directory), atomically: a temporary file renamed over the old one.
+pub fn write_private(path: &std::path::Path, body: &[u8]) -> std::result::Result<(), String> {
+    let dir = path.parent().ok_or("a private file needs a directory")?;
+    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
+    let name = path.file_name().and_then(|n| n.to_str()).unwrap_or("file");
+    let tmp = dir.join(format!(".{name}.{}", std::process::id()));
+    #[cfg(unix)]
+    {
+        use std::io::Write;
+        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
+        let _ = std::fs::remove_file(&tmp);
+        let mut f = std::fs::OpenOptions::new()
+            .write(true)
+            .create_new(true)
+            .mode(0o600)
+            .open(&tmp)
+            .map_err(|e| format!("{}: {e}", tmp.display()))?;
+        f.write_all(body).map_err(|e| e.to_string())?;
+    }
+    #[cfg(not(unix))]
+    std::fs::write(&tmp, body).map_err(|e| format!("{}: {e}", tmp.display()))?;
+    std::fs::rename(&tmp, path).map_err(|e| format!("{}: {e}", path.display()))
+}
+
 /// A credential by name: the environment variable `name`, else the key
 /// `name` in `<data_dir>/credentials.json`. Never logged or stored.
 pub fn credential(name: &str) -> Option<String> {

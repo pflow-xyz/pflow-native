@@ -109,6 +109,12 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 
 Each credential goes only to its own hosts, over HTTPS: `PFLOW_XYZ_TOKEN` to `pflow.xyz`; `GITHUB_TOKEN` to `api.github.com` and `pflow.xyz`; `SIM_PFLOW_TOKEN` to `sim.pflow.xyz`. A caller-supplied `server` or `endpoint` that is not one of them is refused before anything is built or sent.
 
+**Signing in.** Rather than pasting tokens, sign in from **Remote → Accounts…**, with `pflow-native-cli login sim|pflow`, or with `auth.login {"service": …}`:
+- **sim.pflow.xyz** opens your browser on sim's own sign-in page, which uses Google. Underneath, this is sim's OAuth server: pflow-native registers itself as a client, uses PKCE and a one-off `127.0.0.1` redirect, and stores the access token as `SIM_PFLOW_TOKEN`. That token lasts a day and is renewed automatically with the refresh token, which lasts 90 days.
+- **pflow.xyz** uses a GitHub sign-in, since pflow.xyz checks its bearer against GitHub. This is GitHub's device flow with pflow.xyz's OAuth app: you enter the code shown at github.com/login/device. The token is stored as `GITHUB_TOKEN`, so Gists use it too. The app needs **Enable Device Flow** turned on in its GitHub settings; until then the sign-in says so. `PFLOW_NATIVE_GITHUB_CLIENT_ID` points it at another OAuth app.
+
+Tokens are written to `credentials.json` (owner-only) and never returned by a command. `auth.status` (`pflow-native-cli accounts`) shows what you are signed in to, and `auth.logout` forgets a sign-in. An environment variable still takes precedence over a sign-in.
+
 **Who can send.**
 - **The app** asks you every time.
 - **The control port** is open only to whoever holds the per-launch token, which the app writes to `<data_dir>/control.json` (owner-only). Sends that arrive there still wait for your **Send** in the app. Batches over the port may not contain sends.

@@ -31,27 +31,8 @@ pub fn new_token() -> Result<String, String> {
 /// Writes `{addr, token, pid}` to [`control_file`], owner-only.
 pub fn write_control_file(addr: &str, token: &str) -> Result<PathBuf, String> {
     let path = control_file().ok_or("no data directory for the control token")?;
-    let dir = path.parent().expect("has a parent");
-    std::fs::create_dir_all(dir).map_err(|e| format!("{}: {e}", dir.display()))?;
     let body = json!({ "addr": addr, "token": token, "pid": std::process::id() }).to_string();
-    let tmp = dir.join(format!(".control.json.{}", std::process::id()));
-    #[cfg(unix)]
-    {
-        use std::io::Write;
-        use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
-        let _ = std::fs::set_permissions(dir, std::fs::Permissions::from_mode(0o700));
-        let _ = std::fs::remove_file(&tmp);
-        let mut f = std::fs::OpenOptions::new()
-            .write(true)
-            .create_new(true)
-            .mode(0o600)
-            .open(&tmp)
-            .map_err(|e| format!("{}: {e}", tmp.display()))?;
-        f.write_all(body.as_bytes()).map_err(|e| e.to_string())?;
-    }
-    #[cfg(not(unix))]
-    std::fs::write(&tmp, body).map_err(|e| format!("{}: {e}", tmp.display()))?;
-    std::fs::rename(&tmp, &path).map_err(|e| format!("{}: {e}", path.display()))?;
+    crate::outbound::write_private(&path, body.as_bytes())?;
     Ok(path)
 }
 

@@ -9,6 +9,7 @@
 
 pub mod analysis;
 pub mod artifact;
+pub mod auth;
 pub mod cid;
 pub mod commands;
 pub mod compose;

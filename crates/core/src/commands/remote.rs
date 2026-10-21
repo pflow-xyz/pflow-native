@@ -745,8 +745,9 @@ impl Plan {
     }
 }
 
+/// Refreshed first when it came from `auth.login` and has expired.
 fn sim_token(endpoint: &str) -> Result<Option<String>> {
-    credential_for("SIM_PFLOW_TOKEN", endpoint)
+    crate::auth::sim_token(endpoint)
 }
 
 /// The steps a plan runs: sim_create_model first when it needs the open net.

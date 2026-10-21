@@ -4,6 +4,7 @@
 use crate::registry::CommandSpec;
 
 pub mod analysis;
+pub mod auth;
 pub mod cid;
 pub mod clipboard;
 pub mod command;
@@ -58,6 +59,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     compose::SET,
     systems::SET,
     outbound::SET,
+    auth::SET,
     remote::SET,
     store::SET,
     provenance::SET,

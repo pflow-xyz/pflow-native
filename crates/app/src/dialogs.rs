@@ -19,6 +19,17 @@ pub struct DialogState {
     /// A previewed remote write awaiting the user's go-ahead:
     /// (command, args it ran with, the request preview).
     pub confirm_send: Option<(String, Value, Value)>,
+    /// The Accounts window, and its last `auth.status` (with when it was read).
+    pub accounts_open: bool,
+    accounts: Option<(f64, Value)>,
+}
+
+impl DialogState {
+    /// Opens the Accounts window with a fresh status.
+    pub(crate) fn show_accounts(&mut self) {
+        self.accounts_open = true;
+        self.accounts = None;
+    }
 }
 
 impl App {
@@ -92,6 +103,7 @@ fn build_args(spec: &CommandSpec, fields: &[String]) -> Result<Value, String> {
 
 pub fn ui(app: &mut App, ctx: &egui::Context) {
     confirm_send(app, ctx);
+    accounts(app, ctx);
     args_dialog(app, ctx);
     palette(app, ctx);
     help(app, ctx);
@@ -339,4 +351,123 @@ fn confirm_send(app: &mut App, ctx: &egui::Context) {
         None if !open => app.dialogs.confirm_send = None,
         None => {}
     }
+}
+
+/// Sign-in to sim.pflow.xyz and pflow.xyz (`auth.*`). The status is re-read
+/// every second while a sign-in is waiting on the browser.
+fn accounts(app: &mut App, ctx: &egui::Context) {
+    if !app.dialogs.accounts_open {
+        app.dialogs.accounts = None;
+        return;
+    }
+    let t = ctx.input(|i| i.time);
+    let stale = match &app.dialogs.accounts {
+        None => true,
+        Some((at, _)) => pflow_native_core::auth::pending() && t - at > 1.0,
+    };
+    if stale {
+        let st = app
+            .sess
+            .execute("auth.status", Value::Null)
+            .unwrap_or(Value::Null);
+        app.dialogs.accounts = Some((t, st));
+    }
+    if pflow_native_core::auth::pending() {
+        ctx.request_repaint_after(std::time::Duration::from_secs(1));
+    }
+    let rows = app
+        .dialogs
+        .accounts
+        .as_ref()
+        .and_then(|(_, v)| v.as_array().cloned())
+        .unwrap_or_default();
+    let mut open = true;
+    let mut act: Option<(&'static str, String)> = None;
+    let mut copy = None;
+    egui::Window::new("Accounts")
+        .open(&mut open)
+        .collapsible(false)
+        .default_width(440.0)
+        .show(ctx, |ui| {
+            for r in &rows {
+                let service = r["service"].as_str().unwrap_or("").to_string();
+                ui.horizontal(|ui| {
+                    ui.strong(r["site"].as_str().unwrap_or(""));
+                    ui.weak(format!("signs in with {}", r["signs_in_with"].as_str().unwrap_or("")));
+                });
+                let from = r["from"].as_str().unwrap_or("");
+                if r["signed_in"] == true {
+                    let who = r["login"].as_str().map(|l| format!(" as {l}")).unwrap_or_default();
+                    let how = match from {
+                        "sign-in" => String::new(),
+                        "env" => format!(" (from ${})", r["credential"].as_str().unwrap_or("")),
+                        _ => " (from credentials.json)".into(),
+                    };
+                    ui.label(format!("✔ Signed in{who}{how}"));
+                    if let Some(s) = r["expires_in_s"].as_i64() {
+                        let refresh = if r["refreshable"] == true { ", renews itself" } else { "" };
+                        ui.weak(if s > 0 {
+                            format!("token valid for {}h{refresh}", s / 3600)
+                        } else {
+                            format!("token expired{refresh}")
+                        });
+                    }
+                    if let Some(n) = r["note"].as_str() {
+                        ui.weak(n);
+                    }
+                } else {
+                    ui.label("Not signed in");
+                }
+                let sign_in = &r["sign_in"];
+                match sign_in["state"].as_str() {
+                    Some("pending") => {
+                        if let Some(code) = sign_in["user_code"].as_str() {
+                            ui.horizontal(|ui| {
+                                ui.label("Enter this code on GitHub:");
+                                ui.heading(egui::RichText::new(code).monospace());
+                                if ui.small_button("Copy").clicked() {
+                                    copy = Some(code.to_string());
+                                }
+                            });
+                        } else {
+                            ui.label("Finish signing in in your browser…");
+                        }
+                        if let Some(url) = sign_in["open"].as_str() {
+                            ui.hyperlink_to("Open the sign-in page again", url);
+                        }
+                        if ui.button("Cancel").clicked() {
+                            act = Some(("auth.logout", service.clone()));
+                        }
+                    }
+                    Some("failed") => {
+                        ui.colored_label(
+                            egui::Color32::from_rgb(220, 60, 60),
+                            sign_in["error"].as_str().unwrap_or("sign-in failed"),
+                        );
+                    }
+                    _ => {}
+                }
+                if sign_in["state"] != "pending" {
+                    ui.horizontal(|ui| {
+                        let label = if r["signed_in"] == true { "Sign in again" } else { "Sign in" };
+                        if ui.button(label).clicked() {
+                            act = Some(("auth.login", service.clone()));
+                        }
+                        if from == "sign-in" && ui.button("Sign out").clicked() {
+                            act = Some(("auth.logout", service.clone()));
+                        }
+                    });
+                }
+                ui.separator();
+            }
+            ui.weak("Tokens are kept in credentials.json in pflow-native's data folder, readable only by you.");
+        });
+    if let Some(text) = copy {
+        ctx.copy_text(text);
+    }
+    if let Some((id, service)) = act {
+        app.queue(id, json!({ "service": service }));
+        app.dialogs.accounts = None; // re-read after it runs
+    }
+    app.dialogs.accounts_open = open;
 }

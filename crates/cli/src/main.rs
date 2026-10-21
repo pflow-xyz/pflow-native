@@ -28,6 +28,11 @@ USAGE:
                                                      else runs headless. -i alone implies headless; with
                                                      --attach it opens NET in the app.
 
+  pflow-native-cli login sim|pflow [--no-browser]   sign in: sim.pflow.xyz (browser, Google) or pflow.xyz
+                                                     (GitHub: enter the printed code); waits until done
+  pflow-native-cli logout sim|pflow                  forget that sign-in (auth.logout)
+  pflow-native-cli accounts                          what you are signed in to (auth.status)
+
   -i NET   open this pflow JSON file first (file.open)
   -o OUT   save the document here afterwards (file.save; for control/mcp: when stdin closes)
 ";
@@ -38,6 +43,7 @@ fn main() -> ExitCode {
     let attach = take_flag(&mut args, "--attach");
     let headless = take_switch(&mut args, "--headless");
     let output = take_flag(&mut args, "-o");
+    let no_browser = take_switch(&mut args, "--no-browser");
     let Some(sub) = (!args.is_empty()).then(|| args.remove(0)) else {
         eprint!("{USAGE}");
         return ExitCode::from(2);
@@ -127,6 +133,9 @@ fn main() -> ExitCode {
                 be.exec("file.save", args)
             });
         }
+        "login" => return login(&mut sess, args.first().map(String::as_str), no_browser),
+        "logout" => sess.execute("auth.logout", json!({ "service": args.first() })),
+        "accounts" => sess.execute("auth.status", Value::Null),
         "-h" | "--help" | "help" => {
             print!("{USAGE}");
             return ExitCode::SUCCESS;
@@ -183,6 +192,43 @@ fn take_switch(args: &mut Vec<String>, flag: &str) -> bool {
             true
         }
         None => false,
+    }
+}
+
+/// `login SERVICE`: starts the sign-in, says on stderr what to do in the
+/// browser, and waits for it.
+fn login(sess: &mut Session, service: Option<&str>, no_browser: bool) -> ExitCode {
+    use pflow_native_core::auth;
+    let started = auth::Service::parse(service.unwrap_or("")).and_then(|svc| {
+        sess.execute(
+            "auth.login",
+            json!({ "service": svc.name(), "browser": !no_browser }),
+        )
+        .map(|info| (svc, info))
+    });
+    let (svc, info) = match started {
+        Ok(x) => x,
+        Err(e) => {
+            eprintln!("error: {e}");
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Some(note) = info["note"].as_str() {
+        eprintln!("{note}");
+    }
+    if no_browser || info.get("browser").is_some() {
+        eprintln!("Open: {}", info["open"].as_str().unwrap_or(""));
+    }
+    eprintln!("Waiting…");
+    match auth::wait(svc, std::time::Duration::from_secs(900)) {
+        Ok(v) => {
+            println!("{}", serde_json::to_string_pretty(&v).unwrap_or_default());
+            ExitCode::SUCCESS
+        }
+        Err(e) => {
+            eprintln!("error: {e}");
+            ExitCode::FAILURE
+        }
     }
 }
 

@@ -173,6 +173,11 @@ screenshot (`--screenshot`).
   - **Credentials:** `outbound::credential_for` attaches a credential only for its
     allowlisted HTTPS hosts, so no path can deliver a token to a caller-chosen
     server.
+  - **Sign-in** (`core::auth`, `auth.*`): an OAuth flow writes its token into
+    `credentials.json` under one of those same names, so the allowlist covers it
+    unchanged. The flow is sim's OAuth server with PKCE and a loopback redirect,
+    or GitHub's device flow for pflow.xyz. Flows run on a background thread; the
+    commands return at once, and `auth::wait` blocks only for the CLI's `login`.
   - `mcp` attaches to that port when it is up, falling back to headless. The
     `Backend` enum in `crates/cli/src/mcp.rs` holds both cases.
   - Attached, the `screenshot` tool returns the live window as a PNG.

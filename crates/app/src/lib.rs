@@ -188,6 +188,9 @@ impl App {
         if id == "sim.ode" {
             self.bottom = BottomTab::Plot;
         }
+        if id.starts_with("auth.") {
+            self.dialogs.show_accounts();
+        }
     }
 
     pub(crate) fn set_status(&mut self, s: Result<String, String>) {
@@ -373,6 +376,13 @@ impl App {
                         if let Some(addr) = self.control_status() {
                             ui.separator();
                             ui.weak(addr);
+                        }
+                    }
+                    if menu == "Remote" {
+                        ui.separator();
+                        if ui.button("Accounts…").clicked() {
+                            self.dialogs.show_accounts();
+                            ui.close();
                         }
                     }
                     if menu == "File" {
@@ -561,6 +571,9 @@ fn native_png(_: &str, _: &egui::ColorImage) -> Result<(), String> {
 
 fn summarize(id: &str, v: &Value) -> String {
     let short = match v {
+        Value::Object(m) if id.starts_with("auth.") && m.contains_key("note") => {
+            m["note"].as_str().unwrap_or("").to_string()
+        }
         Value::String(s) if s.len() > 80 => format!("{} bytes", s.len()),
         Value::Object(m) if m.get("path").is_some_and(|p| !p.is_null()) => format!("{}", m["path"]),
         Value::Object(m) if m.contains_key("artifact") => {
