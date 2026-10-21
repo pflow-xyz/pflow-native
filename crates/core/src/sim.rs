@@ -107,11 +107,83 @@ impl OdeResult {
             .map(|(k, v)| (k.clone(), v.last().copied().unwrap_or(0.0)))
             .collect()
     }
+
+    /// The state at t = 0 (downsampling always keeps the first sample).
+    pub fn initial_state(&self) -> BTreeMap<String, f64> {
+        self.series
+            .iter()
+            .map(|(k, v)| (k.clone(), v.first().copied().unwrap_or(0.0)))
+            .collect()
+    }
+}
+
+/// Solver knobs a caller may override; `None` keeps the default. The
+/// defaults are pflow.xyz's (`petri-solver.js`: dt 0.01, abstol 1e-6,
+/// reltol 1e-3, dtmax 0.1), with dtmax further capped at `t_end / 50` so a
+/// short run still gets a smooth curve.
+#[derive(Debug, Clone, Copy, Default, PartialEq)]
+pub struct OdeOptions {
+    pub dt: Option<f64>,
+    pub abstol: Option<f64>,
+    pub reltol: Option<f64>,
+    pub dtmax: Option<f64>,
+}
+
+impl OdeOptions {
+    /// The coarser setting the grid commands (`opt.heatmap`, `opt.optimize`)
+    /// default to: they only read the final state, so they let the step grow
+    /// to `t_end / 20` and loosen abstol to 1e-4 (reltol stays 1e-3).
+    pub fn grid(t_end: f64) -> Self {
+        Self {
+            dt: None,
+            abstol: Some(1e-4),
+            reltol: None,
+            dtmax: Some(t_end / 20.0),
+        }
+    }
+
+    /// Fills unset fields from `base`.
+    pub fn or(self, base: OdeOptions) -> Self {
+        Self {
+            dt: self.dt.or(base.dt),
+            abstol: self.abstol.or(base.abstol),
+            reltol: self.reltol.or(base.reltol),
+            dtmax: self.dtmax.or(base.dtmax),
+        }
+    }
+
+    /// pflow-solver options for a run over `[0, t_end]`, refusing
+    /// non-positive or non-finite overrides.
+    pub fn solver_options(&self, t_end: f64) -> Result<pflow_solver::Options> {
+        let mut o = pflow_solver::Options::default_opts();
+        o.dtmax = o.dtmax.min(t_end / 50.0).max(o.dtmin);
+        let pos = |name: &str, v: Option<f64>| -> Result<Option<f64>> {
+            match v {
+                Some(x) if !(x > 0.0 && x.is_finite()) => Err(Error::BadArgs(format!(
+                    "{name} must be a positive number, got {x}"
+                ))),
+                other => Ok(other),
+            }
+        };
+        if let Some(dt) = pos("dt", self.dt)? {
+            o.dt = dt;
+        }
+        if let Some(a) = pos("abstol", self.abstol)? {
+            o.abstol = a;
+        }
+        if let Some(r) = pos("reltol", self.reltol)? {
+            o.reltol = r;
+        }
+        if let Some(m) = pos("dtmax", self.dtmax)? {
+            o.dtmax = m.max(o.dtmin);
+        }
+        o.dt = o.dt.min(o.dtmax);
+        Ok(o)
+    }
 }
 
 pub const SOLVERS: &[&str] = &["tsit5", "rk45", "rk4", "euler", "heun", "midpoint", "bs32"];
 
-/// Integrates the mass-action ODE from marking `mk` over `[0, t_end]`.
 /// The document as a continuous (single-color) pflow-core net, ready for
 /// pflow-solver: colors unfolded, the state taken from a marking, rates
 /// filled in. Shared by every continuous and stochastic engine.
@@ -217,7 +289,8 @@ pub fn downsample(n: usize, max_points: usize) -> Vec<usize> {
     idx
 }
 
-/// Integrates the mass-action ODE from marking `mk` over `[0, t_end]`.
+/// Integrates the mass-action ODE from marking `mk` over `[0, t_end]`
+/// with the default solver options.
 pub fn ode(
     doc: &Document,
     mk: &Marking,
@@ -226,15 +299,33 @@ pub fn ode(
     method: &str,
     max_points: usize,
 ) -> Result<OdeResult> {
-    use pflow_solver::{solve, Options, Problem};
+    ode_with(
+        doc,
+        mk,
+        rates,
+        t_end,
+        method,
+        max_points,
+        &OdeOptions::default(),
+    )
+}
 
-    if !(t_end > 0.0 && t_end.is_finite()) {
-        return Err(Error::BadArgs("t_end must be a positive number".into()));
-    }
+/// [`ode`] with solver option overrides.
+pub fn ode_with(
+    doc: &Document,
+    mk: &Marking,
+    rates: &BTreeMap<String, f64>,
+    t_end: f64,
+    method: &str,
+    max_points: usize,
+    opts: &OdeOptions,
+) -> Result<OdeResult> {
+    use pflow_solver::{solve, Problem};
+
+    check_t_end(t_end)?;
     let solver = solver(method)?;
+    let opts = opts.solver_options(t_end)?;
     let cn = continuous(doc, mk, rates)?;
-    let mut opts = Options::default_opts();
-    opts.dtmax = opts.dtmax.min(t_end / 50.0).max(opts.dtmin);
     let prob = Problem::new(cn.net, cn.state, [0.0, t_end], cn.rates);
     let sol = solve(&prob, &solver, &opts);
 
@@ -249,4 +340,35 @@ pub fn ode(
         })
         .collect();
     Ok(OdeResult { t, series, t_end })
+}
+
+/// Refuses a horizon that is not a positive finite number.
+pub fn check_t_end(t_end: f64) -> Result<()> {
+    if t_end > 0.0 && t_end.is_finite() {
+        Ok(())
+    } else {
+        Err(Error::BadArgs("t_end must be a positive number".into()))
+    }
+}
+
+/// Indices into `order` (a [`ContinuousNet::order`]) that `name` selects:
+/// an exact display name (`S`, `CoffeeBeans.brown`) or a base place id,
+/// which selects every color of that place.
+pub fn select_series(order: &[(String, String)], name: &str) -> Vec<usize> {
+    let exact: Vec<usize> = order
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, d))| d == name)
+        .map(|(i, _)| i)
+        .collect();
+    if !exact.is_empty() {
+        return exact;
+    }
+    let prefix = format!("{name}.");
+    order
+        .iter()
+        .enumerate()
+        .filter(|(_, (_, d))| d.starts_with(&prefix))
+        .map(|(i, _)| i)
+        .collect()
 }
