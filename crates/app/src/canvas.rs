@@ -212,7 +212,10 @@ fn input(app: &mut App, ui: &egui::Ui, resp: &egui::Response, rect: Rect) {
         app.canvas.panning = false;
         if let Some((ids, off)) = app.canvas.drag.take() {
             if off.length() > 0.5 {
-                app.queue(
+                // Run now, not queued: this frame is drawn without the live
+                // drag offset, so a queued move would flash the nodes back at
+                // their old spot for one frame.
+                app.run(
                     "net.move_by",
                     json!({ "ids": ids, "dx": off.x, "dy": off.y }),
                 );
