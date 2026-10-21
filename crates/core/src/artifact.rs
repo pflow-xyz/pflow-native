@@ -158,6 +158,19 @@ pub enum DrawShape {
         width: f64,
         #[serde(default)]
         dashed: bool,
+        /// Dash pattern (on, off) in drawing units; overrides `dashed`.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        dash: Option<(f64, f64)>,
+    },
+    /// A closed shape (arrowheads, regions).
+    Polygon {
+        points: Vec<(f64, f64)>,
+        #[serde(default)]
+        fill: Option<String>,
+        #[serde(default)]
+        stroke: Option<String>,
+        #[serde(default = "one")]
+        stroke_width: f64,
     },
     Rect {
         x: f64,
@@ -170,6 +183,8 @@ pub enum DrawShape {
         stroke: Option<String>,
         #[serde(default)]
         radius: f64,
+        #[serde(default = "one")]
+        stroke_width: f64,
     },
     Circle {
         x: f64,
@@ -179,6 +194,8 @@ pub enum DrawShape {
         fill: Option<String>,
         #[serde(default)]
         stroke: Option<String>,
+        #[serde(default = "one")]
+        stroke_width: f64,
     },
     Text {
         x: f64,
@@ -191,6 +208,12 @@ pub enum DrawShape {
         anchor: String,
         #[serde(default = "default_ink")]
         color: String,
+        #[serde(default)]
+        bold: bool,
+        /// Center the text vertically on `y` (SVG dominant-baseline
+        /// central) instead of sitting on it as a baseline.
+        #[serde(default)]
+        central: bool,
     },
 }
 

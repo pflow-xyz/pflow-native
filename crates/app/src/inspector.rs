@@ -268,7 +268,7 @@ fn document(app: &mut App, ui: &mut egui::Ui) {
     if app.sess.registry().find("net.layout").is_some() {
         ui.label("Auto layout:");
         ui.horizontal_wrapped(|ui| {
-            for name in ["sugiyama", "grid", "bipartite", "circular"] {
+            for name in pflow_native_core::layout::Algorithm::ALL.map(|a| a.name()) {
                 if ui.button(name).clicked() {
                     app.queue("net.layout", json!({ "algorithm": name }));
                 }

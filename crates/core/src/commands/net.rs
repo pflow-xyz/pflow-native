@@ -190,7 +190,7 @@ pub const SET: &[CommandSpec] = &[
             "algorithm",
             Str,
             "sugiyama (layered, top to bottom), grid, bipartite (places left, \
-             transitions right) or circular",
+             transitions right), circular or string (pflow.xyz's string-diagram layout)",
         )],
         enabled: always,
         run: layout,

@@ -280,7 +280,7 @@ fn texts(shapes: &[DrawShape]) -> Vec<&str> {
 /// Every anchor point of every shape, for the NaN and bounds checks.
 fn points(s: &DrawShape) -> Vec<(f64, f64)> {
     match s {
-        DrawShape::Line { points, .. } => points.clone(),
+        DrawShape::Line { points, .. } | DrawShape::Polygon { points, .. } => points.clone(),
         DrawShape::Rect { x, y, w, h, .. } => vec![(*x, *y), (x + w, y + h)],
         DrawShape::Circle { x, y, .. } | DrawShape::Text { x, y, .. } => vec![(*x, *y)],
     }
@@ -415,22 +415,38 @@ fn drawing_styles_follow_the_viewer() {
         .filter(|p| p.iter().any(|&(x, _)| x == 185.0))
         .collect();
     assert_eq!(back.len(), 4);
+    // Back edges dash 6,3; arrowheads are filled red triangles tipped at
+    // t's input port.
     let arrows: Vec<_> = shapes
         .iter()
         .filter_map(|s| match s {
-            DrawShape::Line {
+            DrawShape::Polygon {
                 points,
-                dashed: false,
+                fill: Some(f),
                 ..
-            } if points.len() == 4 && points[0] == points[3] => Some(points),
+            } if f == "#cc4444" && points.len() == 3 => Some(points),
             _ => None,
         })
         .collect();
     assert_eq!(arrows.len(), 2);
     assert_eq!(arrows[0][0], (94.0, 150.0));
-    // Box label: centered, 12px, #333 ink.
+    assert!(shapes.iter().any(|s| matches!(
+        s,
+        DrawShape::Line {
+            dash: Some((6.0, 3.0)),
+            ..
+        }
+    )));
+    // Weight labels are bold; box outlines 1.5.
+    assert!(shapes
+        .iter()
+        .any(|s| matches!(s, DrawShape::Text { text, bold: true, .. } if text == "3")));
+    assert!(shapes
+        .iter()
+        .any(|s| matches!(s, DrawShape::Rect { stroke_width, .. } if *stroke_width == 1.5)));
+    // Box label: centered (dominant-baseline central), 12px, #333 ink.
     assert!(shapes.iter().any(|s| matches!(s,
-        DrawShape::Text { text, size, color, x, .. } if text == "t" && *size == 12.0 && color == "#333333" && *x == 70.0)));
+        DrawShape::Text { text, size, color, x, central: true, .. } if text == "t" && *size == 12.0 && color == "#333333" && *x == 70.0)));
 }
 
 #[test]
@@ -457,4 +473,22 @@ fn listed_in_the_view_menu_and_journaled() {
     run(&mut s, "file.open_example", json!({"name": "sir"}));
     run(&mut s, "view.string_diagram", Value::Null);
     assert_eq!(s.journal.last().unwrap().command, "view.string_diagram");
+}
+
+#[test]
+fn string_layout_is_a_net_layout_algorithm() {
+    let mut s = pflow_native_core::Session::default();
+    s.execute(
+        "file.open_example",
+        serde_json::json!({"name": "coffee-shop"}),
+    )
+    .unwrap();
+    let r = s
+        .execute("net.layout", serde_json::json!({"algorithm": "string"}))
+        .unwrap();
+    assert_eq!(r["algorithm"], "string");
+    let pos: Vec<(String, f64, f64)> = pflow_native_core::string_diagram::net_layout(&s.doc);
+    for (id, x, y) in pos {
+        assert_eq!(s.doc.position(&id), Some((x, y)), "{id}");
+    }
 }

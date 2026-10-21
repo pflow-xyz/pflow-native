@@ -54,7 +54,9 @@ const WIRE_WIDTH: f64 = 1.5;
 const BEZIER_SEGMENTS: usize = 16;
 /// `dominant-baseline="central"` (dv:508) as a baseline shift, in em: a
 /// [`DrawShape::Text`] `y` is the alphabetic baseline.
-const CENTRAL_DY: f64 = 0.35;
+/// SVG `stroke-dasharray` of inhibitor wires (dv:470) and back edges (dv:488).
+const INHIBIT_DASH: (f64, f64) = (4.0, 3.0);
+const BACK_DASH: (f64, f64) = (6.0, 3.0);
 
 /// One typed port of a box.
 #[derive(Debug, Clone, PartialEq, Serialize)]
@@ -502,13 +504,7 @@ pub fn port_x(b: &DiagramBox, index: usize, count: usize) -> f64 {
 /// Approximations, where a [`DrawShape`] has no equivalent:
 /// - Cubic Bézier wires are flattened to [`BEZIER_SEGMENTS`]-segment
 ///   polylines (straight ones to their two end points).
-/// - The back-edge arrowhead marker (dv:435, a filled triangle scaled by
-///   the stroke width) is drawn as a closed triangle outline.
-/// - Dashes are the renderer's own pattern (SVG `4,3` / `6,3` in the JS).
-/// - Box and inhibitor-port outlines use the renderer's stroke width (1.5
-///   in the JS), and the bold weight labels are regular.
-/// - Text `dy` offsets are folded into `y`; the box label's
-///   `dominant-baseline="central"` becomes a baseline shift of 0.35 em.
+/// - Text `dy` offsets are folded into `y`.
 pub fn drawing(d: &Diagram) -> ArtifactData {
     let svg_width = d.width.max(200.0);
     let svg_height = d.height.max(100.0);
@@ -520,6 +516,7 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
         fill: Some(BACKGROUND.into()),
         stroke: None,
         radius: 4.0,
+        stroke_width: 1.0,
     }];
     let text = |x: f64, y: f64, s: &str, size: f64, anchor: &str, color: &str| DrawShape::Text {
         x,
@@ -528,6 +525,8 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
         size,
         anchor: anchor.into(),
         color: color.into(),
+        bold: false,
+        central: false,
     };
     let input_port = |x: f64, y: f64, inhibit: bool| DrawShape::Circle {
         x,
@@ -535,6 +534,7 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
         r: PORT_RADIUS,
         fill: (!inhibit).then(|| PORT.into()),
         stroke: inhibit.then(|| ALERT.into()),
+        stroke_width: 1.5,
     };
 
     // Boundary inputs entering from the top (dv:442).
@@ -555,7 +555,7 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
                         (px, py),
                     ],
                     WIRE,
-                    port.inhibit,
+                    port.inhibit.then_some(INHIBIT_DASH),
                 ));
                 shapes.push(text(
                     px,
@@ -579,7 +579,7 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
         shapes.push(bezier(
             [(fx, fy), (fx, mid_y), (tx, mid_y), (tx, ty)],
             color,
-            w.inhibit,
+            w.inhibit.then_some(INHIBIT_DASH),
         ));
         let label_x = (fx + tx) / 2.0;
         shapes.push(text(
@@ -591,14 +591,19 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
             LABEL,
         ));
         if let Some(wt) = w.weight.filter(|&wt| wt > 1.0) {
-            shapes.push(text(
+            // font-weight="bold" (dv:478).
+            let mut t = text(
                 label_x + 8.0,
                 mid_y + 8.0,
                 &fmt_weight(wt),
                 LABEL_FONT_SIZE,
                 "start",
                 ALERT,
-            ));
+            );
+            if let DrawShape::Text { bold, .. } = &mut t {
+                *bold = true;
+            }
+            shapes.push(t);
         }
     }
 
@@ -616,7 +621,7 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
                 (right_x, mid),
             ],
             ALERT,
-            true,
+            Some(BACK_DASH),
         ));
         let leg = [
             (right_x, mid),
@@ -624,7 +629,7 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
             (tx + 30.0, mid_y2),
             (tx, ty),
         ];
-        shapes.push(bezier(leg, ALERT, true));
+        shapes.push(bezier(leg, ALERT, Some(BACK_DASH)));
         shapes.push(arrowhead(leg, ALERT));
         shapes.push(text(
             right_x - 4.0,
@@ -646,15 +651,19 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
             fill: Some(BOX_FILL.into()),
             stroke: Some(BOX_INK.into()),
             radius: 6.0,
+            stroke_width: 1.5,
         });
-        shapes.push(text(
-            b.x + b.width / 2.0,
-            b.y + BOX_HEIGHT / 2.0 + CENTRAL_DY * FONT_SIZE,
-            &b.label,
-            FONT_SIZE,
-            "middle",
-            BOX_INK,
-        ));
+        // dominant-baseline="central" (dv:520).
+        shapes.push(DrawShape::Text {
+            x: b.x + b.width / 2.0,
+            y: b.y + BOX_HEIGHT / 2.0,
+            text: b.label.clone(),
+            size: FONT_SIZE,
+            anchor: "middle".into(),
+            color: BOX_INK.into(),
+            bold: false,
+            central: true,
+        });
         for (i, port) in b.inputs.iter().enumerate() {
             shapes.push(input_port(port_x(b, i, b.inputs.len()), b.y, port.inhibit));
         }
@@ -680,7 +689,7 @@ pub fn drawing(d: &Diagram) -> ArtifactData {
                 shapes.push(bezier(
                     [(px, py), (px, py + 15.0), (px, end_y - 15.0), (px, end_y)],
                     WIRE,
-                    false,
+                    None,
                 ));
                 shapes.push(text(
                     px,
@@ -708,7 +717,7 @@ pub fn string_diagram(doc: &Document) -> ArtifactData {
 
 /// A cubic Bézier as a polyline; a straight one (all control points on one
 /// vertical or horizontal line) as its two end points.
-fn bezier(c: [(f64, f64); 4], color: &str, dashed: bool) -> DrawShape {
+fn bezier(c: [(f64, f64); 4], color: &str, dash: Option<(f64, f64)>) -> DrawShape {
     let straight = c.iter().all(|p| p.0 == c[0].0) || c.iter().all(|p| p.1 == c[0].1);
     let points = if straight {
         vec![c[0], c[3]]
@@ -729,7 +738,8 @@ fn bezier(c: [(f64, f64); 4], color: &str, dashed: bool) -> DrawShape {
         points,
         color: color.into(),
         width: WIRE_WIDTH,
-        dashed,
+        dashed: dash.is_some(),
+        dash,
     }
 }
 
@@ -750,11 +760,11 @@ fn arrowhead(c: [(f64, f64); 4], color: &str) -> DrawShape {
     let base = (tip.0 - ux * back, tip.1 - uy * back);
     let left = (base.0 - uy * half, base.1 + ux * half);
     let right = (base.0 + uy * half, base.1 - ux * half);
-    DrawShape::Line {
-        points: vec![tip, left, right, tip],
-        color: color.into(),
-        width: WIRE_WIDTH,
-        dashed: false,
+    DrawShape::Polygon {
+        points: vec![tip, left, right],
+        fill: Some(color.into()),
+        stroke: None,
+        stroke_width: 1.0,
     }
 }
 

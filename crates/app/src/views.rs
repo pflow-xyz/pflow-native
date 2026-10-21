@@ -1010,6 +1010,13 @@ pub fn drawing(
     painter.rect_filled(page, 4.0, Color32::WHITE);
     let p = |x: f64, y: f64| origin + Vec2::new(x as f32 * k, y as f32 * k);
     let ink = |c: &str| css(c).unwrap_or(Color32::from_gray(60));
+    let fill_of = |c: &Option<String>| c.as_deref().and_then(css).unwrap_or(Color32::TRANSPARENT);
+    let stroke_of = |c: &Option<String>, w: f64| {
+        c.as_deref()
+            .and_then(css)
+            .map(|c| Stroke::new((w as f32 * k).max(0.6), c))
+            .unwrap_or(Stroke::NONE)
+    };
     for sh in shapes {
         match sh {
             D::Line {
@@ -1017,14 +1024,37 @@ pub fn drawing(
                 color,
                 width,
                 dashed,
+                dash,
             } => {
                 let pts: Vec<Pos2> = points.iter().map(|&(x, y)| p(x, y)).collect();
                 let stroke = Stroke::new((*width as f32 * k).max(0.6), ink(color));
-                if *dashed {
-                    painter.extend(Shape::dashed_line(&pts, stroke, 6.0 * k, 4.0 * k));
-                } else {
-                    painter.add(Shape::line(pts, stroke));
+                match (dash, dashed) {
+                    (Some((on, off)), _) => painter.extend(Shape::dashed_line(
+                        &pts,
+                        stroke,
+                        *on as f32 * k,
+                        *off as f32 * k,
+                    )),
+                    (None, true) => {
+                        painter.extend(Shape::dashed_line(&pts, stroke, 6.0 * k, 4.0 * k))
+                    }
+                    (None, false) => {
+                        painter.add(Shape::line(pts, stroke));
+                    }
                 }
+            }
+            D::Polygon {
+                points,
+                fill,
+                stroke,
+                stroke_width,
+            } => {
+                let pts: Vec<Pos2> = points.iter().map(|&(x, y)| p(x, y)).collect();
+                painter.add(Shape::convex_polygon(
+                    pts,
+                    fill_of(fill),
+                    stroke_of(stroke, *stroke_width),
+                ));
             }
             D::Rect {
                 x,
@@ -1034,18 +1064,16 @@ pub fn drawing(
                 fill,
                 stroke,
                 radius,
+                stroke_width,
             } => {
                 let rr = Rect::from_min_size(p(*x, *y), Vec2::new(*w as f32 * k, *h as f32 * k));
-                let fill = fill
-                    .as_deref()
-                    .and_then(css)
-                    .unwrap_or(Color32::TRANSPARENT);
-                let st = stroke
-                    .as_deref()
-                    .and_then(css)
-                    .map(|c| Stroke::new(1.0, c))
-                    .unwrap_or(Stroke::NONE);
-                painter.rect(rr, *radius as f32 * k, fill, st, StrokeKind::Middle);
+                painter.rect(
+                    rr,
+                    *radius as f32 * k,
+                    fill_of(fill),
+                    stroke_of(stroke, *stroke_width),
+                    StrokeKind::Middle,
+                );
             }
             D::Circle {
                 x,
@@ -1053,17 +1081,14 @@ pub fn drawing(
                 r: rad,
                 fill,
                 stroke,
+                stroke_width,
             } => {
-                let fill = fill
-                    .as_deref()
-                    .and_then(css)
-                    .unwrap_or(Color32::TRANSPARENT);
-                let st = stroke
-                    .as_deref()
-                    .and_then(css)
-                    .map(|c| Stroke::new(1.0, c))
-                    .unwrap_or(Stroke::NONE);
-                painter.circle(p(*x, *y), *rad as f32 * k, fill, st);
+                painter.circle(
+                    p(*x, *y),
+                    *rad as f32 * k,
+                    fill_of(fill),
+                    stroke_of(stroke, *stroke_width),
+                );
             }
             D::Text {
                 x,
@@ -1072,21 +1097,38 @@ pub fn drawing(
                 size,
                 anchor,
                 color,
+                bold,
+                central,
             } => {
-                // SVG text sits on its baseline; egui anchors boxes.
-                let align = match anchor.as_str() {
-                    "start" => Align2::LEFT_BOTTOM,
-                    "end" => Align2::RIGHT_BOTTOM,
-                    _ => Align2::CENTER_BOTTOM,
-                };
-                let fs = (*size as f32 * k).max(6.0);
-                painter.text(
-                    p(*x, *y) + Vec2::new(0.0, fs * 0.25),
-                    align,
-                    text,
-                    FontId::proportional(fs),
-                    ink(color),
+                // SVG text sits on its baseline (or is centered); egui
+                // anchors boxes.
+                let (h, v) = (
+                    match anchor.as_str() {
+                        "start" => egui::Align::Min,
+                        "end" => egui::Align::Max,
+                        _ => egui::Align::Center,
+                    },
+                    if *central {
+                        egui::Align::Center
+                    } else {
+                        egui::Align::Max
+                    },
                 );
+                let fs = (*size as f32 * k).max(6.0);
+                let nudge = if *central { 0.0 } else { fs * 0.25 };
+                let at = p(*x, *y) + Vec2::new(0.0, nudge);
+                let font = FontId::proportional(fs);
+                painter.text(at, Align2([h, v]), text, font.clone(), ink(color));
+                if *bold {
+                    // egui's default fonts have no bold face: overstrike.
+                    painter.text(
+                        at + Vec2::new(0.6, 0.0),
+                        Align2([h, v]),
+                        text,
+                        font,
+                        ink(color),
+                    );
+                }
             }
         }
     }

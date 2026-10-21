@@ -29,14 +29,19 @@ pub enum Algorithm {
     Bipartite,
     /// All nodes on one circle, starting at the top (pv:6281).
     Circular,
+    /// pflow.xyz's String Diagram net layout (`_applyStringDiagramLayout`,
+    /// pv:6381): transitions in layers, places between their producers and
+    /// consumers. Ported in `string_diagram::net_layout`.
+    StringDiagram,
 }
 
 impl Algorithm {
-    pub const ALL: [Algorithm; 4] = [
+    pub const ALL: [Algorithm; 5] = [
         Algorithm::Sugiyama,
         Algorithm::Grid,
         Algorithm::Bipartite,
         Algorithm::Circular,
+        Algorithm::StringDiagram,
     ];
 
     pub fn name(self) -> &'static str {
@@ -45,6 +50,7 @@ impl Algorithm {
             Algorithm::Grid => "grid",
             Algorithm::Bipartite => "bipartite",
             Algorithm::Circular => "circular",
+            Algorithm::StringDiagram => "string",
         }
     }
 
@@ -60,6 +66,10 @@ impl Algorithm {
 /// first, then transitions, each in the order pflow.xyz iterates them.
 /// An empty net gives an empty vector.
 pub fn layout(doc: &Document, algo: Algorithm) -> Vec<(String, f64, f64)> {
+    if algo == Algorithm::StringDiagram {
+        // Already in pflow.xyz's coordinates (it normalizes itself).
+        return crate::string_diagram::net_layout(doc);
+    }
     let nodes = nodes(doc);
     if nodes.is_empty() {
         return vec![];
@@ -69,6 +79,7 @@ pub fn layout(doc: &Document, algo: Algorithm) -> Vec<(String, f64, f64)> {
         Algorithm::Grid => grid(doc, &nodes),
         Algorithm::Bipartite => bipartite(doc, &nodes),
         Algorithm::Circular => circular(&nodes),
+        Algorithm::StringDiagram => unreachable!("handled above"),
     };
     normalize(&mut pos, 100.0);
     nodes
@@ -472,6 +483,16 @@ fn circular(nodes: &[Node]) -> Vec<(f64, f64)> {
 
 #[cfg(test)]
 mod tests {
+    /// The four layouts held to pflow.xyz's coordinates here; the string
+    /// layout has its own goldens in tests/diagram.rs (and, like pflow.xyz,
+    /// may overlap nodes on degenerate nets).
+    const CLASSIC: [Algorithm; 4] = [
+        Algorithm::Sugiyama,
+        Algorithm::Grid,
+        Algorithm::Bipartite,
+        Algorithm::Circular,
+    ];
+
     use super::*;
 
     const COFFEE: &[u8] = include_bytes!("../../../examples/coffee-shop.json");
@@ -623,7 +644,7 @@ mod tests {
     fn matches_pflow_xyz_exactly() {
         for (name, bytes) in NETS {
             let d = doc(bytes);
-            for algo in Algorithm::ALL {
+            for algo in CLASSIC {
                 let got = layout(&d, algo);
                 let want: Vec<(String, f64, f64)> = golden(name, algo)
                     .iter()
@@ -638,7 +659,7 @@ mod tests {
     fn every_node_placed_distinct_and_deterministic() {
         for (name, bytes) in NETS {
             let d = doc(bytes);
-            for algo in Algorithm::ALL {
+            for algo in CLASSIC {
                 let out = layout(&d, algo);
                 assert_eq!(out.len(), d.places.len() + d.transitions.len());
                 for id in d
@@ -675,7 +696,7 @@ mod tests {
     #[test]
     fn empty_net_and_names() {
         let empty = Document::default();
-        for algo in Algorithm::ALL {
+        for algo in CLASSIC {
             assert!(layout(&empty, algo).is_empty());
             assert_eq!(Algorithm::parse(algo.name()), Some(algo));
         }
@@ -691,7 +712,7 @@ mod tests {
         assert_eq!(at(&out, "p"), (400.0, 100.0));
         assert_eq!(at(&out, "t"), (400.0, 250.0));
         let one = doc(br#"{"places":{"p":{}},"transitions":{},"arcs":[]}"#);
-        for algo in Algorithm::ALL {
+        for algo in CLASSIC {
             assert_eq!(layout(&one, algo).len(), 1);
         }
     }

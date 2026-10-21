@@ -790,6 +790,13 @@ fn drawing_svg(width: f64, height: f64, shapes: &[crate::artifact::DrawShape]) -
         r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" font-family="sans-serif"><rect width="{width}" height="{height}" fill="white"/>"#
     );
     let paint = |c: &Option<String>| c.as_deref().map(esc).unwrap_or_else(|| "none".into());
+    let pts = |points: &[(f64, f64)]| {
+        points
+            .iter()
+            .map(|(x, y)| format!("{x:.2},{y:.2}"))
+            .collect::<Vec<_>>()
+            .join(" ")
+    };
     for sh in shapes {
         match sh {
             D::Line {
@@ -797,21 +804,32 @@ fn drawing_svg(width: f64, height: f64, shapes: &[crate::artifact::DrawShape]) -
                 color,
                 width,
                 dashed,
+                dash,
             } => {
-                let pts: Vec<String> = points
-                    .iter()
-                    .map(|(x, y)| format!("{x:.2},{y:.2}"))
-                    .collect();
-                let dash = if *dashed {
-                    r#" stroke-dasharray="6 4""#
-                } else {
-                    ""
+                let dash = match (dash, dashed) {
+                    (Some((on, off)), _) => format!(r#" stroke-dasharray="{on},{off}""#),
+                    (None, true) => r#" stroke-dasharray="6 4""#.to_string(),
+                    (None, false) => String::new(),
                 };
                 let _ = write!(
                     s,
                     r#"<polyline fill="none" stroke="{}" stroke-width="{width}"{dash} points="{}"/>"#,
                     esc(color),
-                    pts.join(" ")
+                    pts(points)
+                );
+            }
+            D::Polygon {
+                points,
+                fill,
+                stroke,
+                stroke_width,
+            } => {
+                let _ = write!(
+                    s,
+                    r#"<polygon fill="{}" stroke="{}" stroke-width="{stroke_width}" points="{}"/>"#,
+                    paint(fill),
+                    paint(stroke),
+                    pts(points)
                 );
             }
             D::Rect {
@@ -822,10 +840,11 @@ fn drawing_svg(width: f64, height: f64, shapes: &[crate::artifact::DrawShape]) -
                 fill,
                 stroke,
                 radius,
+                stroke_width,
             } => {
                 let _ = write!(
                     s,
-                    r#"<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{radius}" fill="{}" stroke="{}"/>"#,
+                    r#"<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{radius}" fill="{}" stroke="{}" stroke-width="{stroke_width}"/>"#,
                     paint(fill),
                     paint(stroke)
                 );
@@ -836,10 +855,11 @@ fn drawing_svg(width: f64, height: f64, shapes: &[crate::artifact::DrawShape]) -
                 r,
                 fill,
                 stroke,
+                stroke_width,
             } => {
                 let _ = write!(
                     s,
-                    r#"<circle cx="{x}" cy="{y}" r="{r}" fill="{}" stroke="{}"/>"#,
+                    r#"<circle cx="{x}" cy="{y}" r="{r}" fill="{}" stroke="{}" stroke-width="{stroke_width}"/>"#,
                     paint(fill),
                     paint(stroke)
                 );
@@ -851,10 +871,18 @@ fn drawing_svg(width: f64, height: f64, shapes: &[crate::artifact::DrawShape]) -
                 size,
                 anchor,
                 color,
+                bold,
+                central,
             } => {
+                let weight = if *bold { r#" font-weight="bold""# } else { "" };
+                let base = if *central {
+                    r#" dominant-baseline="central""#
+                } else {
+                    ""
+                };
                 let _ = write!(
                     s,
-                    r#"<text x="{x}" y="{y}" font-size="{size}" text-anchor="{}" fill="{}">{}</text>"#,
+                    r#"<text x="{x}" y="{y}" font-size="{size}" text-anchor="{}" fill="{}"{weight}{base}>{}</text>"#,
                     esc(anchor),
                     esc(color),
                     esc(text)
