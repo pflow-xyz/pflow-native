@@ -16,7 +16,7 @@ serde_json.workspace = true
 eframe = { version = "0.37", features = ["persistence"] }
 
 [target.'cfg(not(target_arch = "wasm32"))'.dependencies]
-pflow-native-core = { workspace = true, features = ["http"] }
+pflow-native-core = { workspace = true, features = ["http", "zk"] }
 rfd = "0.17"
 image = { version = "0.25", default-features = false, features = ["png"] }
 
