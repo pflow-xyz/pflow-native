@@ -67,7 +67,7 @@ How to read it:
 | Command palette (not in pflow.xyz) | — | ⌘K over the whole registry; args form generated from each command's `ArgSpec`s | app | 2 | ✅ |
 | Agents drive the live window (not in pflow.xyz) | — | app control port `127.0.0.1:7979` (JSON lines); `pflow-native-cli mcp` attaches to it, `screenshot` tool | app + cli | 2 | ✅ |
 | Web build | — | Trunk (`make web`), eframe WebRunner, browser-storage autosave | app | 2 | ✅ (no file dialogs or HTTP fetch yet) |
-| String-diagram view + SVG | pv:6324; diagram-viewer.js | `view.string_diagram` → drawing artifact (`core::string_diagram`), SVG via `export.artifact`; the pv:6381 net layout is `string_diagram::net_layout` | port | 4 | 🟡 core: boxes, wires, ports, labels, back edges match the JS element for element (Béziers flattened, arrowhead outlined); net layout matches but is not yet a `net.layout` algorithm |
+| String-diagram view + SVG | pv:6324; diagram-viewer.js | `view.string_diagram` → drawing artifact (`core::string_diagram`), SVG via `export.artifact`; the pv:6381 net layout is `string_diagram::net_layout` | port | 4 | ✅ geometry matches the JS element for element; filled arrowheads, dash patterns, stroke widths, bold/centered text; Béziers flattened to polylines; also `net.layout {algorithm: "string"}` |
 
 ### A3. Simulation (editor)
 
@@ -81,7 +81,7 @@ How to read it:
 | Rate scan (steady state vs rate) | pv:5268 | `opt.rate_scan {transition, from, to, steps≤25, t_end=50}` → TimeSeries(x=rate) | pflow-solver | 3 | ✅ value at t_end, as the editor (not detected equilibrium) |
 | Sweep (one place across rates) | pv:5268 | `opt.sweep {transition, place, from, to, steps≤25}` → TimeSeries overlay, group `k=<rate>` | pflow-solver | 3 | ✅ runs resampled onto one time grid |
 | Phase plot | pv:5268 | Results → Phase (any TimeSeries) | app | 3 | ✅ |
-| CSV / JSON download, "copy MCP call" | pv:5615–5620 | `export.artifact {format}`, `command.copy_call` | core | 1 | 🟡 csv/json |
+| CSV / JSON download, "copy MCP call" | pv:5615–5620 | `export.artifact {format}` (every result: JSON, CSV, SVG / DOT where it has a picture) | core | 1 | 🟡 no "copy MCP call" button (any command is already an MCP call: `pflow-native-cli mcp` → `execute`) |
 | SSA / SDE engines (library only in JS) | petri-ssa.js, petri-sde.js | `sim.ssa {t_end, seed, runs, points}`, `sim.sde {…, dt}` → TimeSeries, mean ± sd band when runs > 1 | pflow-solver ssa (portable, byte-exact) / ssa::sde | 3 | ✅ SDE refuses gated nets, as go-pflow |
 | Rate fitting (library only in JS) | petri-learn.js:1863 | `opt.fit {data, parameters, method, loss, space, places, group, max_iters, tolerance, apply}`: observed series of a timeseries artifact (matched by display name, base place id or place label, or `places`) → Report (initial/fitted rates, loss before/after, iterations, converged) + TimeSeries overlay (group `data` vs `fit`) | pflow-learn `fit` over `LearnableProblem` (same mass-action law as `sim.ode`) | 5 | ✅ pflow.xyz defaults (nelder-mead, 1000 iters, tol 1e-4, mse); fits ln(rate) by default (`space: "linear"` = pflow.xyz); starts from the current marking; `apply` is not undoable (result carries `restore` steps) |
 | Equilibrium (not in the editor; pflow-rs) | — | `sim.equilibrium {t_max, tolerance}` → Report | pflow-solver `solve_until_equilibrium` | 3 | ✅ |
@@ -137,8 +137,8 @@ How to read it:
 | conformance_stream | online replay, first divergence | `data.replay {log \| events, case, repair_depth}` | port of sim `Monitor.Observe` (repair BFS ≤ 64, 5000 states) on the metamodel firing rule | Trace (one case, `sim.goto`), running-fitness TimeSeries, Report | 5 ✅ (no `keepSteps`: the TimeSeries is the per-event signal; no case-close final-marking check) |
 | calibrate | learn rates/delays from a log | `data.calibrate {log, unit, apply, conformance}`: activity → transition by id, else id/label ignoring case | port of sim `Calibrate` (sources by inter-arrival split by case starts, race-corrected services, pickups ≥ 100 kept) + pflow-mining replay/precision | Table (evidence) + Report | 5 ✅ (no delays: pflow.xyz documents declare none; rates go to the session, not a new model; `apply` is one undo step; `unit` default hour as sim) |
 | — (discovery) | mine a net from a log | `data.discover {log, method, threshold}`: replaces the net (one undo step), Sugiyama layout | pflow-mining alpha / heuristic / sequential / common-path | Net, Report | 5 ✅ |
-| optimize | Monte Carlo sweep, Pareto | `opt.optimize {parameters, objectives, samples≤2000, seed}` ✅ | pflow-solver | Scatter + Pareto, Table | 3 |
-| param_heatmap | two-rate grid → final value | `opt.heatmap {param_x,param_y,observable}` (≤ 40 × 40, `log`) ✅ | pflow-solver | Heatmap | 3 |
+| optimize | Monte Carlo sweep, Pareto | `opt.optimize {parameters, objectives, samples≤2000, seed}` | pflow-solver | Scatter + Pareto, Table | 3 ✅ |
+| param_heatmap | two-rate grid → final value | `opt.heatmap {param_x,param_y,observable}` (≤ 40 × 40, `log`) | pflow-solver | Heatmap | 3 ✅ |
 | distill | fit rate multipliers to minimax | `opt.distill {player, players, objective, groups, games, positions, iters, horizon, realizations, seed, apply}` | pflow-learn hinge rank loss + Nelder-Mead; exact minimax (memoized) and `sim.evaluate`'s SSA play scorer here | Report + per-position Table | 5 ✅ (game read from `<player>_turn` places, as pflow.xyz nets declare no game schema; default groups `moves`/`house`; ssa engine only; self-play RNG differs from sim, so positions differ for a seed) |
 | publish, publish_compare, my_sheets | Google Sheets | `remote.sim.publish {id, scenario}`; publish_compare / my_sheets via `remote.sim.call` | remote | URL | 7 ✅ previews unless `send`; id omitted stores the open net first (sim_create_model, session rates included); needs `SIM_PFLOW_TOKEN` (scope sim.publish) |
 | publish_app | host an HTML app | `remote.sim.publish_app {html, id}` | remote | URL | 7 ✅ previews unless `send` (the wasm build previews only: no HTTP client) |
@@ -152,10 +152,10 @@ How to read it:
 | Phase plot (X vs Y) | any TimeSeries | SVG, CSV | 3 | | ✅ view (export the source series as CSV) 
 | Heatmap | param_heatmap | CSV, JSON, SVG | 3 | 🟡 artifact + CSV/JSON (`opt.heatmap`) | ✅ view with color bar + hover; CSV/JSON/SVG 
 | Scatter / Pareto | optimize | CSV, JSON | 3 | 🟡 artifact + CSV/JSON (`opt.optimize`) | ✅ view with Pareto front + hover; CSV/JSON/SVG 
-| Matrix table (incidence, P/T invariants) | analysis | CSV, JSON | 4 | | 🟡 view ready (phase 4 produces the data) 
-| Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | |
-| Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | |
-| Tornado / ranked bars | diagnose, evaluate | CSV | 4 | |
+| Matrix table (incidence, P/T invariants) | `analysis.incidence`, `analysis.invariants` (basis) | CSV, JSON | 4 | ✅ |
+| Reachability / coverability graph | `analysis.reachability`, `system.show`, `store.graph` (Graph view: layered, pan/zoom, click a state to load it via `sim.goto`) | JSON, DOT | 4 | ✅ (no SVG export of the graph view) |
+| Trace / timeline (replayable on canvas) | `analysis.reach`, `analysis.verify` counterexamples, `data.replay` | JSON, CSV | 4 | ✅ step list + play; each step loads onto the canvas (`sim.goto`) with the fired transition highlighted |
+| Tornado / ranked bars | `analysis.diagnose` (Bars) | CSV | 4 | ✅ (`sim.evaluate` ranks as a Table) |
 | Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate; conformance variants, generated logs) 
 | System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | 🟡 system + pipeline Graph artifacts (`system.show`, `system.run {graph}`); knowledge graph as a Graph artifact (`store.graph`, `store.query`) |
 | Side-by-side mapping | prove, diff | SVG | 6–7 | 🟡 diff (`compose.diff` drawing artifact); prove in 7 |
