@@ -516,3 +516,35 @@ fn distill_with_explicit_groups_applies_and_refuses_bad_requests() {
     let mut sir = sir();
     assert!(bad(&mut sir, json!({})).contains("turn-based"));
 }
+
+#[test]
+fn applied_rates_are_one_undo_step() {
+    let mut s = pflow_native_core::Session::default();
+    s.execute("file.open_example", serde_json::json!({"name": "sir"}))
+        .unwrap();
+    s.execute(
+        "sim.set_rate",
+        serde_json::json!({"id": "recover", "rate": 0.2}),
+    )
+    .unwrap();
+    let ode = s
+        .execute("sim.ode", serde_json::json!({"t_end": 20, "points": 40}))
+        .unwrap();
+    let id = ode["artifact"].as_str().unwrap().to_string();
+    s.execute(
+        "sim.set_rate",
+        serde_json::json!({"id": "recover", "rate": 0.05}),
+    )
+    .unwrap();
+    s.execute(
+        "opt.fit",
+        serde_json::json!({"data": id, "parameters": ["recover"], "apply": true}),
+    )
+    .unwrap();
+    let fitted = s.rates["recover"];
+    assert!((fitted - 0.2).abs() < 0.01, "{fitted}");
+    s.execute("edit.undo", serde_json::Value::Null).unwrap();
+    assert_eq!(s.rates["recover"], 0.05, "undo restores the pre-apply rate");
+    s.execute("edit.redo", serde_json::Value::Null).unwrap();
+    assert_eq!(s.rates["recover"], fitted);
+}

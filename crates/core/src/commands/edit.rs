@@ -94,7 +94,12 @@ fn undo(s: &mut Session, _: &Value) -> Result<Value> {
         .pop()
         .ok_or_else(|| Error::Invalid("nothing to undo".into()))?;
     let label = snap.label.clone();
-    let cur = s.snapshot(&label);
+    // The opposite step restores what this one changes (rates included).
+    let cur = if snap.rates.is_some() {
+        s.snapshot_with_rates(&label)
+    } else {
+        s.snapshot(&label)
+    };
     s.redo.push(cur);
     s.restore(snap);
     Ok(json!({ "undone": label }))
@@ -106,7 +111,12 @@ fn redo(s: &mut Session, _: &Value) -> Result<Value> {
         .pop()
         .ok_or_else(|| Error::Invalid("nothing to redo".into()))?;
     let label = snap.label.clone();
-    let cur = s.snapshot(&label);
+    // The opposite step restores what this one changes (rates included).
+    let cur = if snap.rates.is_some() {
+        s.snapshot_with_rates(&label)
+    } else {
+        s.snapshot(&label)
+    };
     s.undo.push(cur);
     s.restore(snap);
     Ok(json!({ "redone": label }))

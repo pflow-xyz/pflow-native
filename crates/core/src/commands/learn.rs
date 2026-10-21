@@ -120,15 +120,15 @@ fn apply_rates(
 ) -> (Map<String, Value>, Vec<Step>) {
     let mut prev = Map::new();
     let mut restore = vec![];
-    for (t, r) in rates {
+    for t in rates.keys() {
         let old = sess.rates.get(t).copied().unwrap_or(1.0);
         prev.insert(t.clone(), json!(old));
         restore.push(Step {
             command: "sim.set_rate".into(),
             args: json!({ "id": t, "rate": old }),
         });
-        sess.rates.insert(t.clone(), *r);
     }
+    sess.set_rates(rates, "apply learned rates");
     (prev, restore)
 }
 
@@ -139,7 +139,7 @@ fn applied(sess: &mut Session, a: &Value, rates: &BTreeMap<String, f64>, out: &m
         out["applied"] = json!(true);
         out["previous_rates"] = Value::Object(prev);
         out["restore"] = json!(restore);
-        out["undo"] = json!("session rates are not in the undo history; run the `restore` steps to put the previous rates back");
+        out["undo"] = json!("one undo step (edit.undo) restores the previous rates; `restore` lists the same as sim.set_rate steps");
     }
 }
 

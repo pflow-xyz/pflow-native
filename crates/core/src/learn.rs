@@ -589,9 +589,11 @@ pub fn fit_method(s: &str) -> Result<FitMethod> {
         "coordinate-descent" | "coordinate_descent" => FitMethod::CoordinateDescent,
         "adam" => FitMethod::Adam,
         "gradient-descent" | "gradient_descent" => FitMethod::GradientDescent,
-        other => return Err(Error::BadArgs(format!(
+        other => {
+            return Err(Error::BadArgs(format!(
             "method {other:?}: nelder-mead (default), coordinate-descent, adam or gradient-descent"
-        ))),
+        )))
+        }
     })
 }
 

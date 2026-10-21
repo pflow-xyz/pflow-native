@@ -157,6 +157,10 @@ pub(crate) struct Snapshot {
     pub doc: Document,
     pub marking: Marking,
     pub selection: Vec<String>,
+    /// Session rates, only for steps that change them in bulk (calibrate /
+    /// fit / distill with `apply`): undoing an unrelated edit must not
+    /// rewind rate tweaks made since, so ordinary snapshots carry `None`.
+    pub rates: Option<BTreeMap<String, f64>>,
 }
 
 const HISTORY_LIMIT: usize = 200;
@@ -325,13 +329,36 @@ impl Session {
             doc: self.doc.clone(),
             marking: self.marking.clone(),
             selection: self.selection.clone(),
+            rates: None,
         }
+    }
+
+    /// A snapshot that also restores the session rates.
+    pub(crate) fn snapshot_with_rates(&self, label: &str) -> Snapshot {
+        Snapshot {
+            rates: Some(self.rates.clone()),
+            ..self.snapshot(label)
+        }
+    }
+
+    /// Sets several rates as one undo step (rates absent from `updates`
+    /// keep their values).
+    pub(crate) fn set_rates(&mut self, updates: &BTreeMap<String, f64>, label: &str) {
+        let snap = self.snapshot_with_rates(label);
+        for (t, r) in updates {
+            self.rates.insert(t.clone(), *r);
+        }
+        self.push_undo(snap);
+        self.revision += 1;
     }
 
     pub(crate) fn restore(&mut self, s: Snapshot) {
         self.doc = s.doc;
         self.marking = s.marking;
         self.selection = s.selection;
+        if let Some(r) = s.rates {
+            self.rates = r;
+        }
         self.touch();
     }
 
