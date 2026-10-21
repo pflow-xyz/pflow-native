@@ -106,9 +106,9 @@ How to read it:
 | Tool(s) | What | Native | Backing | Output view | Phase |
 |---|---|---|---|---|---|
 | create_model, get_model, list_models, delete_model | content-addressed store | `store.put/get/list/delete` | pflow-tokenmodel CID + local store | — | 7 |
-| extend | structural edit ops + diff | `compose.extend {ops}` (each op = a `net.*` command) | pflow-compose | Net diff overlay | 6 |
-| diff | structural diff | `compose.diff {a,b}` | port (pflow-mcp diff.rs) | Diff overlay, Table | 6 |
-| components, compose | template library, port fusion | `compose.components`, `compose.fuse` | pflow-compose templates | Net | 6 |
+| extend | structural edit ops + diff | `compose.extend {ops}`: sim's ops (add_place/transition/arc with weight + inhibitor/read type, remove_*, set_rate/initial/capacity) plus remove, set_arc, rename, set_label, move, each translated to its `net.*`/`edit.delete`/`sim.set_rate` step and run as one `command.batch` (one undo step, all-or-nothing) | port (sim pkg/builder ops) | sim-shaped diff + canvas highlight of what changed | 6 ✅ (no guards/events/bindings: refused; `kinetic: false` dropped with a note; removing a node takes its arcs, where sim leaves them for validation) |
+| diff | structural diff | `compose.diff {a, b}` over library models or `current` | port (sim pkg/ops/diff.go, color-aware) | Table (kind/id/change/before/after), Report (sim_diff shape), Sets (added/removed/changed, open-net ids) → `artifact.show_set`, side-by-side Drawing | 6 ✅ (compares initial/capacity/label/role/arc weight and token colors; no rates — session-only — or positions) |
+| components, compose | template library, port fusion | `compose.components`; `compose.fuse {component, attach, params, prefix, x, y, color}` (one undo step) | sim's 7 registry components (ported), pflow-compose templates (sir, seir, queue, producer-consumer, workflow) and subnets (bounded-queue, resource-pool) | Net (new nodes selected + highlighted) | 6 ✅ (edits the open net instead of storing a new model; declared rates go to session rates; components are single-color, `color` picks one on a colored net) |
 | code_to_flow, prompt, reroll, get_artifact | LLM derivation | `remote.sim.prompt` … | remote | Net | 7 |
 | scenario | seeded SSA/ODE what-if | `sim.scenario {scenario}`: marking, rates, schedule, hours, samples, realizations, seed, summary, engine; `params` refused | pflow-solver stochastic (contention, depletion, metrics, schedules) | TimeSeries + bands, Table | 3 ✅ (no `neverFired`; starts from the current marking) |
 | compare | N scenarios, shared seed | `sim.compare {scenarios, seed}` | same | TimeSeries overlay (group = scenario), Table | 3 ✅ (scenarios must share hours/samples) |
@@ -155,7 +155,7 @@ How to read it:
 | Tornado / ranked bars | diagnose, evaluate | CSV | 4 | |
 | Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate tables today) 
 | System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | |
-| Side-by-side mapping | prove, diff | SVG | 6–7 | |
+| Side-by-side mapping | prove, diff | SVG | 6–7 | 🟡 diff (`compose.diff` drawing artifact); prove in 7 |
 
 ## D. Gaps in pflow-rs (work that lands upstream, not here)
 

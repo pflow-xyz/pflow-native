@@ -10,6 +10,7 @@
 pub mod artifact;
 pub mod cid;
 pub mod commands;
+pub mod compose;
 pub mod doc;
 pub mod eventlog;
 pub mod export;
