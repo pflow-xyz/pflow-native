@@ -164,4 +164,5 @@ How to read it:
 3. Exact automorphisms, canonical labelling, color refinement. Source: sim `orbits.go`, `classify.go`.
 4. Morphism prover/checker. Source: sim `pkg/morphism`.
 5. Port bindings, pipelines, loop fixed point. Source: sim `bindcheck`, `pipeline`, `loop`.
-6. pflow.xyz layout algorithms (Sugiyama, grid, bipartite, circular). (URDNA2015 CID sealing landed here instead, in `crates/core/src/cid.rs`: it is a port of pflow-xyz's json-gold behaviour, not a general JSON-LD library.)
+6. pflow.xyz layout algorithms and URDNA2015 CID sealing. Both landed here instead (`crates/core/src/layout.rs`, `crates/core/src/cid.rs`; the latter is a port of pflow-xyz's json-gold behaviour, not a general JSON-LD library). Worth upstreaming.
+7. Deterministic ODE summation. `pflow_core::PetriNet` keeps transitions in a std `HashMap` with a random hasher, so `pflow_solver::Problem` sums derivatives in a different order each run, and results differ in the last bits between runs. Iterate in sorted order (or use a `BTreeMap`) upstream. Until then, tests compare ODE results with a tolerance.
