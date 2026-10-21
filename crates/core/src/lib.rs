@@ -23,6 +23,7 @@ pub mod outbound;
 pub mod registry;
 pub mod session;
 pub mod sim;
+pub mod simclient;
 pub mod statespace;
 pub mod stochastic;
 pub mod string_diagram;
