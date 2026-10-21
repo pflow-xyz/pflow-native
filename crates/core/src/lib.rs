@@ -14,6 +14,7 @@ pub mod doc;
 pub mod eventlog;
 pub mod export;
 pub mod layout;
+pub mod learn;
 pub mod registry;
 pub mod session;
 pub mod sim;

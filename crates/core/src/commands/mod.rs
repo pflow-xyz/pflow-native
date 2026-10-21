@@ -12,6 +12,7 @@ pub mod edit;
 pub mod export;
 pub mod file;
 pub mod fileio;
+pub mod learn;
 pub mod macros;
 pub mod net;
 pub mod opt;
@@ -36,6 +37,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     overlay::SET,
     settings::SET,
     data::SET,
+    learn::SET,
     export::SET,
     macros::SET,
     command::SET,
