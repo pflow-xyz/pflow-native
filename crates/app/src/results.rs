@@ -121,6 +121,9 @@ fn kind_icon(d: &ArtifactData) -> &'static str {
         ArtifactData::Trace { .. } => "⇢",
         ArtifactData::Table { .. } => "☰",
         ArtifactData::Scatter { .. } => "⁘",
+        ArtifactData::Sets { .. } => "◎",
+        ArtifactData::Bars { .. } => "▤",
+        ArtifactData::Drawing { .. } => "✏",
         ArtifactData::Report(_) => "📄",
     }
 }

@@ -11,6 +11,10 @@ pflow-core.workspace = true
 pflow-parser.workspace = true
 pflow-metamodel.workspace = true
 pflow-solver.workspace = true
+pflow-reachability.workspace = true
+pflow-verify.workspace = true
+pflow-validation.workspace = true
+pflow-results.workspace = true
 serde.workspace = true
 # float_roundtrip: parse floats exactly, as Go does, so CIDs of documents
 # with fractional numbers match pflow.xyz.

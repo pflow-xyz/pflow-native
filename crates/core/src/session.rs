@@ -132,6 +132,19 @@ impl Tool {
     }
 }
 
+/// Nodes (and arcs) the canvas emphasizes: a siphon, an invariant's
+/// support, a trace step's transition. Set by `view.highlight`.
+#[derive(Debug, Clone, PartialEq, Default, Serialize, Deserialize)]
+pub struct Highlight {
+    pub label: String,
+    pub nodes: Vec<String>,
+    #[serde(default)]
+    pub arcs: Vec<(String, String)>,
+    /// Per-node numbers shown as badges (invariant coefficients).
+    #[serde(default)]
+    pub weights: BTreeMap<String, f64>,
+}
+
 /// Work a command hands to the front end because it needs pixels.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UiRequest {
@@ -175,6 +188,8 @@ pub struct Session {
     pub macros: BTreeMap<String, Vec<Step>>,
     /// Journal length when `macro.record` started.
     pub recording: Option<usize>,
+    /// What the canvas emphasizes (`view.highlight`).
+    pub highlight: Option<Highlight>,
     /// Nodes (and the arcs between them) from `edit.copy` / `edit.cut`.
     pub clipboard: Option<Document>,
     /// Set by a front end that can fulfil [`UiRequest`]s (the app).
@@ -219,6 +234,7 @@ impl Session {
             journal: vec![],
             macros: BTreeMap::new(),
             recording: None,
+            highlight: None,
             clipboard: None,
             has_ui: false,
             ui_requests: vec![],
@@ -341,6 +357,9 @@ impl Session {
         self.compiled = None;
         let doc = &self.doc;
         self.selection.retain(|id| doc.kind_of(id).is_some());
+        if let Some(h) = &mut self.highlight {
+            h.nodes.retain(|id| doc.kind_of(id).is_some());
+        }
     }
 
     pub fn is_dirty(&self) -> bool {
@@ -381,6 +400,14 @@ impl Session {
         self.fired += 1;
         self.revision += 1; // marking only: the compiled model stays valid
         Ok(())
+    }
+
+    /// Replaces the marking as one undo step (trace replay).
+    pub(crate) fn set_marking(&mut self, mk: Marking, label: &str) {
+        let snap = self.snapshot(label);
+        self.marking = mk;
+        self.push_undo(snap);
+        self.revision += 1;
     }
 
     pub(crate) fn reset_marking(&mut self) {

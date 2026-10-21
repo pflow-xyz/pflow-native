@@ -296,6 +296,67 @@ pub fn artifact(a: &Artifact, format: &str) -> Result<String> {
             }
             Ok(s)
         }
+        (ArtifactData::Graph { nodes, edges }, "dot") => {
+            let q = |t: &str| format!("\"{}\"", t.replace('\\', "\\\\").replace('"', "\\\""));
+            let mut s = String::from("digraph G {\n  node [shape=box, fontname=\"sans-serif\"];\n");
+            for n in nodes {
+                let _ = writeln!(s, "  {} [label={}];", q(&n.id), q(&n.label));
+            }
+            for e in edges {
+                let _ = writeln!(
+                    s,
+                    "  {} -> {} [label={}];",
+                    q(&e.source),
+                    q(&e.target),
+                    q(&e.label)
+                );
+            }
+            s.push_str("}\n");
+            Ok(s)
+        }
+        (ArtifactData::Sets { sets }, "csv") => {
+            let mut s = String::from("set,node,weight,note\n");
+            for set in sets {
+                for n in &set.nodes {
+                    let w = set
+                        .weights
+                        .get(n)
+                        .map(|w| w.to_string())
+                        .unwrap_or_default();
+                    let _ = writeln!(
+                        s,
+                        "{},{},{w},{}",
+                        csv_field(&set.label),
+                        csv_field(n),
+                        csv_field(&set.note)
+                    );
+                }
+            }
+            Ok(s)
+        }
+        (ArtifactData::Bars { value_label, bars }, "csv") => {
+            let mut s = format!("name,{},lo,hi\n", csv_field(value_label));
+            for b in bars {
+                let o = |v: Option<f64>| v.map(|v| v.to_string()).unwrap_or_default();
+                let _ = writeln!(
+                    s,
+                    "{},{},{},{}",
+                    csv_field(&b.name),
+                    b.value,
+                    o(b.lo),
+                    o(b.hi)
+                );
+            }
+            Ok(s)
+        }
+        (
+            ArtifactData::Drawing {
+                width,
+                height,
+                shapes,
+            },
+            "svg",
+        ) => Ok(drawing_svg(*width, *height, shapes)),
         (ArtifactData::Heatmap { xs, ys, z, .. }, "csv") => {
             let mut s = String::from("y\\x");
             for x in xs {
@@ -718,6 +779,88 @@ fn scatter_svg(
             sx(x),
             sy(y)
         );
+    }
+    s.push_str("</svg>\n");
+    s
+}
+
+fn drawing_svg(width: f64, height: f64, shapes: &[crate::artifact::DrawShape]) -> String {
+    use crate::artifact::DrawShape as D;
+    let mut s = format!(
+        r#"<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {width} {height}" width="{width}" height="{height}" font-family="sans-serif"><rect width="{width}" height="{height}" fill="white"/>"#
+    );
+    let paint = |c: &Option<String>| c.as_deref().map(esc).unwrap_or_else(|| "none".into());
+    for sh in shapes {
+        match sh {
+            D::Line {
+                points,
+                color,
+                width,
+                dashed,
+            } => {
+                let pts: Vec<String> = points
+                    .iter()
+                    .map(|(x, y)| format!("{x:.2},{y:.2}"))
+                    .collect();
+                let dash = if *dashed {
+                    r#" stroke-dasharray="6 4""#
+                } else {
+                    ""
+                };
+                let _ = write!(
+                    s,
+                    r#"<polyline fill="none" stroke="{}" stroke-width="{width}"{dash} points="{}"/>"#,
+                    esc(color),
+                    pts.join(" ")
+                );
+            }
+            D::Rect {
+                x,
+                y,
+                w,
+                h,
+                fill,
+                stroke,
+                radius,
+            } => {
+                let _ = write!(
+                    s,
+                    r#"<rect x="{x}" y="{y}" width="{w}" height="{h}" rx="{radius}" fill="{}" stroke="{}"/>"#,
+                    paint(fill),
+                    paint(stroke)
+                );
+            }
+            D::Circle {
+                x,
+                y,
+                r,
+                fill,
+                stroke,
+            } => {
+                let _ = write!(
+                    s,
+                    r#"<circle cx="{x}" cy="{y}" r="{r}" fill="{}" stroke="{}"/>"#,
+                    paint(fill),
+                    paint(stroke)
+                );
+            }
+            D::Text {
+                x,
+                y,
+                text,
+                size,
+                anchor,
+                color,
+            } => {
+                let _ = write!(
+                    s,
+                    r#"<text x="{x}" y="{y}" font-size="{size}" text-anchor="{}" fill="{}">{}</text>"#,
+                    esc(anchor),
+                    esc(color),
+                    esc(text)
+                );
+            }
+        }
     }
     s.push_str("</svg>\n");
     s

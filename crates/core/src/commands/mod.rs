@@ -14,6 +14,7 @@ pub mod fileio;
 pub mod macros;
 pub mod net;
 pub mod opt;
+pub mod overlay;
 pub mod settings;
 pub mod sim;
 pub mod stochastic;
@@ -31,6 +32,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     opt::SET,
     stochastic::SET,
     view::SET,
+    overlay::SET,
     settings::SET,
     export::SET,
     macros::SET,

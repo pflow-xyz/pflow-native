@@ -2537,7 +2537,11 @@ dependencies = [
  "pflow-core",
  "pflow-metamodel",
  "pflow-parser",
+ "pflow-reachability",
+ "pflow-results",
  "pflow-solver",
+ "pflow-validation",
+ "pflow-verify",
  "serde",
  "serde_json",
  "sha2",
@@ -2558,6 +2562,26 @@ dependencies = [
 ]
 
 [[package]]
+name = "pflow-reachability"
+version = "0.3.0"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+dependencies = [
+ "pflow-metamodel",
+]
+
+[[package]]
+name = "pflow-results"
+version = "0.3.0"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+dependencies = [
+ "pflow-core",
+ "pflow-solver",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.21",
+]
+
+[[package]]
 name = "pflow-solver"
 version = "0.3.0"
 source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
@@ -2571,6 +2595,24 @@ dependencies = [
 name = "pflow-tropical"
 version = "0.3.0"
 source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+
+[[package]]
+name = "pflow-validation"
+version = "0.3.0"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+dependencies = [
+ "pflow-metamodel",
+ "pflow-reachability",
+]
+
+[[package]]
+name = "pflow-verify"
+version = "0.3.0"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=98bfd8355d96991a66ac3e1d9c107a797813fff6#98bfd8355d96991a66ac3e1d9c107a797813fff6"
+dependencies = [
+ "pflow-metamodel",
+ "pflow-reachability",
+]
 
 [[package]]
 name = "phf"

@@ -44,3 +44,74 @@ fn put_validates_and_exports_every_kind() {
     run(&mut s, "artifact.clear", Value::Null);
     assert!(s.artifacts.is_empty());
 }
+
+#[test]
+fn sets_highlight_and_trace_replay() {
+    let mut s = Session::default();
+    run(&mut s, "file.open_example", json!({"name": "sir"}));
+    let sets = json!({"kind":"sets","sets":[
+        {"label":"S+I+R","nodes":["S","I","R"],"weights":{"S":1,"I":1,"R":1}},
+        {"label":"bad","nodes":["nope"]}]});
+    let id = run(&mut s, "artifact.put", json!({"title":"inv","data":sets}))["artifact"].clone();
+    run(&mut s, "artifact.show_set", json!({"id": id, "index": 0}));
+    assert_eq!(s.highlight.as_ref().unwrap().nodes, vec!["S", "I", "R"]);
+    assert!(s
+        .execute("artifact.show_set", json!({"id": id, "index": 1}))
+        .is_err());
+    let csv = run(
+        &mut s,
+        "export.artifact",
+        json!({"id": id, "format": "csv"}),
+    );
+    assert!(csv.as_str().unwrap().contains("S+I+R,S,1,"));
+    run(&mut s, "view.clear_highlight", Value::Null);
+    assert!(s.highlight.is_none());
+
+    let trace = json!({"kind":"trace","steps":[
+        {"transition":"","marking":{"S":[999],"I":[1],"R":[0]}},
+        {"transition":"recover","marking":{"S":[999],"I":[0],"R":[1]}}]});
+    let id = run(&mut s, "artifact.put", json!({"title":"t","data":trace}))["artifact"].clone();
+    run(&mut s, "sim.goto", json!({"id": id, "step": 1}));
+    assert_eq!(s.marking["R"], vec![1]);
+    assert_eq!(s.highlight.as_ref().unwrap().nodes, vec!["recover"]);
+    run(&mut s, "edit.undo", Value::Null);
+    assert_eq!(s.marking["R"], vec![0], "goto is one undo step");
+
+    let g = json!({"kind":"graph","nodes":[{"id":"m0","label":"S=999","data":{"initial":true}},{"id":"m1","label":"R=1"}],
+        "edges":[{"source":"m0","target":"m1","label":"recover"}]});
+    let id = run(&mut s, "artifact.put", json!({"title":"g","data":g}))["artifact"].clone();
+    let dot = run(
+        &mut s,
+        "export.artifact",
+        json!({"id": id, "format": "dot"}),
+    );
+    assert!(dot
+        .as_str()
+        .unwrap()
+        .contains("\"m0\" -> \"m1\" [label=\"recover\"]"));
+    let bad = json!({"kind":"graph","nodes":[],"edges":[{"source":"a","target":"b","label":""}]});
+    assert!(s
+        .execute("artifact.put", json!({"title":"g","data":bad}))
+        .is_err());
+
+    let d = json!({"kind":"drawing","width":100,"height":50,"shapes":[
+        {"shape":"rect","x":1,"y":1,"w":20,"h":10,"stroke":"#000"},
+        {"shape":"line","points":[[0,0],[10,10]]},
+        {"shape":"text","x":5,"y":5,"text":"a<b"}]});
+    let id = run(&mut s, "artifact.put", json!({"title":"d","data":d}))["artifact"].clone();
+    let svg = run(
+        &mut s,
+        "export.artifact",
+        json!({"id": id, "format": "svg"}),
+    );
+    assert!(svg.as_str().unwrap().contains("a&lt;b"));
+
+    let bars = json!({"kind":"bars","value_label":"Δ R","bars":[{"name":"infect","value":3,"lo":-1,"hi":5}]});
+    let id = run(&mut s, "artifact.put", json!({"title":"b","data":bars}))["artifact"].clone();
+    let csv = run(
+        &mut s,
+        "export.artifact",
+        json!({"id": id, "format": "csv"}),
+    );
+    assert_eq!(csv.as_str().unwrap().lines().nth(1), Some("infect,3,-1,5"));
+}
