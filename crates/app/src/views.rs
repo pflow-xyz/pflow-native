@@ -8,7 +8,7 @@ use eframe::egui::{
     self, Align2, Color32, FontId, Pos2, Rect, Sense, Shape, Stroke, StrokeKind, Vec2,
 };
 use pflow_native_core::artifact::Series;
-use pflow_native_core::export::{group_index, heat_rgb, name_index, PALETTE};
+use pflow_native_core::export::{heat_rgb, styles, PALETTE};
 use serde_json::Value;
 
 /// Per-artifact viewing state.
@@ -215,8 +215,7 @@ pub fn timeseries(
         return;
     }
     let (fg, _) = colors(ui);
-    let ni = name_index(series);
-    let gi = group_index(series);
+    let sty = styles(series);
     let key = |s: &Series| match &s.group {
         Some(g) => format!("{}·{}", s.name, g),
         None => s.name.clone(),
@@ -240,7 +239,7 @@ pub fn timeseries(
     ax.draw(&painter, ui, x_label, "");
     for &k in &visible {
         let s = &series[k];
-        let c = palette(ni[k]);
+        let c = palette(sty[k].0);
         if let Some(band) = &s.band {
             // Band as vertical quads between consecutive samples.
             for i in 1..x.len() {
@@ -262,7 +261,7 @@ pub fn timeseries(
             .zip(&s.values)
             .map(|(&a, &v)| ax.to_point(a, v))
             .collect();
-        dashed(&painter, &pts, Stroke::new(2.0, c), gi[k]);
+        dashed(&painter, &pts, Stroke::new(2.0, c), sty[k].1);
     }
     if let Some(h) = resp.hover_pos().filter(|p| plot.contains(*p)) {
         let xv = ax.x.0 + ((h.x - plot.left()) / plot.width()) as f64 * (ax.x.1 - ax.x.0);
@@ -293,8 +292,8 @@ pub fn timeseries(
             let last = s.values.last().copied().unwrap_or(0.0);
             (
                 key(s),
-                palette(ni[k]),
-                gi[k],
+                palette(sty[k].0),
+                sty[k].1,
                 format!("{}  {}", key(s), fmt(last)),
             )
         })

@@ -361,6 +361,26 @@ pub fn heat_rgb(t: f64) -> (u8, u8, u8) {
     (mix(a.0, b.0), mix(a.1, b.1), mix(a.2, b.2))
 }
 
+/// (color index, dash index) per series. Normally color = series name and
+/// dash = group; an overlay of one quantity across groups (a sweep) is
+/// colored by group instead, since dashes alone run out quickly.
+pub fn styles(series: &[crate::artifact::Series]) -> Vec<(usize, usize)> {
+    let ni = name_index(series);
+    let gi = group_index(series);
+    let one_name = ni.iter().all(|&i| i == 0);
+    let many_groups = gi.iter().any(|&g| g > 0);
+    ni.into_iter()
+        .zip(gi)
+        .map(|(n, g)| {
+            if one_name && many_groups {
+                (g, 0)
+            } else {
+                (n, g)
+            }
+        })
+        .collect()
+}
+
 /// Color index per distinct series name, in first-seen order.
 pub fn name_index(series: &[crate::artifact::Series]) -> Vec<usize> {
     let mut names: Vec<&str> = vec![];
@@ -504,10 +524,9 @@ fn timeseries_svg(
     let sx = |v: f64| f.ml + (v - xmin) / (xmax - xmin) * f.pw;
     let sy = |v: f64| f.mt + f.ph - (v - ymin) / (ymax - ymin) * f.ph;
     svg_axes(&mut s, &f, (xmin, xmax), (ymin, ymax), x_label, "");
-    let ni = name_index(series);
-    let gi = group_index(series);
+    let st = styles(series);
     for (k, se) in series.iter().enumerate() {
-        let (r, g, b) = PALETTE[ni[k] % PALETTE.len()];
+        let (r, g, b) = PALETTE[st[k].0 % PALETTE.len()];
         if let Some(band) = &se.band {
             let upper: Vec<String> = x
                 .iter()
@@ -534,7 +553,7 @@ fn timeseries_svg(
             .zip(&se.values)
             .map(|(&xv, &yv)| format!("{:.2},{:.2}", sx(xv), sy(yv)))
             .collect();
-        let dash = DASHES[gi[k] % DASHES.len()];
+        let dash = DASHES[st[k].1 % DASHES.len()];
         let _ = write!(
             s,
             r#"<polyline fill="none" stroke="rgb({r},{g},{b})" stroke-width="2" stroke-dasharray="{dash}" points="{}"/>"#,
