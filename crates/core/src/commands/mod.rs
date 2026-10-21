@@ -7,6 +7,7 @@ pub mod cid;
 pub mod clipboard;
 pub mod command;
 pub mod details;
+pub mod diagram;
 pub mod edit;
 pub mod export;
 pub mod file;
@@ -32,6 +33,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     opt::SET,
     stochastic::SET,
     view::SET,
+    diagram::SET,
     overlay::SET,
     settings::SET,
     export::SET,
