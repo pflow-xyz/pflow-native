@@ -26,6 +26,7 @@ pub mod statespace;
 pub mod stochastic;
 pub mod string_diagram;
 pub mod sweep;
+pub mod systems;
 
 pub use artifact::{Artifact, ArtifactData};
 pub use doc::{Arc, Document, NodeKind, Place, Transition};

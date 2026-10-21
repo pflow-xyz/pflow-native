@@ -195,6 +195,9 @@ pub struct Session {
     /// Named models besides the open one (`model.*`): what systems bind,
     /// diffs compare, and composition draws from. Not part of undo.
     pub models: BTreeMap<String, Document>,
+    /// Port bindings and named systems over the library (`system.*`). Like
+    /// the library, not part of undo.
+    pub systems: crate::systems::SystemsState,
     /// What the canvas emphasizes (`view.highlight`).
     pub highlight: Option<Highlight>,
     /// Nodes (and the arcs between them) from `edit.copy` / `edit.cut`.
@@ -242,6 +245,7 @@ impl Session {
             macros: BTreeMap::new(),
             recording: None,
             models: BTreeMap::new(),
+            systems: Default::default(),
             highlight: None,
             clipboard: None,
             has_ui: false,

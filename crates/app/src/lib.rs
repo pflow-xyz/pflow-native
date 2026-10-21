@@ -60,6 +60,7 @@ const KEY_DOC: &str = "pflow-native/doc";
 const KEY_PATH: &str = "pflow-native/path";
 const KEY_SETTINGS: &str = "pflow-native/settings";
 const KEY_MODELS: &str = "pflow-native/models";
+const KEY_SYSTEMS: &str = "pflow-native/systems";
 
 pub struct App {
     pub sess: Session,
@@ -138,6 +139,12 @@ impl App {
                     json!({ "name": name, "json": doc, "overwrite": true }),
                 );
             }
+        }
+        if let Some(Ok(st)) = restore
+            .and_then(|s| s.get_string(KEY_SYSTEMS))
+            .map(|t| serde_json::from_str::<Value>(&t))
+        {
+            app.run("system.restore_state", json!({ "state": st }));
         }
         let autosaved = restore.and_then(|s| s.get_string(KEY_DOC));
         match (&opts.open, autosaved) {
@@ -666,6 +673,9 @@ impl eframe::App for App {
             .map(|(k, d)| (k.clone(), d.to_value()))
             .collect();
         storage.set_string(KEY_MODELS, Value::Object(models).to_string());
+        if let Ok(st) = self.sess.execute("system.dump_state", Value::Null) {
+            storage.set_string(KEY_SYSTEMS, st.to_string());
+        }
         storage.set_string(
             KEY_SETTINGS,
             serde_json::to_string(&self.sess.view.settings).unwrap_or_default(),

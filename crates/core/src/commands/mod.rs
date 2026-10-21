@@ -26,6 +26,7 @@ pub mod settings;
 pub mod sim;
 pub mod statespace;
 pub mod stochastic;
+pub mod systems;
 pub mod view;
 
 pub const ALL: &[&[CommandSpec]] = &[
@@ -51,6 +52,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     export::SET,
     models::SET,
     compose::SET,
+    systems::SET,
     macros::SET,
     command::SET,
 ];
