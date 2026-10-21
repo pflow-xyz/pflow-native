@@ -198,7 +198,10 @@ fn save_round_trip_and_svg() {
     assert!(!s.is_dirty());
     let mut t = Session::default();
     run(&mut t, "file.open", json!({"path": path.to_str().unwrap()}));
-    assert_eq!(t.doc, s.doc);
+    // The reloaded document also carries the file's own fields (`@type`,
+    // `offset`, ...) verbatim; what it writes is identical.
+    assert_eq!(t.doc.to_value(), s.doc.to_value());
+    assert_eq!(t.doc.places[0].initial, s.doc.places[0].initial);
     let svg = run(&mut t, "export.svg", Value::Null);
     assert!(svg.as_str().unwrap().contains("<circle"));
     std::fs::remove_dir_all(dir).ok();

@@ -18,6 +18,12 @@ pub struct Place {
     pub capacity: Vec<f64>,
     pub x: f64,
     pub y: f64,
+    /// Fields this editor does not model (`@type`, `offset`, ...), written
+    /// back unchanged: they are part of the net's CID. Also the file's own
+    /// `initial`/`capacity` arrays, verbatim, written back while they still
+    /// read as the modeled vectors (see [`Document::to_value`]).
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -25,14 +31,22 @@ pub struct Transition {
     pub id: String,
     #[serde(default)]
     pub label: Option<String>,
-    #[serde(default = "default_role")]
-    pub role: String,
+    /// `None` when the file has no `role` (pflow.xyz's "default"). Kept
+    /// apart from an explicit `"default"`, which is a triple of its own.
+    #[serde(default)]
+    pub role: Option<String>,
     pub x: f64,
     pub y: f64,
+    /// Fields this editor does not model, written back unchanged.
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
-fn default_role() -> String {
-    "default".into()
+impl Transition {
+    /// The role, `"default"` when unset.
+    pub fn role(&self) -> &str {
+        self.role.as_deref().unwrap_or("default")
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -43,6 +57,10 @@ pub struct Arc {
     /// Input side: an inhibitor arc. Output side: the editor's read arc.
     #[serde(default)]
     pub inhibit: bool,
+    /// Fields this editor does not model (`@type`, ...), written back
+    /// unchanged, and the file's own `weight` array (as for [`Place::extra`]).
+    #[serde(default, skip_serializing_if = "Map::is_empty")]
+    pub extra: Map<String, Value>,
 }
 
 impl Arc {
@@ -175,6 +193,7 @@ impl Document {
                             capacity: float_vec(p.get("capacity")),
                             x: num_field(p, "x"),
                             y: num_field(p, "y"),
+                            extra: rest(p, &["label", "x", "y"]),
                         });
                     }
                 }
@@ -183,9 +202,10 @@ impl Document {
                         doc.transitions.push(Transition {
                             id: id.clone(),
                             label: str_field(t, "label"),
-                            role: str_field(t, "role").unwrap_or_else(default_role),
+                            role: str_field(t, "role"),
                             x: num_field(t, "x"),
                             y: num_field(t, "y"),
+                            extra: rest(t, &["label", "role", "x", "y"]),
                         });
                     }
                 }
@@ -207,11 +227,13 @@ impl Document {
                                 .get("inhibitTransition")
                                 .and_then(Value::as_bool)
                                 .unwrap_or(false),
+                            extra: rest(a, &["source", "target", "inhibitTransition"]),
                         });
                     }
                 }
-                // Always written by to_value.
-                "@context" | "@type" | "@version" => {}
+                // Always written by to_value. @type and @version are kept
+                // (in `extra`): a net may be, say, a "ResourceNet".
+                "@context" => {}
                 _ => {
                     doc.extra.insert(k.clone(), val.clone());
                 }
@@ -222,6 +244,22 @@ impl Document {
 
     /// Writes the pflow.xyz editor shape, readable by pflow.xyz, go-pflow
     /// and `pflow_core::from_json`.
+    ///
+    /// Loading and writing back keeps the net's CID ([`crate::cid`]): every
+    /// field this editor does not model is carried in `extra` and written
+    /// back (a place's `offset`, an element's own `@type`, a transition's
+    /// explicit `"role": "default"`), because each one is an RDF triple of
+    /// the preimage. Defaults are only filled in for elements that lack
+    /// them, i.e. ones created here.
+    ///
+    /// Per-color vectors are written as the file had them while they still
+    /// mean the same thing: `"capacity": [null, null]` is an empty RDF list
+    /// (JSON-LD drops nulls from lists) where `[0, 0]` is a two-item one,
+    /// and `[]` differs from the `[0]` that [`Document::normalize_colors`]
+    /// pads it to. Trailing zeros are insignificant (no tokens, unbounded),
+    /// as is `[]` versus `[1]` for a weight. Once an edit changes a vector,
+    /// the modeled one is written. Number formatting does not matter (`1`
+    /// and `1.0` are the same literal), nor does key order.
     pub fn to_value(&self) -> Value {
         let mut out = Map::new();
         out.insert("@context".into(), json!("https://pflow.xyz/schema"));
@@ -243,6 +281,11 @@ impl Document {
             m.insert("capacity".into(), nums(&p.capacity));
             m.insert("x".into(), num(p.x));
             m.insert("y".into(), num(p.y));
+            overlay(&mut m, &p.extra, |k, v| match k {
+                "initial" => same_vec(v, &p.initial, false),
+                "capacity" => same_vec(v, &p.capacity, false),
+                _ => true,
+            });
             places.insert(p.id.clone(), Value::Object(m));
         }
         out.insert("places".into(), Value::Object(places));
@@ -253,11 +296,12 @@ impl Document {
             if let Some(l) = &t.label {
                 m.insert("label".into(), json!(l));
             }
-            if t.role != "default" {
-                m.insert("role".into(), json!(t.role));
+            if let Some(r) = &t.role {
+                m.insert("role".into(), json!(r));
             }
             m.insert("x".into(), num(t.x));
             m.insert("y".into(), num(t.y));
+            overlay(&mut m, &t.extra, |_, _| true);
             transitions.insert(t.id.clone(), Value::Object(m));
         }
         out.insert("transitions".into(), Value::Object(transitions));
@@ -265,13 +309,17 @@ impl Document {
             .arcs
             .iter()
             .map(|a| {
-                json!({
+                let mut v = json!({
                     "@type": "Arrow",
                     "source": a.source,
                     "target": a.target,
                     "weight": nums(&a.weight),
                     "inhibitTransition": a.inhibit,
-                })
+                });
+                overlay(v.as_object_mut().expect("object"), &a.extra, |k, v| {
+                    k != "weight" || same_vec(v, &a.weight, true)
+                });
+                v
             })
             .collect();
         out.insert("arcs".into(), Value::Array(arcs));
@@ -296,6 +344,42 @@ impl Document {
             a.weight.resize(n, 0.0);
         }
     }
+}
+
+/// The fields of element `v` other than the modeled ones in `known`.
+fn rest(v: &Value, known: &[&str]) -> Map<String, Value> {
+    let mut m = v.as_object().cloned().unwrap_or_default();
+    m.retain(|k, _| !known.contains(&k.as_str()));
+    m
+}
+
+/// Writes carried-through fields over the defaults (a file's own `@type`
+/// or `offset` wins, keeping its key position), those that `keep` allows.
+fn overlay(
+    m: &mut Map<String, Value>,
+    extra: &Map<String, Value>,
+    keep: impl Fn(&str, &Value) -> bool,
+) {
+    for (k, v) in extra {
+        if keep(k, v) {
+            m.insert(k.clone(), v.clone());
+        }
+    }
+}
+
+/// Whether a file's per-color array still reads as the modeled vector,
+/// ignoring trailing zeros (and, for a weight, `[]` meaning `[1]`).
+fn same_vec(raw: &Value, modeled: &[f64], weight: bool) -> bool {
+    let canon = |mut v: Vec<f64>| {
+        if weight && v.is_empty() {
+            v.push(1.0);
+        }
+        while v.last() == Some(&0.0) {
+            v.pop();
+        }
+        v
+    };
+    canon(float_vec(Some(raw))) == canon(modeled.to_vec())
 }
 
 fn str_field(v: &Value, k: &str) -> Option<String> {

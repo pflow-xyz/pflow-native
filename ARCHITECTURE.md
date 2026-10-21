@@ -27,7 +27,10 @@ pflow-rs crates (pinned git rev; sibling-path [patch] for development)
 ## The document is pure data
 
 `Document` is the pflow.xyz editor JSON ("Shape A"). It is held in ordered `Vec`s so a
-load/save round trip keeps the file's own order and its unknown top-level fields.
+load/save round trip keeps the file's own order and its unknown fields, top-level and
+per element (`offset`, an element's `@type`, ...): each one is a triple of the net's
+content identifier (`cid.rs`, pflow.xyz's URDNA2015 → CIDv1 sealing), so loading and
+saving a pflow.xyz net keeps its CID.
 It knows nothing about selection, views or simulation state.
 
 `Session` wraps it with the following:

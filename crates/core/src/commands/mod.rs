@@ -3,6 +3,7 @@
 
 use crate::registry::CommandSpec;
 
+pub mod cid;
 pub mod command;
 pub mod edit;
 pub mod export;
@@ -14,6 +15,7 @@ pub mod view;
 
 pub const ALL: &[&[CommandSpec]] = &[
     file::SET,
+    cid::SET,
     edit::SET,
     net::SET,
     sim::SET,

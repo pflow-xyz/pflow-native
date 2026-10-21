@@ -8,6 +8,7 @@
 //! headless and `wasm32-unknown-unknown`.
 
 pub mod artifact;
+pub mod cid;
 pub mod commands;
 pub mod doc;
 pub mod export;
