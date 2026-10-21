@@ -39,6 +39,7 @@ pub enum BottomTab {
     Plot,
     Workbench,
     Run,
+    Models,
     Console,
 }
 

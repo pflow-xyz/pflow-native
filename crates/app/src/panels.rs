@@ -10,6 +10,7 @@ use crate::{results, App, BottomTab};
 #[derive(Default)]
 pub struct ConsoleState {
     line: String,
+    pub model_name: String,
     log: Vec<(String, Result<String, String>)>,
     steps: u32,
     seed: u32,
@@ -49,6 +50,7 @@ pub fn bottom(app: &mut App, ui: &mut egui::Ui) {
         ui.selectable_value(&mut app.bottom, BottomTab::Plot, "📈 Results");
         ui.selectable_value(&mut app.bottom, BottomTab::Workbench, "🔬 Workbench");
         ui.selectable_value(&mut app.bottom, BottomTab::Run, "▶ Run");
+        ui.selectable_value(&mut app.bottom, BottomTab::Models, "🗂 Models");
         ui.selectable_value(&mut app.bottom, BottomTab::Console, "⌨ Console");
     });
     ui.separator();
@@ -56,6 +58,7 @@ pub fn bottom(app: &mut App, ui: &mut egui::Ui) {
         BottomTab::Plot => results::ui(app, ui),
         BottomTab::Workbench => workbench(app, ui),
         BottomTab::Run => run(app, ui),
+        BottomTab::Models => models(app, ui),
         BottomTab::Console => console(app, ui),
     }
 }
@@ -180,7 +183,14 @@ fn console(app: &mut App, ui: &mut egui::Ui) {
 /// the Results tab.
 fn workbench(app: &mut App, ui: &mut egui::Ui) {
     let reg = app.sess.registry();
-    let groups = ["Simulate", "Workbench", "Analyze", "Data"];
+    let groups = [
+        "Simulate",
+        "Workbench",
+        "Analyze",
+        "Data",
+        "Compose",
+        "Systems",
+    ];
     egui::ScrollArea::vertical().show(ui, |ui| {
         for g in groups {
             let cmds: Vec<_> = reg.commands().iter().filter(|c| c.menu == g).collect();
@@ -199,5 +209,61 @@ fn workbench(app: &mut App, ui: &mut egui::Ui) {
             ui.add_space(6.0);
         }
         ui.weak("Tip: select a transition or place first — forms prefill transition/place arguments from the selection.");
+    });
+}
+
+/// The model library: the nets kept beside the open one (systems bind
+/// them, diffs compare them).
+fn models(app: &mut App, ui: &mut egui::Ui) {
+    ui.horizontal(|ui| {
+        ui.label("Save the open net as");
+        ui.add(egui::TextEdit::singleline(&mut app.console.model_name).desired_width(160.0));
+        let name = app.console.model_name.trim().to_string();
+        let exists = app.sess.models.contains_key(&name);
+        let label = if exists { "Overwrite" } else { "Save" };
+        if ui
+            .add_enabled(!name.is_empty(), egui::Button::new(label))
+            .clicked()
+        {
+            app.queue("model.save", json!({ "name": name, "overwrite": exists }));
+        }
+        ui.separator();
+        if ui.button("Import…").clicked() {
+            app.invoke("model.import");
+        }
+    });
+    ui.separator();
+    if app.sess.models.is_empty() {
+        ui.weak("The library is empty. Save the open net, or import a file or example.");
+        return;
+    }
+    egui::ScrollArea::vertical().show(ui, |ui| {
+        egui::Grid::new("models").striped(true).show(ui, |ui| {
+            for h in ["name", "places", "transitions", "arcs", ""] {
+                ui.strong(h);
+            }
+            ui.end_row();
+            let rows: Vec<(String, usize, usize, usize)> = app
+                .sess
+                .models
+                .iter()
+                .map(|(n, d)| (n.clone(), d.places.len(), d.transitions.len(), d.arcs.len()))
+                .collect();
+            for (name, p, t, a) in rows {
+                ui.label(&name);
+                ui.label(p.to_string());
+                ui.label(t.to_string());
+                ui.label(a.to_string());
+                ui.horizontal(|ui| {
+                    if ui.small_button("open").clicked() {
+                        app.queue("model.open", json!({ "name": name }));
+                    }
+                    if ui.small_button("delete").clicked() {
+                        app.queue("model.delete", json!({ "name": name }));
+                    }
+                });
+                ui.end_row();
+            }
+        });
     });
 }
