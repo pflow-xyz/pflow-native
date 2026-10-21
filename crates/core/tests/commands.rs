@@ -213,3 +213,29 @@ fn every_command_has_unique_id_and_valid_schema() {
         assert_eq!(schema["type"], "object");
     }
 }
+
+#[test]
+fn layout_is_one_undo_step() {
+    let mut s = Session::default();
+    run(&mut s, "file.open_example", json!({"name": "sir"}));
+    let before = s.doc.clone();
+    let r = run(&mut s, "net.layout", json!({"algorithm": "sugiyama"}));
+    assert_eq!(r, json!({"algorithm": "sugiyama", "moved": 5}));
+    assert_eq!(s.doc.position("S"), Some((400.0, 100.0)));
+    assert_eq!(s.doc.position("R"), Some((400.0, 700.0)));
+    assert!(s.is_dirty());
+    run(&mut s, "edit.undo", Value::Null);
+    assert_eq!(s.doc, before, "one undo restores every node");
+
+    let r = run(&mut s, "net.layout", json!({"algorithm": "circular"}));
+    assert_eq!(r["moved"], 5);
+    let again = run(&mut s, "net.layout", json!({"algorithm": "circular"}));
+    assert_eq!(again["moved"], 0, "already laid out");
+
+    let e = s
+        .execute("net.layout", json!({"algorithm": "force"}))
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("sugiyama, grid, bipartite, circular"), "{e}");
+    assert!(s.execute("net.layout", Value::Null).is_err());
+}

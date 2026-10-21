@@ -1,6 +1,7 @@
 use serde_json::{json, Value};
 
 use crate::doc::{Arc, NodeKind, Place, Transition};
+use crate::layout::Algorithm;
 use crate::registry::{always, arg, b, n, nums, opt, req, s, strs, ArgType::*, CommandSpec};
 use crate::session::Session;
 use crate::{Error, Result};
@@ -176,6 +177,23 @@ pub const SET: &[CommandSpec] = &[
         ],
         enabled: always,
         run: add_tokens,
+        journal: true,
+    },
+    CommandSpec {
+        id: "net.layout",
+        label: "Auto Layout",
+        help: "Rearrange every place and transition with one of pflow.xyz's layout \
+               algorithms, as one undo step, then fit the view.",
+        menu: "",
+        shortcut: None,
+        args: &[arg(
+            "algorithm",
+            Str,
+            "sugiyama (layered, top to bottom), grid, bipartite (places left, \
+             transitions right) or circular",
+        )],
+        enabled: always,
+        run: layout,
         journal: true,
     },
     CommandSpec {
@@ -463,6 +481,32 @@ fn add_tokens(sess: &mut Session, a: &Value) -> Result<Value> {
         s.reset_marking();
         Ok(json!({ "id": id, "initial": initial }))
     })
+}
+
+fn layout(sess: &mut Session, a: &Value) -> Result<Value> {
+    let name = req(a, "algorithm");
+    let algo = Algorithm::parse(name).ok_or_else(|| {
+        let names: Vec<&str> = Algorithm::ALL.iter().map(|a| a.name()).collect();
+        Error::BadArgs(format!(
+            "unknown algorithm {name:?}; expected one of {}",
+            names.join(", ")
+        ))
+    })?;
+    let positions: Vec<_> = crate::layout::layout(&sess.doc, algo)
+        .into_iter()
+        .filter(|(id, x, y)| sess.doc.position(id) != Some((*x, *y)))
+        .collect();
+    let moved = positions.len();
+    if moved > 0 {
+        sess.edit("layout", |s| {
+            for (id, x, y) in &positions {
+                set_pos(s, id, *x, *y);
+            }
+            Ok(())
+        })?;
+    }
+    crate::commands::view::fit_view(sess);
+    Ok(json!({ "algorithm": algo.name(), "moved": moved }))
 }
 
 fn info(sess: &mut Session, _: &Value) -> Result<Value> {

@@ -93,7 +93,7 @@ How to read it:
 | Example gallery | index.html:766 | `file.open_example {name}`, File → Examples | bundled | 2 | 🟡 2 of 6 bundled |
 | Server save / delete / My Diagrams (`/api/save`, `/o/{cid}`) | pv:1345, 1415, 6603 | `remote.pflow.save/list/delete` | remote | 7 | |
 | Share dialog (badge, `/img/{cid}.svg`), Gist, GitHub login | pv:1506, 1709, 214 | `remote.pflow.share`, `remote.gist` | remote | 7 | |
-| Layout algorithms: Sugiyama, grid, bipartite, circular | pv:5837–6281 | `net.layout {algorithm}` | port | 2 | |
+| Layout algorithms: Sugiyama, grid, bipartite, circular | pv:5837–6320 | `net.layout {algorithm}` (`core::layout`, matches the JS output exactly) | port | 2 | ✅ |
 | SVG export of the net | server svg.go | `export.svg` | core (no egui) | 1 | ✅ |
 | PNG export | — (not in pflow.xyz) | `--screenshot`, `view.screenshot` | app | 1 | ✅ |
 
