@@ -13,6 +13,7 @@ pub mod file;
 pub mod fileio;
 pub mod macros;
 pub mod net;
+pub mod opt;
 pub mod settings;
 pub mod sim;
 pub mod view;
@@ -26,6 +27,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     net::SET,
     details::SET,
     sim::SET,
+    opt::SET,
     view::SET,
     settings::SET,
     export::SET,

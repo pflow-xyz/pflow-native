@@ -74,16 +74,17 @@ How to read it:
 | Feature | Source | Native | Backing | Phase | Status |
 |---|---|---|---|---|---|
 | Token game: fire on click, blocked feedback, baseline reset | pv:2215–2911 | `sim.fire {id}`, `sim.reset`, Fire tool, double-click | pflow-metamodel `Model::enabled/fire` | 1 | ✅ |
-| ODE (Tsit5) + plot + initial/final/Δ table | pv:5268; petri-solver.js | `sim.ode {t_end, method}` → TimeSeries view | pflow-solver | 1 | ✅ plot + final values in legend; no Δ table |
+| ODE (Tsit5) + plot + initial/final/Δ table | pv:5268; petri-solver.js | `sim.ode {t_end, method, places}` → TimeSeries view; result carries `initial`/`final`/`delta` | pflow-solver | 1 | ✅ plot + final values in legend; Δ in the result (no table view yet) |
 | Per-transition rates (session), rate 0 disables | pv:5287 | `sim.set_rate {id, rate}` | core | 1 | ✅ |
-| Solver options dt/abstol/reltol | pv:5287–5300 | `sim.ode {dt, abstol, reltol}` | pflow-solver Options | 3 | |
-| Place checkboxes on plot, legend toggle, hover | pv:593 | TimeSeries view | app | 3 | 🟡 legend toggle + hover |
-| Rate scan (steady state vs rate) | pv:5268 | `opt.rate_scan` → TimeSeries(x=rate) | pflow-solver equilibrium | 3 | |
-| Sweep (one place across rates) | pv:5268 | `opt.sweep` → overlay | pflow-solver | 3 | |
+| Solver options dt/abstol/reltol | pv:5287–5300 | `sim.ode {dt, abstol, reltol, dtmax}`; also on every `opt.*` | pflow-solver Options (`sim::OdeOptions`) | 3 | ✅ |
+| Place checkboxes on plot, legend toggle, hover | pv:593 | TimeSeries view; `sim.ode {places}` / `opt.rate_scan {places}` filter | app | 3 | 🟡 legend toggle + hover; places filter in core |
+| Rate scan (steady state vs rate) | pv:5268 | `opt.rate_scan {transition, from, to, steps≤25, t_end=50}` → TimeSeries(x=rate) | pflow-solver | 3 | ✅ value at t_end, as the editor (not detected equilibrium) |
+| Sweep (one place across rates) | pv:5268 | `opt.sweep {transition, place, from, to, steps≤25}` → TimeSeries overlay, group `k=<rate>` | pflow-solver | 3 | ✅ runs resampled onto one time grid |
 | Phase plot | pv:5268 | Phase view over a TimeSeries | app | 3 | |
 | CSV / JSON download, "copy MCP call" | pv:5615–5620 | `export.artifact {format}`, `command.copy_call` | core | 1 | 🟡 csv/json |
 | SSA / SDE engines (library only in JS) | petri-ssa.js, petri-sde.js | `sim.ssa`, `sim.sde` | pflow-solver ssa / ssa::sde | 3 | |
 | Rate fitting (library only in JS) | petri-learn.js:1863 | `opt.fit` | pflow-learn | 5 | |
+| Equilibrium (not in the editor; pflow-rs) | — | `sim.equilibrium {t_max, tolerance}` → Report | pflow-solver `solve_until_equilibrium` | 3 | ✅ |
 
 ### A4. I/O & sharing
 
@@ -133,8 +134,8 @@ How to read it:
 | conformance | fitness/precision/generalization/simplicity | `data.conformance {log}` | pflow-mining, pflow-eventlog | Table + residual on canvas | 5 |
 | conformance_stream | online replay, first divergence | `data.replay {events}` | pflow-mining | Trace + running-fitness TimeSeries | 5 |
 | calibrate | learn rates/delays from a log | `data.calibrate {log}` | pflow-learn, pflow-mining | Table (evidence), new model | 5 |
-| optimize | Monte Carlo sweep, Pareto | `opt.optimize {parameters, objectives}` | pflow-solver | Scatter + Pareto | 3 |
-| param_heatmap | two-rate grid → final value | `opt.heatmap {param_x,param_y,observable}` | pflow-solver | Heatmap | 3 |
+| optimize | Monte Carlo sweep, Pareto | `opt.optimize {parameters, objectives, samples≤2000, seed}` ✅ | pflow-solver | Scatter + Pareto, Table | 3 |
+| param_heatmap | two-rate grid → final value | `opt.heatmap {param_x,param_y,observable}` (≤ 40 × 40, `log`) ✅ | pflow-solver | Heatmap | 3 |
 | distill | fit rate multipliers to minimax | `opt.distill` | pflow-learn | Report | 5 |
 | publish, publish_compare, my_sheets | Google Sheets | `remote.sim.publish` | remote | URL | 7 |
 | publish_app | host an HTML app | `remote.sim.publish_app` (wasm build) | remote | URL | 7 |
@@ -146,8 +147,8 @@ How to read it:
 | Net graph (+ marking, enabled, overlays) | document | SVG (core), PNG (app), JSON | 1 | ✅ (overlays 4) |
 | Time series (lines; mean±sd bands; overlays) | ODE, SSA, scenario, compare, pipeline, crosscheck | CSV, JSON, SVG | 1 | ✅ lines, CSV/JSON |
 | Phase plot (X vs Y) | any TimeSeries | SVG, CSV | 3 | |
-| Heatmap | param_heatmap | CSV, JSON, SVG | 3 | |
-| Scatter / Pareto | optimize | CSV, JSON | 3 | |
+| Heatmap | param_heatmap | CSV, JSON, SVG | 3 | 🟡 artifact + CSV/JSON (`opt.heatmap`) |
+| Scatter / Pareto | optimize | CSV, JSON | 3 | 🟡 artifact + CSV/JSON (`opt.optimize`) |
 | Matrix table (incidence, P/T invariants) | analysis | CSV, JSON | 4 | |
 | Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | |
 | Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | |
