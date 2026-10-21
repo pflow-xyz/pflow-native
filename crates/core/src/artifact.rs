@@ -24,6 +24,21 @@ pub struct Series {
     pub values: Vec<f64>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub band: Option<Vec<f64>>,
+    /// Overlay group (a scenario, a swept value): views color by series
+    /// name and dash/label by group.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub group: Option<String>,
+}
+
+impl Series {
+    pub fn new(name: impl Into<String>, values: Vec<f64>) -> Self {
+        Self {
+            name: name.into(),
+            values,
+            band: None,
+            group: None,
+        }
+    }
 }
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]

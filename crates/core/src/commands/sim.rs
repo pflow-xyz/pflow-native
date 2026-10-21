@@ -160,11 +160,7 @@ fn ode(sess: &mut Session, a: &Value) -> Result<Value> {
         series: r
             .series
             .into_iter()
-            .map(|(name, values)| Series {
-                name,
-                values,
-                band: None,
-            })
+            .map(|(name, values)| Series::new(name, values))
             .collect(),
     };
     let source = Step {

@@ -112,33 +112,26 @@ impl OdeResult {
 pub const SOLVERS: &[&str] = &["tsit5", "rk45", "rk4", "euler", "heun", "midpoint", "bs32"];
 
 /// Integrates the mass-action ODE from marking `mk` over `[0, t_end]`.
-pub fn ode(
+/// The document as a continuous (single-color) pflow-core net, ready for
+/// pflow-solver: colors unfolded, the state taken from a marking, rates
+/// filled in. Shared by every continuous and stochastic engine.
+pub struct ContinuousNet {
+    pub net: pflow_core::PetriNet,
+    /// Initial state by net place label.
+    pub state: HashMap<String, f64>,
+    /// Rate by transition id (absent in the session = 1.0).
+    pub rates: HashMap<String, f64>,
+    /// (net place label, display name) in document order; colored places
+    /// appear once per color they can hold, as `place.color`.
+    pub order: Vec<(String, String)>,
+    pub colors: Option<ColorMap>,
+}
+
+pub fn continuous(
     doc: &Document,
     mk: &Marking,
     rates: &BTreeMap<String, f64>,
-    t_end: f64,
-    method: &str,
-    max_points: usize,
-) -> Result<OdeResult> {
-    use pflow_solver::{methods, solve, Options, Problem};
-
-    if !(t_end > 0.0 && t_end.is_finite()) {
-        return Err(Error::BadArgs("t_end must be a positive number".into()));
-    }
-    let solver = match method {
-        "tsit5" => methods::tsit5(),
-        "rk45" => methods::rk45(),
-        "rk4" => methods::rk4(),
-        "euler" => methods::euler(),
-        "heun" => methods::heun(),
-        "midpoint" => methods::midpoint(),
-        "bs32" => methods::bs32(),
-        other => {
-            return Err(Error::BadArgs(format!(
-                "unknown method {other:?}; one of {SOLVERS:?}"
-            )))
-        }
-    };
+) -> Result<ContinuousNet> {
     let json = serde_json::to_vec(&doc.to_value()).expect("serializable");
     let net = pflow_core::from_json(&json).map_err(|e| Error::Parse(e.to_string()))?;
     let (net, cm) = if doc.colors() > 1 {
@@ -146,10 +139,8 @@ pub fn ode(
     } else {
         (net, None)
     };
-
-    // State labels in document order: place, or place.color when unfolded.
     let short = pflow_core::colors::short_color_names(&doc.token);
-    let mut order: Vec<(String, String)> = Vec::new(); // (net label, display)
+    let mut order: Vec<(String, String)> = Vec::new();
     for p in &doc.places {
         match cm.as_ref() {
             Some(cm) => {
@@ -188,20 +179,69 @@ pub fn ode(
         .map(|t| (t.id.clone(), rates.get(&t.id).copied().unwrap_or(1.0)))
         .collect();
     let rates = net.set_rates(Some(&rates));
+    Ok(ContinuousNet {
+        net,
+        state,
+        rates,
+        order,
+        colors: cm,
+    })
+}
 
-    let mut opts = Options::default_opts();
-    opts.dtmax = opts.dtmax.min(t_end / 50.0).max(opts.dtmin);
-    let prob = Problem::new(net, state, [0.0, t_end], rates);
-    let sol = solve(&prob, &solver, &opts);
+/// A pflow-solver method by name.
+pub fn solver(method: &str) -> Result<pflow_solver::Solver> {
+    use pflow_solver::methods;
+    Ok(match method {
+        "tsit5" => methods::tsit5(),
+        "rk45" => methods::rk45(),
+        "rk4" => methods::rk4(),
+        "euler" => methods::euler(),
+        "heun" => methods::heun(),
+        "midpoint" => methods::midpoint(),
+        "bs32" => methods::bs32(),
+        other => {
+            return Err(Error::BadArgs(format!(
+                "unknown method {other:?}; one of {SOLVERS:?}"
+            )))
+        }
+    })
+}
 
-    let n = sol.t.len();
+/// Indices that thin `n` samples to at most `max_points`, keeping the last.
+pub fn downsample(n: usize, max_points: usize) -> Vec<usize> {
     let stride = n.div_ceil(max_points.max(2)).max(1);
     let mut idx: Vec<usize> = (0..n).step_by(stride).collect();
     if n > 0 && idx.last() != Some(&(n - 1)) {
         idx.push(n - 1);
     }
+    idx
+}
+
+/// Integrates the mass-action ODE from marking `mk` over `[0, t_end]`.
+pub fn ode(
+    doc: &Document,
+    mk: &Marking,
+    rates: &BTreeMap<String, f64>,
+    t_end: f64,
+    method: &str,
+    max_points: usize,
+) -> Result<OdeResult> {
+    use pflow_solver::{solve, Options, Problem};
+
+    if !(t_end > 0.0 && t_end.is_finite()) {
+        return Err(Error::BadArgs("t_end must be a positive number".into()));
+    }
+    let solver = solver(method)?;
+    let cn = continuous(doc, mk, rates)?;
+    let mut opts = Options::default_opts();
+    opts.dtmax = opts.dtmax.min(t_end / 50.0).max(opts.dtmin);
+    let prob = Problem::new(cn.net, cn.state, [0.0, t_end], cn.rates);
+    let sol = solve(&prob, &solver, &opts);
+
+    let idx = downsample(sol.t.len(), max_points);
     let t = idx.iter().map(|&i| sol.t[i]).collect();
-    let series = order
+    let series = cn
+        .order
         .into_iter()
         .map(|(label, display)| {
             let col = sol.get_variable(&label);
