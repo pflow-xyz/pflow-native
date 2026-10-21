@@ -70,6 +70,19 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 ![Scenario compare with ± bands](docs/screenshot-compare.png)
 ![Rate heatmap](docs/screenshot-heatmap.png)
 
+## Analysis and data
+
+| Area | Commands |
+|---|---|
+| Structure | `analysis.incidence`, `analysis.invariants` (P/T, highlighted on the net), `analysis.siphons` (siphons/traps, Commoner, deadlock witnesses), `analysis.validate`, `analysis.canonical` / `analysis.classify` (symmetry orbits, identical to sim.pflow.xyz on the bundled examples) |
+| State space | `analysis.reachability` (graph; click a state to load it), `analysis.verify` (counterexamples become traces you can step through), `analysis.reach` (shortest witness or invariant certificate), `analysis.diagnose` (tornado) |
+| Event logs | `data.load_log` (CSV/JSONL), `data.generate` (seeded synthetic logs), `data.conformance` (fitness/precision/…, residual on the net), `data.replay` (first divergence + repair), `data.discover` (alpha/heuristic mining → new net) |
+| Learning | `data.calibrate` (rates from a log), `opt.fit` (ODE rates to observed series), `opt.distill` (game scorer vs exact minimax). With `apply`, the learned rates are one undo step |
+| Views | `view.string_diagram` (pflow.xyz's string diagram), `net.layout {algorithm: "string"}` |
+
+![Reachability graph](docs/screenshot-reachability.png)
+![Reach witness replayed on tic-tac-toe](docs/screenshot-reach.png)
+
 ## Agents: CLI, control channel, MCP
 
 ```bash

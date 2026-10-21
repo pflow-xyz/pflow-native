@@ -11,7 +11,7 @@ How to read it:
 - **Source:** where the feature lives today. `pv:` means `petri-view.js` line numbers; `sim_*` is the MCP tool name.
 - **Native:** the registry command(s) and/or the view that will carry the feature (see `ARCHITECTURE.md`).
 - **Backing:** the pflow-rs crate that does the work. **port** means pflow-rs has no equivalent yet; **remote** means it calls sim.pflow.xyz.
-- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0, phase 4 in v0.4.0.
+- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0, phase 4 in v0.4.0, phase 5 in v0.5.0.
 
 ## Phases
 
@@ -115,7 +115,7 @@ How to read it:
 | receipt | signed run certificate | `sim.receipt` | port (ed25519) | Report | 7 |
 | evaluate | score moves by rollouts | `sim.evaluate {player, objective, rollouts, seed, horizon, depth}` (play method) | metamodel firing + pflow-solver stochastic | Table (ranked) | 3 ✅ (player = role or id prefix, objective inferred from `win_*`; no eliminate/incidence/search) |
 | crosscheck | SSA vs ODE vs conservation | `sim.crosscheck {t_end, runs, seed, points}` | pflow-solver ssa + ODE; Farkas P-invariants in core | TimeSeries overlay (ssa/ode), Report | 3 ✅ (no move-ranking check) |
-| dataset | synthetic event log | `data.generate {cases, seed}` | pflow-solver ssa + pflow-eventlog | Table, CSV export | 5 |
+| dataset | synthetic event log | `data.generate {cases≤2000, seed, max_steps≤10000, rates}` → event-log table | pflow-solver portable SSA (xoshiro256**, `plog`) + pflow-eventlog | Table, CSV export | 5 ✅ (one seeded playout per case from the initial marking, to deadlock or `max_steps`; sim attributes cases per arrival through FIFO tokens. sim's epoch 2026-01-05T08:00Z, 1 model unit = 1 h) |
 | run_pipeline | bound models, loop fixed point | `compose.run_pipeline` | port | TimeSeries per model, Graph | 6 |
 | diagnose | resource/rate influence, knee, lumpability | `analysis.diagnose {observable, t_end, delta, noise, seed}` | pflow-solver ODE (sweep Runner) + portable SSA noise floor | Tornado (bars), Report | 4 🟡 (influence of every rate at ×(1 ± delta) and of +1 token per place on one observable, read on the ODE; sim's 3-seed SSA noise floor, `inert`, dormant-sources / something-binds findings. No knob kinds, outcome scoring, relief rounds, knee, classes or lumpability) |
 | invariants | P/T invariants, siphons/traps, deadlock witnesses | `analysis.invariants {kind}` (P valued at the current marking, P/T coverage), `analysis.siphons` (+ Commoner's property: max trap per siphon, ordinary / free-choice verdict) | Farkas in core (`analysis::farkas`, shared with crosscheck); siphons/traps **port** in core (`analysis::siphons`) | Sets (one per invariant / siphon / trap / witness, `artifact.show_set`), Matrix (basis), Report | 4 ✅ siphon/trap sets and T-invariant supports match sim on every bundled example |
@@ -132,9 +132,10 @@ How to read it:
 | map_put, map_get, map_list | content-addressed tables | `store.map_*` | local store | Table | 7 |
 | bind, get_binding, list_bindings | checked port bindings (units, delay) | `compose.bind` | **port** | Graph | 6 |
 | create_system, system | stored model+binding sets | `compose.system` | **port** | Graph (system) | 6 |
-| conformance | fitness/precision/generalization/simplicity | `data.conformance {log}` | pflow-mining, pflow-eventlog | Table + residual on canvas | 5 |
-| conformance_stream | online replay, first divergence | `data.replay {events}` | pflow-mining | Trace + running-fitness TimeSeries | 5 |
-| calibrate | learn rates/delays from a log | `data.calibrate {log, unit, apply, conformance}`: activity → transition by id, else id/label ignoring case | port of sim `Calibrate` (sources by inter-arrival split by case starts, race-corrected services, pickups ≥ 100 kept) + pflow-mining replay/precision | Table (evidence) + Report | 5 ✅ (no delays: pflow.xyz documents declare none; rates go to the session, not a new model; `apply` not undoable; `unit` default hour as sim) |
+| conformance | fitness/precision/generalization/simplicity | `data.conformance {log, max_traces}` | go-pflow v0.33 token replay (gate-aware) + ETC precision + sim `LogResidual`, ported onto the metamodel firing rule (`conformance.rs`; pflow-mining's copy at our pin predates the read/inhibitor fix) | Report, variant Table, Sets (residual on canvas via `artifact.show_set`) | 5 ✅ (activities match by id, then label, then either ignoring case; generalization and simplicity are computed here — sim names them but returns neither; a capacity refusal counts one missing) |
+| conformance_stream | online replay, first divergence | `data.replay {log \| events, case, repair_depth}` | port of sim `Monitor.Observe` (repair BFS ≤ 64, 5000 states) on the metamodel firing rule | Trace (one case, `sim.goto`), running-fitness TimeSeries, Report | 5 ✅ (no `keepSteps`: the TimeSeries is the per-event signal; no case-close final-marking check) |
+| calibrate | learn rates/delays from a log | `data.calibrate {log, unit, apply, conformance}`: activity → transition by id, else id/label ignoring case | port of sim `Calibrate` (sources by inter-arrival split by case starts, race-corrected services, pickups ≥ 100 kept) + pflow-mining replay/precision | Table (evidence) + Report | 5 ✅ (no delays: pflow.xyz documents declare none; rates go to the session, not a new model; `apply` is one undo step; `unit` default hour as sim) |
+| — (discovery) | mine a net from a log | `data.discover {log, method, threshold}`: replaces the net (one undo step), Sugiyama layout | pflow-mining alpha / heuristic / sequential / common-path | Net, Report | 5 ✅ |
 | optimize | Monte Carlo sweep, Pareto | `opt.optimize {parameters, objectives, samples≤2000, seed}` ✅ | pflow-solver | Scatter + Pareto, Table | 3 |
 | param_heatmap | two-rate grid → final value | `opt.heatmap {param_x,param_y,observable}` (≤ 40 × 40, `log`) ✅ | pflow-solver | Heatmap | 3 |
 | distill | fit rate multipliers to minimax | `opt.distill {player, players, objective, groups, games, positions, iters, horizon, realizations, seed, apply}` | pflow-learn hinge rank loss + Nelder-Mead; exact minimax (memoized) and `sim.evaluate`'s SSA play scorer here | Report + per-position Table | 5 ✅ (game read from `<player>_turn` places, as pflow.xyz nets declare no game schema; default groups `moves`/`house`; ssa engine only; self-play RNG differs from sim, so positions differ for a seed) |
@@ -151,10 +152,10 @@ How to read it:
 | Heatmap | param_heatmap | CSV, JSON, SVG | 3 | 🟡 artifact + CSV/JSON (`opt.heatmap`) | ✅ view with color bar + hover; CSV/JSON/SVG 
 | Scatter / Pareto | optimize | CSV, JSON | 3 | 🟡 artifact + CSV/JSON (`opt.optimize`) | ✅ view with Pareto front + hover; CSV/JSON/SVG 
 | Matrix table (incidence, P/T invariants) | analysis | CSV, JSON | 4 | | 🟡 view ready (phase 4 produces the data) 
-| Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | 🟡 graph artifact (`analysis.reachability`: node label = marking, data = marking per color, ω as -1, initial/terminal/deadlock); JSON/DOT export |
-| Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | 🟡 trace artifacts from `analysis.reach` and `analysis.verify` counterexamples (step 0 = start marking), replayed by `sim.goto` |
-| Tornado / ranked bars | diagnose, evaluate | CSV | 4 | 🟡 bars artifact from `analysis.diagnose` (value = baseline, lo/hi = outcomes) |
-| Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate tables today) 
+| Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | |
+| Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | |
+| Tornado / ranked bars | diagnose, evaluate | CSV | 4 | |
+| Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate; conformance variants, generated logs) 
 | System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | |
 | Side-by-side mapping | prove, diff | SVG | 6–7 | |
 
