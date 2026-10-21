@@ -72,6 +72,7 @@ pub struct App {
     clipboard_out: Option<String>,
     #[cfg(not(target_arch = "wasm32"))]
     control: Option<control::Control>,
+    #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
     control_addr: Option<String>,
     frame: u64,
     exit_after_screenshot: Option<String>,
@@ -152,12 +153,6 @@ impl App {
         }
         if id == "sim.ode" {
             self.bottom = BottomTab::Plot;
-            if let Some(t) = args.get("t_end").and_then(Value::as_f64) {
-                self.plot.t_end = t;
-            }
-            if let Some(m) = args.get("method").and_then(Value::as_str) {
-                self.plot.method = m.to_string();
-            }
         }
     }
 
@@ -472,7 +467,7 @@ fn native_png(_: &str, _: &egui::ColorImage) -> Result<(), String> {
 fn summarize(id: &str, v: &Value) -> String {
     let short = match v {
         Value::String(s) if s.len() > 80 => format!("{} bytes", s.len()),
-        Value::Object(m) if m.contains_key("path") => format!("{}", m["path"]),
+        Value::Object(m) if m.get("path").is_some_and(|p| !p.is_null()) => format!("{}", m["path"]),
         Value::Object(m) if m.contains_key("artifact") => {
             format!("artifact {}", m["artifact"].as_str().unwrap_or(""))
         }

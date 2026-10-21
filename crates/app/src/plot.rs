@@ -15,6 +15,8 @@ pub struct PlotState {
     pub t_end: f64,
     pub method: String,
     hidden: BTreeSet<String>,
+    /// Artifact whose settings the controls were last synced from.
+    seen: Option<String>,
 }
 
 impl Default for PlotState {
@@ -23,6 +25,7 @@ impl Default for PlotState {
             t_end: 10.0,
             method: "tsit5".into(),
             hidden: BTreeSet::new(),
+            seen: None,
         }
     }
 }
@@ -34,6 +37,19 @@ impl PlotState {
 }
 
 pub fn ui(app: &mut App, ui: &mut egui::Ui) {
+    // Follow runs made elsewhere (console, control port, macros): show the
+    // settings of the newest result in the controls.
+    if let Some(a) = app.sess.latest("timeseries") {
+        if app.plot.seen.as_deref() != Some(a.id.as_str()) {
+            if let Some(t) = a.source.args.get("t_end").and_then(Value::as_f64) {
+                app.plot.t_end = t;
+            }
+            if let Some(m) = a.source.args.get("method").and_then(Value::as_str) {
+                app.plot.method = m.to_string();
+            }
+            app.plot.seen = Some(a.id.clone());
+        }
+    }
     ui.horizontal(|ui| {
         ui.label("t_end");
         ui.add(

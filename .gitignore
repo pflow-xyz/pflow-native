@@ -1,5 +1,6 @@
 /target
-/dist
+dist/
 .cargo/config.toml
 *.png
 !docs/*.png
+.playwright-mcp/

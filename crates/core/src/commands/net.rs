@@ -184,7 +184,7 @@ pub const SET: &[CommandSpec] = &[
         label: "Auto Layout",
         help: "Rearrange every place and transition with one of pflow.xyz's layout \
                algorithms, as one undo step, then fit the view.",
-        menu: "",
+        menu: "Net",
         shortcut: None,
         args: &[arg(
             "algorithm",

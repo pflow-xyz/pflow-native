@@ -1,4 +1,4 @@
-.PHONY: build run test lint wasm-check web screenshot mcp
+.PHONY: build run test lint wasm-check web web-build screenshot mcp
 
 build:
 	cargo build --release
@@ -20,6 +20,9 @@ wasm-check:
 # Needs `cargo install trunk`; serves on :8080.
 web:
 	cd crates/app && trunk serve --release
+
+web-build:
+	cd crates/app && trunk build --release
 
 screenshot:
 	cargo run --release -p pflow-native -- --example sir \

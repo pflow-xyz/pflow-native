@@ -8,7 +8,7 @@ use serde_json::{json, Value};
 #[test]
 fn mcp_session_builds_fires_and_simulates() {
     let mut child = Command::new(env!("CARGO_BIN_EXE_pflow-native-cli"))
-        .arg("mcp")
+        .args(["mcp", "--headless"])
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .spawn()
@@ -30,7 +30,16 @@ fn mcp_session_builds_fires_and_simulates() {
         .iter()
         .map(|t| t["name"].as_str().unwrap())
         .collect();
-    assert_eq!(names, ["list_commands", "execute", "batch", "get_state"]);
+    assert_eq!(
+        names,
+        [
+            "list_commands",
+            "execute",
+            "batch",
+            "screenshot",
+            "get_state"
+        ]
+    );
 
     let tool = |name: &str, args: Value, id: u64| json!({"jsonrpc":"2.0","id":id,"method":"tools/call","params":{"name":name,"arguments":args}});
     let r = call(tool(

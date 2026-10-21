@@ -11,7 +11,7 @@ How to read it:
 - **Source:** where the feature lives today. `pv:` means `petri-view.js` line numbers; `sim_*` is the MCP tool name.
 - **Native:** the registry command(s) and/or the view that will carry the feature (see `ARCHITECTURE.md`).
 - **Backing:** the pflow-rs crate that does the work. **port** means pflow-rs has no equivalent yet; **remote** means it calls sim.pflow.xyz.
-- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0.
+- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0.
 
 ## Phases
 
@@ -45,11 +45,11 @@ How to read it:
 | Box select (shift-drag) | pv:3512, 7838 | gesture → `edit.select {ids}` | app | 1 | ✅ |
 | Group drag, 10px grid snap | pv:3665–3929 | `net.move_by {ids,dx,dy}` (snapped) | core | 1 | ✅ |
 | Undo/redo (full snapshots) | pv:2144–2168 | `edit.undo`, `edit.redo` | core | 1 | ✅ |
-| Token colors: `token[]`, palette, arc color by weight, radial breakdown | pv:4246–4710; petri-colors.js | `net.set_colors`, `net.add_tokens {color}`; canvas | core + pflow-core colors | 2 | 🟡 read/write/fire, named colors, per-color counts, arc colors; no editing of `token[]`, no radial |
-| Parallel arcs as curves | pv:4356 | canvas | app | 2 | 🟡 opposite-direction pairs curve |
-| Edit details (name, description) | pv:6945 | `net.set_details` | core | 2 | |
-| Rename node id | — | `net.rename` | core | 2 | |
-| Copy/paste/duplicate (not in pflow.xyz) | — | `edit.copy/paste/duplicate` | core | 2 | |
+| Token colors: `token[]`, palette, arc color by weight, radial breakdown | pv:4246–4710; petri-colors.js | `net.set_colors`, `net.add_tokens {color}`; token-tool color picker; canvas | core + pflow-core colors | 2 | ✅ per-color counts instead of radial breakdown |
+| Parallel arcs as curves | pv:4356 | canvas | app | 2 | ✅ (duplicate same-direction arcs are refused; opposite pairs curve) |
+| Edit details (name, description) | pv:6945 | `net.set_details`; Net → Edit Details | core | 2 | ✅ |
+| Rename node id | — | `net.rename`; inspector Id field | core | 2 | ✅ |
+| Copy/paste/duplicate (not in pflow.xyz) | — | `edit.copy/cut/paste/duplicate` | core | 2 | ✅ |
 
 ### A2. Views & panels
 
@@ -58,12 +58,15 @@ How to read it:
 | Canvas: places, transitions, arcs, tokens, enabled highlight | pv:4421, 4668, 4695 | Net view | app | 1 | ✅ |
 | Wheel zoom, pan (drag empty / middle / space), pinch | pv:7594, 7878, 7611 | `view.zoom`, `view.pan`; gestures | app | 1 | ✅ |
 | Fit to view, center on node, zoom readout | pv:4186, 4231, 4849 | `view.fit`, `view.center {id}`; status bar % | core | 1 | ✅ |
-| JSON-LD editor pane, two-way live sync | pv:360–400, 7462 | JSON view → `file.load_json` | app | 2 | |
-| Split layout / toggle editor pane | pv:913–1124 | dock tabs, `view.open/close` | app | 2 | |
-| Dark/light theme | pv:965 | `view.theme` | app | 2 | |
+| JSON-LD editor pane, two-way live sync | pv:360–400, 7462 | JSON pane (⌘J) → `file.load_json {live}`, debounced | app | 2 | ✅ (no find/fullscreen) |
+| Split layout / toggle editor pane | pv:913–1124 | `view.toggle_*`, `view.set {json_pane, inspector, bottom_panel}` | app | 2 | ✅ panel toggles; no dock tabs yet |
+| Dark/light theme | pv:965 | `view.set {theme}`, `view.cycle_theme` | app | 2 | ✅ |
 | Fireable list + locate, step counter, reset | pv:3220–3338 | `sim.enabled`, `view.center`; Run panel | core | 1 | ✅ |
-| Display settings (hide uniform weights) | pv:2500 | `view.set {hide_unit_weights}` | app | 2 | |
-| Toasts, help dialog | pv:5171, 4961 | status bar, Help → `command.list` | app | 1 | 🟡 |
+| Display settings (hide uniform weights) | pv:2500 | `view.set {show_unit_weights, snap}` | app | 2 | ✅ |
+| Toasts, help dialog | pv:5171, 4961 | status bar, Help → Keyboard & Mouse, ⌘K palette | app | 1 | ✅ |
+| Command palette (not in pflow.xyz) | — | ⌘K over the whole registry; args form generated from each command's `ArgSpec`s | app | 2 | ✅ |
+| Agents drive the live window (not in pflow.xyz) | — | app control port `127.0.0.1:7979` (JSON lines); `pflow-native-cli mcp` attaches to it, `screenshot` tool | app + cli | 2 | ✅ |
+| Web build | — | Trunk (`make web`), eframe WebRunner, browser-storage autosave | app | 2 | ✅ (no file dialogs or HTTP fetch yet) |
 | String-diagram view + SVG | pv:6324; diagram-viewer.js | String-diagram view | port | 4 | |
 
 ### A3. Simulation (editor)
@@ -87,13 +90,13 @@ How to read it:
 | Feature | Source | Native | Backing | Phase | Status |
 |---|---|---|---|---|---|
 | Open/save pflow JSON-LD | pv:1320 | `file.open`, `file.save`, `file.load_json`, `file.export_json` | core | 1 | ✅ |
-| CID (URDNA2015 → CIDv1) as `@id`, `{cid}.jsonld` | seal-cid.mjs | `file.seal_cid` | port (or pflow-tokenmodel) | 2 | |
-| Open from URL, `?data=` / `?cid=` permalink | pv:661, 2008 | `file.open_url`, `file.open_permalink` | app (http) | 2 | |
-| Autosave | pv:2117 | app autosave → recovery file | app | 2 | |
-| Example gallery | index.html:766 | `file.open_example {name}`, File → Examples | bundled | 2 | 🟡 2 of 6 bundled |
+| CID (URDNA2015 → CIDv1) as `@id`, `{cid}.jsonld` | seal-cid.mjs | `file.seal_cid` | port (or pflow-tokenmodel) | 2 |  |
+| Open from URL, `?data=` / `?cid=` permalink | pv:661, 2008 | `file.open_url`, `file.open_cid`, `file.permalink` | app (http) | 2 | ✅ native (http feature); web: permalink only |
+| Autosave | pv:2117 | eframe persistence (doc, path, settings); `--fresh` skips | app | 2 | ✅ native + web |
+| Example gallery | index.html:766 | `file.open_example {name}`, File → Examples | bundled | 2 | ✅ all 6 pflow.xyz gallery nets + SIR |
 | Server save / delete / My Diagrams (`/api/save`, `/o/{cid}`) | pv:1345, 1415, 6603 | `remote.pflow.save/list/delete` | remote | 7 | |
 | Share dialog (badge, `/img/{cid}.svg`), Gist, GitHub login | pv:1506, 1709, 214 | `remote.pflow.share`, `remote.gist` | remote | 7 | |
-| Layout algorithms: Sugiyama, grid, bipartite, circular | pv:5837–6320 | `net.layout {algorithm}` (`core::layout`, matches the JS output exactly) | port | 2 | ✅ |
+| Layout algorithms: Sugiyama, grid, bipartite, circular | pv:5837–6320 | `net.layout {algorithm}` (`core::layout`, matches the JS output exactly) | port | 2 | ✅ coordinates identical to pflow.xyz |
 | SVG export of the net | server svg.go | `export.svg` | core (no egui) | 1 | ✅ |
 | PNG export | — (not in pflow.xyz) | `--screenshot`, `view.screenshot` | app | 1 | ✅ |
 

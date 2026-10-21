@@ -42,7 +42,11 @@ pub fn ui(app: &mut App, ui: &mut egui::Ui) {
         if ui.small_button("copy").clicked() {
             ui.ctx().copy_text(app.json.text.clone());
         }
-        if ui.small_button("✖").on_hover_text("close (⌘J)").clicked() {
+        if ui
+            .small_button("close")
+            .on_hover_text("close (⌘J)")
+            .clicked()
+        {
             app.queue("view.toggle_json", Value::Null);
         }
     });

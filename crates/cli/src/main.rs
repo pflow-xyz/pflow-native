@@ -20,7 +20,11 @@ USAGE:
   pflow-native-cli control [-i NET]                  JSON-lines channel on stdin/stdout:
                                                        {\"id\":1,\"command\":\"net.info\",\"args\":{}}
                                                        -> {\"id\":1,\"ok\":true,\"result\":...}
-  pflow-native-cli mcp [-i NET]                      MCP server on stdio (list_commands, execute, batch, ...)
+  pflow-native-cli mcp [--attach ADDR | --headless] [-i NET]
+                                                     MCP server on stdio (list_commands, execute, batch,
+                                                     get_state, screenshot). Attaches to a running app's
+                                                     control port ($PFLOW_NATIVE_ADDR or 127.0.0.1:7979) when
+                                                     one is up, else runs headless; -i implies headless.
 
   -i NET   open this pflow JSON file first (file.open)
   -o OUT   save the document here afterwards (file.save)
@@ -29,6 +33,8 @@ USAGE:
 fn main() -> ExitCode {
     let mut args: Vec<String> = std::env::args().skip(1).collect();
     let input = take_flag(&mut args, "-i");
+    let attach = take_flag(&mut args, "--attach");
+    let headless = take_switch(&mut args, "--headless");
     let output = take_flag(&mut args, "-o");
     let Some(sub) = (!args.is_empty()).then(|| args.remove(0)) else {
         eprint!("{USAGE}");
@@ -80,7 +86,25 @@ fn main() -> ExitCode {
             }
         }
         "control" => return control(&mut sess),
-        "mcp" => return mcp::serve(&mut sess),
+        "mcp" => {
+            let addr = attach
+                .clone()
+                .or_else(|| std::env::var("PFLOW_NATIVE_ADDR").ok())
+                .unwrap_or_else(|| "127.0.0.1:7979".into());
+            let backend = if headless || (input.is_some() && attach.is_none()) {
+                None
+            } else {
+                match mcp::Backend::connect(&addr) {
+                    Ok(b) => Some(b),
+                    Err(e) if attach.is_some() => {
+                        eprintln!("error: cannot attach to {addr}: {e}");
+                        return ExitCode::FAILURE;
+                    }
+                    Err(_) => None,
+                }
+            };
+            return mcp::serve(backend.unwrap_or(mcp::Backend::Headless(Box::new(sess))));
+        }
         "-h" | "--help" | "help" => {
             print!("{USAGE}");
             return ExitCode::SUCCESS;
@@ -108,6 +132,16 @@ fn main() -> ExitCode {
             eprintln!("error: {e}");
             ExitCode::FAILURE
         }
+    }
+}
+
+fn take_switch(args: &mut Vec<String>, flag: &str) -> bool {
+    match args.iter().position(|a| a == flag) {
+        Some(i) => {
+            args.remove(i);
+            true
+        }
+        None => false,
     }
 }
 
