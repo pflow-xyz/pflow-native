@@ -3,6 +3,7 @@
 
 use crate::registry::CommandSpec;
 
+pub mod analysis;
 pub mod cid;
 pub mod clipboard;
 pub mod command;
@@ -30,6 +31,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     details::SET,
     sim::SET,
     opt::SET,
+    analysis::SET,
     stochastic::SET,
     view::SET,
     overlay::SET,

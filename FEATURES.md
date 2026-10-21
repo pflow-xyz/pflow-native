@@ -118,13 +118,14 @@ How to read it:
 | dataset | synthetic event log | `data.generate {cases, seed}` | pflow-solver ssa + pflow-eventlog | Table, CSV export | 5 |
 | run_pipeline | bound models, loop fixed point | `compose.run_pipeline` | port | TimeSeries per model, Graph | 6 |
 | diagnose | resource/rate influence, knee, lumpability | `analysis.diagnose` | pflow-results sensitivity + port | Tornado (bars), curve, Report | 4 |
-| invariants | P/T invariants, siphons/traps, deadlock witnesses | `analysis.invariants`, `analysis.siphons` | pflow-reachability (+ **port** siphons/traps) | Matrix, canvas overlay | 4 |
-| — (incidence) | incidence matrix | `analysis.incidence` | pflow-zk IncidenceMatrix / metamodel | Matrix | 4 |
+| invariants | P/T invariants, siphons/traps, deadlock witnesses | `analysis.invariants {kind}` (P valued at the current marking, P/T coverage), `analysis.siphons` (+ Commoner's property: max trap per siphon, ordinary / free-choice verdict) | Farkas in core (`analysis::farkas`, shared with crosscheck); siphons/traps **port** in core (`analysis::siphons`) | Sets (one per invariant / siphon / trap / witness, `artifact.show_set`), Matrix (basis), Report | 4 ✅ siphon/trap sets and T-invariant supports match sim on every bundled example |
+| — (incidence) | incidence matrix | `analysis.incidence` (+ pre/post; `place.color` rows on a coloured net) | metamodel `inputs`/`outputs` | Matrix | 4 ✅ |
 | verify | deadlock-free, bounded, live, reachable, invariant, mutex | `analysis.verify {properties}` | pflow-verify | Report + counterexample Trace | 4 |
 | reach | reachability with firing trace | `analysis.reach {from,to}` | pflow-reachability | Trace (replay on canvas) | 4 |
 | — (graph) | full reachability / coverability graph | `analysis.reachability_graph` | pflow-reachability | Graph view | 4 |
 | check_witness | re-check witnesses and derivations | `analysis.check_witness` | port (morphism) / remote | Report | 7 |
-| canonical, classify, refine, propose_types | automorphisms, orbits, parameter classes | `analysis.canonical`, `analysis.classify`, `net.refine` | **port** (orbits.go, classify.go) | canvas orbit coloring | 4 |
+| canonical, classify, refine, propose_types | automorphisms, orbits, parameter classes | `analysis.canonical`, `analysis.classify {scope, verify}`, `net.refine` | **port** in core (`analysis::symmetry`: orbits.go, classify.go) | Sets (orbits, classes) on the canvas, Report | 4 🟡 canonical id, orbits, generators and work identical to sim on every bundled example; classify has no sampled experiment, lumping or JSON-LD; no refine/propose_types |
+| — (validate) | go-pflow structural checks | `analysis.validate {reachability, max_states}` | pflow-validation | Table + Report | 4 ✅ |
 | prove | isomorphic / subnet / refines / preserves invariant | `analysis.prove` | **port** (pkg/morphism) / remote | side-by-side nets + mapping | 7 |
 | query, edges, neighbors, link | knowledge-graph edges | `store.query`, `store.link` | local store / remote | Graph | 7 |
 | create_collection, license_model, supersede_model, migration_offers, accept_migration | collections, licenses, versioning | `store.*` / `remote.sim.*` | remote | Table | 7 |
@@ -160,8 +161,8 @@ How to read it:
 ## D. Gaps in pflow-rs (work that lands upstream, not here)
 
 1. ~~Stochastic analysis over `ssa`: contention, depletion, supply kinds, schedules/stages.~~ Landed as `pflow_solver::stochastic`; `sim.scenario` uses it.
-2. Siphon and trap search. Home: pflow-reachability.
-3. Exact automorphisms, canonical labelling, color refinement. Source: sim `orbits.go`, `classify.go`.
+2. ~~Siphon and trap search.~~ Landed here (`crates/core/src/analysis/siphons.rs`, a port of sim's `siphons.go` with constraint-driven branching, plus the max-trap fixpoint for Commoner's property). Worth upstreaming to pflow-reachability.
+3. ~~Exact automorphisms, canonical labelling, color refinement.~~ Landed here (`crates/core/src/analysis/symmetry.rs`, a string-for-string port of sim's `orbits.go` / `classify.go`, so canonical ids match sim's). Worth upstreaming.
 4. Morphism prover/checker. Source: sim `pkg/morphism`.
 5. Port bindings, pipelines, loop fixed point. Source: sim `bindcheck`, `pipeline`, `loop`.
 6. pflow.xyz layout algorithms and URDNA2015 CID sealing. Both landed here instead (`crates/core/src/layout.rs`, `crates/core/src/cid.rs`; the latter is a port of pflow-xyz's json-gold behaviour, not a general JSON-LD library). Worth upstreaming.
