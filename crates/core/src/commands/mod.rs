@@ -21,6 +21,7 @@ pub mod macros;
 pub mod models;
 pub mod net;
 pub mod opt;
+pub mod outbound;
 pub mod overlay;
 pub mod settings;
 pub mod sim;
@@ -53,6 +54,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     models::SET,
     compose::SET,
     systems::SET,
+    outbound::SET,
     macros::SET,
     command::SET,
 ];

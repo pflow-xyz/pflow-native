@@ -19,6 +19,7 @@ pub mod export;
 pub mod layout;
 pub mod learn;
 pub mod mining;
+pub mod outbound;
 pub mod registry;
 pub mod session;
 pub mod sim;
