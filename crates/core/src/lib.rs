@@ -20,6 +20,7 @@ pub mod layout;
 pub mod learn;
 pub mod mining;
 pub mod outbound;
+pub mod provenance;
 pub mod registry;
 pub mod session;
 pub mod sim;
@@ -30,6 +31,7 @@ pub mod store;
 pub mod string_diagram;
 pub mod sweep;
 pub mod systems;
+pub mod zk;
 
 pub use artifact::{Artifact, ArtifactData};
 pub use doc::{Arc, Document, NodeKind, Place, Transition};

@@ -11,5 +11,5 @@ name = "pflow-native-cli"
 path = "src/main.rs"
 
 [dependencies]
-pflow-native-core = { workspace = true, features = ["http"] }
+pflow-native-core = { workspace = true, features = ["http", "zk"] }
 serde_json.workspace = true

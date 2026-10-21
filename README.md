@@ -93,6 +93,24 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 
 ![Fusing a service component onto the coffee shop](docs/screenshot-diff.png)
 
+## Store, sharing and provenance
+
+| Area | Commands |
+|---|---|
+| Local store | `store.put / get / open / list / delete` (keyed by the pflow.xyz CID, under `<data_dir>/store`), `store.link / edges / neighbors / query` (sim's predicate registry and query language), collections, irrevocable licenses, `store.supersede` / migration offers, content-addressed maps, `store.graph` |
+| pflow.xyz | `remote.pflow.save / list / delete`, `remote.pflow.share` (page, `/img/{cid}.svg`, badge), `remote.gist` |
+| sim.pflow.xyz | `remote.sim.tools`, `remote.sim.call` and wrappers (`create_model`, `publish`, `publish_app`, `prompt`, `prove`, `check_witness`) over MCP |
+| Provenance | `sim.receipt` / `provenance.verify_receipt` (Ed25519, sim's receipt format, verified by replay), `provenance.check_witness` (traces, invariant certificates, morphism maps), `zk.setup / prove_fire / prove_trace / verify` (Groth16 via pflow-zk-arkworks; native builds) |
+
+**Nothing leaves the machine by accident.** Every remote write returns a preview of the exact request, with credentials redacted, unless it is called with `"send": true`. In the app, a preview opens a confirmation window, and only **Send** sends. Credentials come from environment variables or `<data_dir>/credentials.json`, never from documents or the journal; `remote.credentials` shows which are configured. They are:
+- `PFLOW_XYZ_TOKEN`: a GitHub token with `read:user`.
+- `GITHUB_TOKEN`: a GitHub token with the `gist` scope.
+- `SIM_PFLOW_TOKEN`: a sim OAuth access token, valid for 24 h.
+
+**Datasets stay server-computed.** sim stores only results it computed itself. pflow-native can ask it to compute (scenario, dataset, calibrate, publish), but never uploads locally computed datasets; `remote.sim.call` refuses `sim_map_put`. Models are not datasets and can be published.
+
+![Confirm before sending](docs/screenshot-confirm-send.png)
+
 ## Agents: CLI, control channel, MCP
 
 ```bash

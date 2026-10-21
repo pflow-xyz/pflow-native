@@ -23,6 +23,7 @@ pub mod net;
 pub mod opt;
 pub mod outbound;
 pub mod overlay;
+pub mod provenance;
 pub mod remote;
 pub mod settings;
 pub mod sim;
@@ -59,6 +60,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     outbound::SET,
     remote::SET,
     store::SET,
+    provenance::SET,
     macros::SET,
     command::SET,
 ];
