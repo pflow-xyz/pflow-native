@@ -1,0 +1,33 @@
+{
+  "_comment": "pflow.xyz gallery nets downloaded from https://pflow.xyz/o/{cid} (the @id in each file). 'cid' is what pflow-xyz internal/seal (json-gold v0.7.0) computes for the file as served today. The server injects 'author' AFTER sealing (internal/store), so 'cid_without_author' is the CID of the file minus author; for 4 of the 6 it equals the served @id. coffee-shop-pflow and usdc-bridge were sealed under an older contract whose stored canonical N-Quads lack the root node (its relative @id was not stripped, so every triple about it was dropped): their @id cannot be reproduced by the current Go or JS seal either.",
+  "gallery-coffee-shop-pflow.json": {
+    "cid": "z4EBG9j2JGCsZca63NSodtAEnQ4VDas7a4Ehp2LHCBtJ9yAZgpJ",
+    "cid_without_author": "z4EBG9j65C4kUyj1PQ3fWUYoGEXjhpZBTkRSE1Ra78fnJV86n3a",
+    "id": "z4EBG9j3NhEnaxZBEpXXCvyMbR9utkgUZoPBQFxS99qSehUwuBL"
+  },
+  "gallery-enzyme-kinetics.json": {
+    "cid": "z4EBG9jANVP5ZZDDWzQ3j9Z5CfG3UNYUAma89X7d8TVJiVA3EzW",
+    "cid_without_author": "z4EBG9j1aMiBny6hgTAKFXfXxTASCD5vT6NVY3opfQx4FfBf42a",
+    "id": "z4EBG9j1aMiBny6hgTAKFXfXxTASCD5vT6NVY3opfQx4FfBf42a"
+  },
+  "gallery-predator-prey.json": {
+    "cid": "z4EBG9jFi4LBNrp7fJ7XVpg5WVZYWfLsHPvJgthWCXwkNYWdgoi",
+    "cid_without_author": "z4EBG9j7s3ri1DFxbBYpxYUhKtZf8ngA3nfw9849upqeQj85z9J",
+    "id": "z4EBG9j7s3ri1DFxbBYpxYUhKtZf8ngA3nfw9849upqeQj85z9J"
+  },
+  "gallery-producer-consumer.json": {
+    "cid": "z4EBG9j5NDWUaDBDhyAzgcKKYfqjxsYpK5rnAwBooNxM5M4eNoY",
+    "cid_without_author": "z4EBG9jDW9ike1veSLWu9Et2dMTiPEWTMkai8TkjUtEaUVtyrda",
+    "id": "z4EBG9jDW9ike1veSLWu9Et2dMTiPEWTMkai8TkjUtEaUVtyrda"
+  },
+  "gallery-tic-tac-toe.json": {
+    "cid": "z4EBG9j9VonuiVdjSpEidue7JNWUDfHBicAjDearfgNVUHbJH8x",
+    "cid_without_author": "z4EBG9j1YQFZEQBpCn3ZjdpAuXpPnrKSDF5YXsW3q86znPztEoh",
+    "id": "z4EBG9j1YQFZEQBpCn3ZjdpAuXpPnrKSDF5YXsW3q86znPztEoh"
+  },
+  "gallery-usdc-bridge.json": {
+    "cid": "z4EBG9j9Gdopjv4WEoqNJySa7uEjNi3Kvhn5o6CZSN6fyS3g8oQ",
+    "cid_without_author": "z4EBG9j1Z1y1L75KpZs2kc43HtwgNjoNYoLJG6Cq4x4i27GmtRd",
+    "id": "z4EBG9jC6HtPfeMtyA5yt6HuzDspMH2B15FQZ7mx3D2zeBwBU1f"
+  }
+}

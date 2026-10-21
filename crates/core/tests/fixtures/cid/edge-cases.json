@@ -1,0 +1,4773 @@
+[
+ {
+  "name": "place key 'Waiting Customers'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "Waiting Customers": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1amQXjzM4VLXLeoNie25ZtLgqXXsdvGcu38fmL9gsAeG"
+ },
+ {
+  "name": "place key 'tab\\there'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "tab\there": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1amQXjzM4VLXLeoNie25ZtLgqXXsdvGcu38fmL9gsAeG"
+ },
+ {
+  "name": "place key 'bad%zz'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "bad%zz": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1amQXjzM4VLXLeoNie25ZtLgqXXsdvGcu38fmL9gsAeG"
+ },
+ {
+  "name": "place key 'ok%41'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "ok%41": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jEWVHMkeg5wnd8EDjNdjeUwHkhiWpzM8fkAoDRb5ADJaV"
+ },
+ {
+  "name": "place key 'pct%'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "pct%": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1amQXjzM4VLXLeoNie25ZtLgqXXsdvGcu38fmL9gsAeG"
+ },
+ {
+  "name": "place key 'a:b'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "a:b": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1eDqFZbdm7KKbAYBwNgLgADxPcwQaUKgs5r12FeRCC9i"
+ },
+ {
+  "name": "place key '1:2'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "1:2": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jBKwGpRsfFciv1hsBZTrAZmPXoWxKYvKRDhDSb8j7z7r7"
+ },
+ {
+  "name": "place key 'a b:c'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "a b:c": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1amQXjzM4VLXLeoNie25ZtLgqXXsdvGcu38fmL9gsAeG"
+ },
+ {
+  "name": "place key 'a:b c'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "a:b c": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1vqmXLtbBjMQztAVQvg5V9kS1cT9r2Cv7EYJzSyzfooP"
+ },
+ {
+  "name": "place key '_:x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "_:x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1amQXjzM4VLXLeoNie25ZtLgqXXsdvGcu38fmL9gsAeG"
+ },
+ {
+  "name": "place key 'http://example.com/x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "http://example.com/x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDVJRAqixLVCaKpSfo6S7FyfyYmqFKBqYHLwTq49Jwx93"
+ },
+ {
+  "name": "place key 'https://example.com/a b'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "https://example.com/a b": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1amQXjzM4VLXLeoNie25ZtLgqXXsdvGcu38fmL9gsAeG"
+ },
+ {
+  "name": "place key ':foo'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    ":foo": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j2DHEZVsWaBTkqPJMyki8usbSx7HmDPZyNFfD9HbkBLXX"
+ },
+ {
+  "name": "place key 'café'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "café": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jGdw62Zr7XEVppjRNQbpk4QLGcPzGXqXEzSGK3o6Egmoz"
+ },
+ {
+  "name": "place key '日本語'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "日本語": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDvEXUQ1gZrWGdUQUGeRLCAj3XxhS6LfxQ7GNraKPuQvT"
+ },
+ {
+  "name": "place key 'nbsp\\xa0x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "nbsp x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1iKVCs5317xqD9Yc1n5hs3yTMZTMFxjXTBW6Bv7Xvgko"
+ },
+ {
+  "name": "place key 'ctl\\x01x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "ctl\u0001x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j42GvLbh1p7uTQQDeGsjvPmjpg8HwikLbbQ7LCEYdHw1y"
+ },
+ {
+  "name": "place key 'quote\"x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "quote\"x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jGqA5ECJvhoAAyQLp3HRV1myg76XoP6R7yKUagLFCF95C"
+ },
+ {
+  "name": "place key 'back\\\\slash'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "back\\slash": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j73sR7Bg2wRNnkyZgoYv7sV5Srsdn2MehCdkjrsSdNKQ3"
+ },
+ {
+  "name": "place key 'hash#x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "hash#x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j7Uq2ZedT3n4tPEZsr6Le8zjvoWaYcvtSaW3xs5F9f21a"
+ },
+ {
+  "name": "place key 'q?x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "q?x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jF7UbFaKYDFBZ1Xhi2DPkkTVMviKXCKZP73vFNwzs3KXV"
+ },
+ {
+  "name": "place key 'weight'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "weight": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j4Pv3QvMW7sTYYWyD94JnAiUwMzuDJmAmyi9nVYPdf1Li"
+ },
+ {
+  "name": "place key 'x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "x": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j2YRUGFwppCHFzfBSBXQvzqqVq9DGZXAf1kNTSipZjt4q"
+ },
+ {
+  "name": "place key 'token'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "token": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jBQmFN2maDMf1raNFKt3AXmcVcuub8xdMdrp9iAVUa3k6"
+ },
+ {
+  "name": "place key ''",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": null,
+  "note": "Go refuses too: ERROR: panic: invalid typed value: @type value must be a string or array of strings"
+ },
+ {
+  "name": "place key '@foo'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "@foo": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDNzGgewXJjpswWBE9AezsauhgLQPGL3zBxsFUHZsC4tm"
+ },
+ {
+  "name": "place key '@'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "@": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izqLXTEyQmvVuQGnQieTe1VjJe98Tiv1Rjxmc2wgvEx5m"
+ },
+ {
+  "name": "place key '@1'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "@1": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jGtiM3bopDLyjYLqqpHFXq8Nae6nV6ZPSYc3ybDGNo85Z"
+ },
+ {
+  "name": "place key 'urn:x:y'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "urn:x:y": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jBsmEJfUJAhiCdqbz1RuNeRPQHmGhhTiVtEApJ8WsizwB"
+ },
+ {
+  "name": "place key 'mailto:a@b.c'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "mailto:a@b.c": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jEpRhZokJ84zo4hSPToPgTPJt43vMcYvopZ9QxCY2NQQY"
+ },
+ {
+  "name": "place key 'a/b'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "a/b": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izSCqyCS89rKBUwZkCmkFcQvr2dgtS63P6FYQWhy5Ry3t"
+ },
+ {
+  "name": "place key 'ftp://h/p'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "ftp://h/p": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "L"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDJaZW4keWA4FAYXdpkdoyw5u1crLUHFgQaFxoSkK8wVw"
+ },
+ {
+  "name": "label 'line\\nbreak'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "line\nbreak"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izvav53NgsxpqDmscVjRGMnHuakKJ7vNFYtb2gweLEesu"
+ },
+ {
+  "name": "label 'cr\\rx'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "cr\rx"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jCGAVUJ1qXB8GaGJjaxoS3e4Ee4DfXjjM6eKgHqCLj3b1"
+ },
+ {
+  "name": "label 'tab\\tx'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "tab\tx"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3kHbiTERsJ47bMbNmKRn986qtskMftesz7cpfP5L7NLR"
+ },
+ {
+  "name": "label 'bs\\x08x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "bs\bx"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3crLKtK4dbFXh3sKxGc4xFHXvJzA9byRzXKpFqeefYfZ"
+ },
+ {
+  "name": "label 'ff\\x0cx'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "ff\fx"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izhWNiCafJ6iUVYKz4WFk1jXw5pVFYJvdpRSofBsGxJ4X"
+ },
+ {
+  "name": "label 'q\"x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "q\"x"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j2YDHsbkyodHrLo7xfiehasLWTdSP9BzaXa7R7fCUaEJW"
+ },
+ {
+  "name": "label 'b\\\\x'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "b\\x"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j8ZdLRHQMfL3HVzmVvkyyeXG3K16B9RfepUthZVv2BbQ9"
+ },
+ {
+  "name": "label '\\x01\\x7f'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "\u0001"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j8MvRokoPLz63oMTRdruooFqj38Sv9zubjf4emQbxoVrj"
+ },
+ {
+  "name": "label 'emoji 😀'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "emoji 😀"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jBGUd39ig9TsiMcsDAgaiLGNwSUhDKFXB3EBaFfxTz61G"
+ },
+ {
+  "name": "label ''",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": ""
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jEE9o8Scgwsm1UQG29aBMpkkXPeAnXpZ86dH4dSzR91ik"
+ },
+ {
+  "name": "label '<iri>'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": "<iri>"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jGHTo1HkBq2NgcWPmFk238ZvVwK4wbmnSwzLbwVF7tVrH"
+ },
+ {
+  "name": "label '\\u2028sep'",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": " sep"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3L6Vz2bSwR9LHWLH3dwJb6JVDAEyxmit8Ggbp6Q8XcQi"
+ },
+ {
+  "name": "number 1.5",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1.5
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 1.5,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j62mbpgdDuAKp3eCxKgGos4MLR4JTaU7Ng5VMoGmtkkUz"
+ },
+ {
+  "name": "number 0.1",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0.1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0.1,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j6sBEHRU6BGm7iYWFHC5dvZoWjbBhQy1cSMhp6sHqihLC"
+ },
+ {
+  "name": "number -2.25e-07",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      -2.25e-07
+     ],
+     "capacity": [
+      0
+     ],
+     "x": -2.25e-07,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j1DSYPQdEm3h1r7NscYdRcpJqZRpEc3nFE8J5ddmy5g4W"
+ },
+ {
+  "name": "number 1e+21",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1e+21
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 1e+21,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jD8QH13iUDiHxsVZiXXg3xKd6jq4Z4bjToUgSkM5yX8YL"
+ },
+ {
+  "name": "number 1e+300",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1e+300
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 1e+300,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izjHnMEiEqrRA9jyAf97F8XzX2DRNeLt1YUjpX4EMp6dC"
+ },
+ {
+  "name": "number 123456789.123",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      123456789.123
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 123456789.123,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jEpviT4C9PYyid7ACZb7o5762S7Wq29Jw5qUa2idSgZw8"
+ },
+ {
+  "name": "number 9007199254740993",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      9007199254740993
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 9007199254740993,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izMVvygSNdSwDM7heiEzrDqrbm8kDaBfqQNhYN3FsoH1d"
+ },
+ {
+  "name": "number 1e+19",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1e+19
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 1e+19,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j9VjeU34fWVnF4zuTngRqLmPjbHQ229ZEkEXx7YBRDb65"
+ },
+ {
+  "name": "number -0.0",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      -0.0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": -0.0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDpLTLrhsQpw41QnGdzkJ2irJUDYM5AwHi6LcDCHJEjq7"
+ },
+ {
+  "name": "number 3.0",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      3.0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 3.0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izVqMQBtS8YxzyDi6eUX6ggNFqx3S6ZKMLza4hxGk55LL"
+ },
+ {
+  "name": "number -7",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      -7
+     ],
+     "capacity": [
+      0
+     ],
+     "x": -7,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j4jEEBwCA4g4gZDcL8Y1HMau3FYysyha9P8UcM58pkzJ4"
+ },
+ {
+  "name": "number 1e-300",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1e-300
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 1e-300,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3zV5YL5sYA1pKMJCGSRFmDzptAam8dwuamKyidxkCC8i"
+ },
+ {
+  "name": "number 5e-324",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      5e-324
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 5e-324,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j8S4Tgp4uwoLHaJs5MFpsbADTRwMU24MKy1ggqMVrbumz"
+ },
+ {
+  "name": "number 1.7976931348623157e+308",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1.7976931348623157e+308
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 1.7976931348623157e+308,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j8dki1yyb7eiosQthV197aETbUead74PuFhaER93fNNoj"
+ },
+ {
+  "name": "number 0.30000000000000004",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0.30000000000000004
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0.30000000000000004,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j9vG7Ks5y6CR1YXeFVriZFxRa2P972FHgTxguB4gyRW7D"
+ },
+ {
+  "name": "number 9223372036854775808",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      9223372036854775808
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 9223372036854775808,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jCZY4Xfw9i9yR3zSV77KDQZQneisk43GziDjeovsxff8M"
+ },
+ {
+  "name": "number -9223372036854775808",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      -9223372036854775808
+     ],
+     "capacity": [
+      0
+     ],
+     "x": -9223372036854775808,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jBFMx3pCHzCEpVGpPPp3stmhQFx3LTSPX6Fwv56MsZcWd"
+ },
+ {
+  "name": "number 9223372036854774784",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      9223372036854774784
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 9223372036854774784,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izpeXZxQYwnMvf6m17Sk1ckJnfrUGJ84uavwCFEvGq5cD"
+ },
+ {
+  "name": "number 12345678901234567890",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      12345678901234567890
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 12345678901234567890,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3VGw6xAAKGUiAKfXzAGo3n8u7HrEszY1RzDvd2ubewsm"
+ },
+ {
+  "name": "null label",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": null
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDpLTLrhsQpw41QnGdzkJ2irJUDYM5AwHi6LcDCHJEjq7"
+ },
+ {
+  "name": "weight null",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": null
+    }
+   ]
+  },
+  "cid": "z4EBG9jGMzMFLD6Lmw9n3rGMVDmGz4uCgY38hji8yE948riPquM"
+ },
+ {
+  "name": "capacity nulls",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      null,
+      1,
+      null
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j7cHG1giqv4YxYiQviQMBvL1oGrdakytoPgBcNTVkEvWX"
+ },
+ {
+  "name": "capacity empty",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jGfxy96rSHiGG2u7BFCkBtabr94zHB5azANDdJgcrPBXp"
+ },
+ {
+  "name": "initial scalar",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": 5,
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jGPvH7dtTZUWCkphtU8rMgNGWf3HYxAHbaaGh4DLpCQDy"
+ },
+ {
+  "name": "initial object",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": {
+      "a": 1
+     },
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j8fBGZ5psKd9X1dXRQ6dvKd9C9wqPmS2LcrXUHd3YeMjP"
+ },
+ {
+  "name": "empty object value",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "meta": {}
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3hqrGivdBwvzjuVNhEShrNRdn3cUu8WRSsT6kWeTmjBy"
+ },
+ {
+  "name": "nested object value",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "meta": {
+      "k": "v",
+      "n": [
+       1,
+       2
+      ]
+     }
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jC4ri8Ptv69sr45SYJu2ZA4roWkHzJgcEosD3Z1M2TPTt"
+ },
+ {
+  "name": "bools in list",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      true,
+      false,
+      1
+     ]
+    }
+   ]
+  },
+  "cid": "z4EBG9j9MkocvfjYadtEjD717oECpXGLGkdTKL6hnCVhKGfmKmS"
+ },
+ {
+  "name": "type array",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": [
+      "Place",
+      "Extra"
+     ],
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jD5AufjUbZGTC2fQ3N5xZmJwvYP45TP974FBvHLNJ9eFi"
+ },
+ {
+  "name": "type with space",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "My Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j7LraQj5GqKfnpUokrZRY7jiWUR9UicAmWNgLUgTPz5rC"
+ },
+ {
+  "name": "type absolute",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "http://example.org/T",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j6FQtPcmrZHYAA7SrW1yRuvnBiGJxH32qGDNdsXSLjJ8D"
+ },
+ {
+  "name": "type urn",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "urn:x",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j5FQduLvCvxY1g8mPWLziVoc6je5zHwWgjT99UT8qWRjr"
+ },
+ {
+  "name": "type term",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "weight",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j9NdS24yvN2Cc3f38e5PJcabQavYk7croVbb2Hogze5wZ"
+ },
+ {
+  "name": "type empty",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izWbpNn9z29XSTuawz9igFJe8TQ3qdo9p7dU5DNfBX1ww"
+ },
+ {
+  "name": "type dup",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": [
+      "Place",
+      "Place"
+     ],
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDpLTLrhsQpw41QnGdzkJ2irJUDYM5AwHi6LcDCHJEjq7"
+ },
+ {
+  "name": "nested version and foo",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "@version": "1.1",
+     "@foo": 1
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jDpLTLrhsQpw41QnGdzkJ2irJUDYM5AwHi6LcDCHJEjq7"
+ },
+ {
+  "name": "top extras",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "name": "n",
+   "description": "d",
+   "author": {
+    "@type": "Person",
+    "name": "x",
+    "id": "github:1"
+   }
+  },
+  "cid": "z4EBG9jFvAb2HY7btmy6RpWQKcQTH7ANWrPQhyH6wz5f4sXedLa"
+ },
+ {
+  "name": "parents",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "parents": [
+    "zA",
+    "zB",
+    "zA"
+   ]
+  },
+  "cid": "z4EBG9izUJLEWqKyh3eobxzKrpg92f9822hVXPMT4QGa9zq4cyq"
+ },
+ {
+  "name": "tags dup",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "tags": [
+    "a",
+    "a",
+    "b",
+    1,
+    1.0,
+    "1"
+   ]
+  },
+  "cid": "z4EBG9jAF8WM2eMVzh8dJcMNBPRwFRfzLU65YxYrVCXF7jmcKVx"
+ },
+ {
+  "name": "nested arrays flatten",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "tags": [
+    [
+     "a",
+     [
+      "b"
+     ]
+    ],
+    "c"
+   ]
+  },
+  "cid": "z4EBG9j1DYHmeofPtzjtub5Pz8ZAMs4D9bQ6LJAqXjnVu2Vk1wr"
+ },
+ {
+  "name": "list of objects",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "parents": [
+    {
+     "a": 1
+    },
+    {
+     "a": 1
+    },
+    {
+     "b": {}
+    }
+   ]
+  },
+  "cid": "z4EBG9j998fWXKXyagsXUbGaS6JNjCMrBbo8kY2SCxRmtox1e48"
+ },
+ {
+  "name": "empty net",
+  "doc": {
+   "@context": "https://pflow.xyz/schema"
+  },
+  "cid": "z4EBG9jFSaAgqU2ahKkKiWnWEaxu8D73LRafEiKz3nVf3d4RxWQ"
+ },
+ {
+  "name": "only type",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet"
+  },
+  "cid": "z4EBG9jBn2bSapLQccnHj8n4RLGKuywZgUuWJJDpwc3j6FwhSdG"
+ },
+ {
+  "name": "token empty",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3wnXcuBuXXCbk1WWLUXgBiAQomJY2oNb852DY887GYd5"
+ },
+ {
+  "name": "symmetric empties",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "sym": [
+    {},
+    {},
+    {}
+   ]
+  },
+  "cid": "z4EBG9jAfBTnNFSvhnCJ1rT1VQxYQfrBZQ4LMf3cA7FnrVT1G5N"
+ },
+ {
+  "name": "symmetric chains",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "sym": [
+    {
+     "b": {
+      "c": {}
+     }
+    },
+    {
+     "b": {
+      "c": {}
+     }
+    },
+    {
+     "b": {}
+    }
+   ]
+  },
+  "cid": "z4EBG9j6i7DUN3butFX6kYAc1CVhfqdEAhkEGMgyfigtJmdRGiJ"
+ },
+ {
+  "name": "identical places",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "a": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    },
+    "b": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    },
+    "c": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": []
+  },
+  "cid": "z4EBG9jHL6L7mrdkCTzcGLMRwfbHxojnKA5jFSuohyKg3jnjZuE"
+ },
+ {
+  "name": "identical arcs",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ]
+    },
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ]
+    },
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ]
+    }
+   ]
+  },
+  "cid": "z4EBG9j6xZcFUtqXr7Pv3xRsmKDz5LmoYHsQsgvsV9L8ACodgu9"
+ },
+ {
+  "name": "cycle-ish lists",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1,
+      1
+     ],
+     "capacity": [
+      1,
+      1
+     ],
+     "x": 0,
+     "y": 0
+    },
+    "p1": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1,
+      1
+     ],
+     "capacity": [
+      1,
+      1
+     ],
+     "x": 0,
+     "y": 0
+    },
+    "p2": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1,
+      1
+     ],
+     "capacity": [
+      1,
+      1
+     ],
+     "x": 0,
+     "y": 0
+    },
+    "p3": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1,
+      1
+     ],
+     "capacity": [
+      1,
+      1
+     ],
+     "x": 0,
+     "y": 0
+    },
+    "p4": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1,
+      1
+     ],
+     "capacity": [
+      1,
+      1
+     ],
+     "x": 0,
+     "y": 0
+    },
+    "p5": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1,
+      1
+     ],
+     "capacity": [
+      1,
+      1
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": []
+  },
+  "cid": "z4EBG9jGmWuu9UgigX9jxvFz6dtPuVZbnJhnjNCJNreBTaNRBn9"
+ },
+ {
+  "name": "inline context",
+  "doc": {
+   "@context": {
+    "@vocab": "https://pflow.xyz/schema#",
+    "arcs": {
+     "@id": "https://pflow.xyz/schema#arcs",
+     "@container": "@list"
+    },
+    "places": "https://pflow.xyz/schema#places",
+    "transitions": "https://pflow.xyz/schema#transitions",
+    "token": {
+     "@id": "https://pflow.xyz/schema#token",
+     "@container": "@list"
+    },
+    "source": "https://pflow.xyz/schema#source",
+    "target": "https://pflow.xyz/schema#target",
+    "weight": {
+     "@id": "https://pflow.xyz/schema#weight",
+     "@container": "@list"
+    },
+    "inhibitTransition": "https://pflow.xyz/schema#inhibitTransition",
+    "capacity": {
+     "@id": "https://pflow.xyz/schema#capacity",
+     "@container": "@list"
+    },
+    "initial": {
+     "@id": "https://pflow.xyz/schema#initial",
+     "@container": "@list"
+    },
+    "parents": {
+     "@id": "https://pflow.xyz/schema#parents",
+     "@container": "@list"
+    },
+    "offset": "https://pflow.xyz/schema#offset",
+    "x": "https://pflow.xyz/schema#x",
+    "y": "https://pflow.xyz/schema#y"
+   },
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jFSPEoQEG6y1jbAc2eCC2bzRAaHfFSvYp3sESvLN5QAfH"
+ },
+ {
+  "name": "context array",
+  "doc": {
+   "@context": [
+    "https://pflow.xyz/schema"
+   ],
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9jFSPEoQEG6y1jbAc2eCC2bzRAaHfFSvYp3sESvLN5QAfH"
+ },
+ {
+  "name": "top @id stripped",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "@id": "zWhatever"
+  },
+  "cid": "z4EBG9jFSPEoQEG6y1jbAc2eCC2bzRAaHfFSvYp3sESvLN5QAfH"
+ },
+ {
+  "name": "nested @id",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "@id": "http://example.org/p0"
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9j9RhpWmc21e5jyCzmBEGRkPdDxG9sPTKsqcj6DTdz1Z4m"
+ },
+ {
+  "name": "value object",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "label": {
+      "@value": "x",
+      "@language": "en"
+     }
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9j1B42KihJ2ZKZE7uzWgF5VBFS9xdhRpjckiDVnBtuPESB"
+ },
+ {
+  "name": "list of lists",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "parents": [
+    [
+     "a"
+    ],
+    [
+     "b"
+    ]
+   ]
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9j4pzgGYzeHLwVWtSNcNSVTFWBXR55zo2jmGwG9JDcrJdw"
+ },
+ {
+  "name": "other context",
+  "doc": {
+   "@context": "https://schema.org",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9j6rTpMSQj74EJvzs3DFDe1nRrunZa94WAUbtx5bqHaWqz"
+ },
+ {
+  "name": "no context",
+  "doc": {
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9j8W9yi98ynN9Yn2eMQJ1qT7ARsij2YyDhSL2ojhAfhFJ4"
+ },
+ {
+  "name": "nested context",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0,
+     "@context": {
+      "x": "http://e/x"
+     }
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9j2cJw58fsBUcz1rZmMAuXU5BdNVJCB6evQxTQM7YYbXUE"
+ },
+ {
+  "name": "type blank",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "_:t",
+     "offset": 0,
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 0,
+     "y": 0
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9j18cQAzMfWupR57JG495nCzqEBfqKWNf7NrP9DviAFkyF"
+ },
+ {
+  "name": "graph",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "p0": {
+     "@type": "Place",
+     "offset": 0,
+     "initial": [
+      1
+     ],
+     "capacity": [
+      0
+     ],
+     "x": 10,
+     "y": 20
+    }
+   },
+   "transitions": {
+    "t0": {
+     "@type": "Transition",
+     "x": 30,
+     "y": 20
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "p0",
+     "target": "t0",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "@graph": []
+  },
+  "cid": null,
+  "note": "refused here by design; Go gives z4EBG9jFSPEoQEG6y1jbAc2eCC2bzRAaHfFSvYp3sESvLN5QAfH"
+ }
+]

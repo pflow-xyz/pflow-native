@@ -90,7 +90,7 @@ How to read it:
 | Feature | Source | Native | Backing | Phase | Status |
 |---|---|---|---|---|---|
 | Open/save pflow JSON-LD | pv:1320 | `file.open`, `file.save`, `file.load_json`, `file.export_json` | core | 1 | ✅ |
-| CID (URDNA2015 → CIDv1) as `@id`, `{cid}.jsonld` | seal-cid.mjs | `file.seal_cid` | port (or pflow-tokenmodel) | 2 |  |
+| CID (URDNA2015 → CIDv1) as `@id`, `{cid}.jsonld` | seal-cid.mjs, internal/seal | `file.cid`, `file.seal` | core `cid` (port of json-gold; byte-identical on pflow-xyz's parity goldens) | 2 | ✅ (`{cid}.jsonld` naming: save with `path`) |
 | Open from URL, `?data=` / `?cid=` permalink | pv:661, 2008 | `file.open_url`, `file.open_cid`, `file.permalink` | app (http) | 2 | ✅ native (http feature); web: permalink only |
 | Autosave | pv:2117 | eframe persistence (doc, path, settings); `--fresh` skips | app | 2 | ✅ native + web |
 | Example gallery | index.html:766 | `file.open_example {name}`, File → Examples | bundled | 2 | ✅ all 6 pflow.xyz gallery nets + SIR |
@@ -163,4 +163,4 @@ How to read it:
 3. Exact automorphisms, canonical labelling, color refinement. Source: sim `orbits.go`, `classify.go`.
 4. Morphism prover/checker. Source: sim `pkg/morphism`.
 5. Port bindings, pipelines, loop fixed point. Source: sim `bindcheck`, `pipeline`, `loop`.
-6. pflow.xyz layout algorithms (Sugiyama, grid, bipartite, circular) and URDNA2015 CID sealing.
+6. pflow.xyz layout algorithms (Sugiyama, grid, bipartite, circular). (URDNA2015 CID sealing landed here instead, in `crates/core/src/cid.rs`: it is a port of pflow-xyz's json-gold behaviour, not a general JSON-LD library.)

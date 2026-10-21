@@ -262,6 +262,7 @@ fn add_place(sess: &mut Session, a: &Value) -> Result<Value> {
         capacity: color_vec(nums(a, "capacity"), ncol, 0.0),
         x: snap(n(a, "x").unwrap(), on),
         y: snap(n(a, "y").unwrap(), on),
+        extra: Default::default(),
     };
     sess.edit("add place", |s| {
         let tokens = p.initial.iter().map(|f| f.round() as i64).collect();
@@ -287,9 +288,10 @@ fn add_transition(sess: &mut Session, a: &Value) -> Result<Value> {
     let t = Transition {
         id: id.clone(),
         label: s(a, "label").map(str::to_string),
-        role: "default".into(),
+        role: None,
         x: snap(n(a, "x").unwrap(), on),
         y: snap(n(a, "y").unwrap(), on),
+        extra: Default::default(),
     };
     sess.edit("add transition", |s| {
         s.doc.transitions.push(t);
@@ -328,6 +330,7 @@ fn add_arc(sess: &mut Session, a: &Value) -> Result<Value> {
         target: dst.to_string(),
         weight,
         inhibit: b(a, "inhibit").unwrap_or(false),
+        extra: Default::default(),
     };
     sess.edit("add arc", |s| {
         s.doc.arcs.push(arc);
