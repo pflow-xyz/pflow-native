@@ -491,6 +491,77 @@ fn draw(app: &mut App, painter: &egui::Painter, rect: Rect, dark: bool, hover: O
         }
     }
 
+    // Analysis highlight (a siphon, an invariant, a trace step).
+    if let Some(h) = &s.highlight {
+        let amber = Color32::from_rgb(245, 158, 11);
+        for id in &h.nodes {
+            let Some(c) = pos(id) else { continue };
+            match s.doc.kind_of(id) {
+                Some(NodeKind::Place) => {
+                    painter.circle_stroke(
+                        c,
+                        (PLACE_R as f32 + 6.0) * z,
+                        Stroke::new(4.0, amber.gamma_multiply(0.85)),
+                    );
+                }
+                _ => {
+                    let r = Rect::from_center_size(
+                        c,
+                        Vec2::new(TRANSITION_W as f32 + 12.0, TRANSITION_H as f32 + 12.0) * z,
+                    );
+                    painter.rect_stroke(
+                        r,
+                        4.0 * z,
+                        Stroke::new(4.0, amber.gamma_multiply(0.85)),
+                        StrokeKind::Middle,
+                    );
+                }
+            }
+            if let Some(w) = h.weights.get(id) {
+                let badge = c + Vec2::new(PLACE_R as f32 * z, PLACE_R as f32 * z);
+                let txt = if w.fract() == 0.0 {
+                    format!("{}", *w as i64)
+                } else {
+                    format!("{w:.3}")
+                };
+                let r = painter.text(
+                    badge,
+                    Align2::CENTER_CENTER,
+                    &txt,
+                    font.clone(),
+                    Color32::BLACK,
+                );
+                painter.rect_filled(r.expand(3.0), 6.0, amber);
+                painter.text(
+                    badge,
+                    Align2::CENTER_CENTER,
+                    txt,
+                    font.clone(),
+                    Color32::BLACK,
+                );
+            }
+        }
+        if !h.label.is_empty() {
+            let at = rect.left_top() + Vec2::new(10.0, 10.0);
+            let txt = format!("◉ {}   (View → Clear Highlight)", h.label);
+            let r = painter.text(
+                at,
+                Align2::LEFT_TOP,
+                &txt,
+                FontId::proportional(13.0),
+                Color32::BLACK,
+            );
+            painter.rect_filled(r.expand(5.0), 5.0, amber);
+            painter.text(
+                at,
+                Align2::LEFT_TOP,
+                txt,
+                FontId::proportional(13.0),
+                Color32::BLACK,
+            );
+        }
+    }
+
     // Box select rubber band.
     if let (Some(a), Some(h)) = (app.canvas.box_from, hover) {
         let r = Rect::from_two_pos(xf.to_screen(a.x as f64, a.y as f64), h);

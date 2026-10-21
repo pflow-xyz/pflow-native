@@ -17,7 +17,19 @@ pub struct ViewState {
     pub hidden: BTreeSet<String>,
     pub phase_x: usize,
     pub phase_y: usize,
+    /// Graph view: node positions (world) from the layered layout, pan, zoom.
+    graph: Option<Vec<Pos2>>,
+    pan: Vec2,
+    zoom: f32,
+    /// Trace view: current step and autoplay.
+    pub step: usize,
+    playing: bool,
+    last_tick: f64,
+    pub set: Option<usize>,
 }
+
+/// A command a view asks the app to run (views never change the session).
+pub type Action = Option<(&'static str, Value)>;
 
 /// A JSON number: integers as integers, the rest through [`fmt`].
 pub fn fmt_json(n: &serde_json::Number) -> String {
@@ -704,4 +716,625 @@ fn json_tree(ui: &mut egui::Ui, key: Option<&str>, v: &Value, depth: usize) {
             ui.monospace(format!("{}{}", label(key), other));
         }
     }
+}
+
+// ---------------------------------------------------------------- sets
+
+pub fn sets(
+    ui: &mut egui::Ui,
+    st: &mut ViewState,
+    id: &str,
+    sets: &[pflow_native_core::artifact::NodeSet],
+) -> Action {
+    let mut act = None;
+    ui.horizontal(|ui| {
+        ui.weak("Click a set to highlight it on the net.");
+        if ui.small_button("clear highlight").clicked() {
+            st.set = None;
+            act = Some(("view.clear_highlight", Value::Null));
+        }
+    });
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            for (i, set) in sets.iter().enumerate() {
+                let sel = st.set == Some(i);
+                let r = ui.selectable_label(sel, egui::RichText::new(&set.label).strong());
+                if r.clicked() {
+                    st.set = Some(i);
+                    act = Some((
+                        "artifact.show_set",
+                        serde_json::json!({ "id": id, "index": i }),
+                    ));
+                }
+                ui.horizontal_wrapped(|ui| {
+                    ui.add_space(12.0);
+                    for n in &set.nodes {
+                        match set.weights.get(n) {
+                            Some(w) if *w != 1.0 => ui.monospace(format!("{}·{n}", fmt(*w))),
+                            _ => ui.monospace(n),
+                        };
+                    }
+                    if !set.note.is_empty() {
+                        ui.weak(&set.note);
+                    }
+                });
+            }
+        });
+    act
+}
+
+// ---------------------------------------------------------------- trace
+
+pub fn trace(
+    ui: &mut egui::Ui,
+    st: &mut ViewState,
+    id: &str,
+    steps: &[pflow_native_core::artifact::TraceStep],
+) -> Action {
+    let mut act = None;
+    if steps.is_empty() {
+        ui.label("Empty trace.");
+        return None;
+    }
+    let last = steps.len() - 1;
+    st.step = st.step.min(last);
+    let go = |st: &mut ViewState, k: usize| {
+        st.step = k.min(last);
+        Some(("sim.goto", serde_json::json!({ "id": id, "step": st.step })))
+    };
+    ui.horizontal(|ui| {
+        if ui.button("⏮").on_hover_text("first").clicked() {
+            act = go(st, 0);
+        }
+        if ui.button("◀").on_hover_text("previous").clicked() {
+            act = go(st, st.step.saturating_sub(1));
+        }
+        let label = if st.playing { "⏸ pause" } else { "▶ play" };
+        if ui.button(label).clicked() {
+            st.playing = !st.playing;
+            if st.playing && st.step == last {
+                act = go(st, 0);
+            }
+        }
+        if ui.button("▶|").on_hover_text("next").clicked() {
+            act = go(st, st.step + 1);
+        }
+        if ui.button("⏭").on_hover_text("last").clicked() {
+            act = go(st, last);
+        }
+        ui.label(format!("step {} / {}", st.step, last));
+    });
+    if st.playing {
+        let now = ui.input(|i| i.time);
+        if now - st.last_tick > 0.7 {
+            st.last_tick = now;
+            if st.step >= last {
+                st.playing = false;
+            } else {
+                act = go(st, st.step + 1);
+            }
+        }
+        ui.ctx()
+            .request_repaint_after(std::time::Duration::from_millis(100));
+    }
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            egui::Grid::new("trace").striped(true).show(ui, |ui| {
+                ui.strong("#");
+                ui.strong("fired");
+                ui.strong("marking after");
+                ui.end_row();
+                for (i, s) in steps.iter().enumerate() {
+                    let sel = i == st.step;
+                    if ui.selectable_label(sel, i.to_string()).clicked() {
+                        act = go(st, i);
+                    }
+                    ui.monospace(if s.transition.is_empty() {
+                        "(start)"
+                    } else {
+                        &s.transition
+                    });
+                    let mk: Vec<String> = s
+                        .marking
+                        .iter()
+                        .filter(|(_, v)| v.iter().any(|x| *x != 0))
+                        .map(|(p, v)| {
+                            if v.len() == 1 {
+                                format!("{p}={}", v[0])
+                            } else {
+                                format!("{p}={v:?}")
+                            }
+                        })
+                        .collect();
+                    ui.label(mk.join("  "));
+                    ui.end_row();
+                }
+            });
+        });
+    act
+}
+
+// ---------------------------------------------------------------- bars
+
+pub fn bars(ui: &mut egui::Ui, value_label: &str, bars: &[pflow_native_core::artifact::Bar]) {
+    let (fg, grid) = colors(ui);
+    let n = bars.len().max(1);
+    let row_h = 22.0_f32;
+    let height = (n as f32 * row_h + 40.0).max(ui.available_height());
+    egui::ScrollArea::vertical()
+        .auto_shrink([false, false])
+        .show(ui, |ui| {
+            let (resp, painter) =
+                ui.allocate_painter(Vec2::new(ui.available_width(), height), Sense::hover());
+            let full = resp.rect;
+            let name_w = 150.0;
+            let plot = Rect::from_min_max(
+                full.min + Vec2::new(name_w, 6.0),
+                full.max - Vec2::new(70.0, 24.0),
+            );
+            let vals = bars
+                .iter()
+                .flat_map(|b| [Some(b.value), b.lo, b.hi])
+                .flatten();
+            let has_range = bars.iter().any(|b| b.lo.is_some() || b.hi.is_some());
+            let (mut lo, mut hi) = range(vals);
+            if !has_range {
+                lo = lo.min(0.0);
+                hi = hi.max(0.0);
+            }
+            let ax = Axes {
+                plot,
+                x: (lo, hi),
+                y: (0.0, 1.0),
+            };
+            let small = FontId::proportional(11.0);
+            for i in 0..=4 {
+                let xv = lo + (hi - lo) * i as f64 / 4.0;
+                let x = ax.sx(xv);
+                painter.line_segment(
+                    [Pos2::new(x, plot.top()), Pos2::new(x, plot.bottom())],
+                    Stroke::new(1.0, grid),
+                );
+                painter.text(
+                    Pos2::new(x, plot.bottom() + 3.0),
+                    Align2::CENTER_TOP,
+                    fmt(xv),
+                    small.clone(),
+                    fg,
+                );
+            }
+            painter.text(
+                Pos2::new(plot.center().x, plot.bottom() + 15.0),
+                Align2::CENTER_TOP,
+                value_label,
+                small.clone(),
+                fg,
+            );
+            for (i, b) in bars.iter().enumerate() {
+                let y = plot.top() + i as f32 * row_h + row_h / 2.0;
+                painter.text(
+                    Pos2::new(plot.left() - 8.0, y),
+                    Align2::RIGHT_CENTER,
+                    &b.name,
+                    small.clone(),
+                    fg,
+                );
+                if has_range {
+                    let base = ax.sx(b.value);
+                    if let Some(l) = b.lo {
+                        let r = Rect::from_x_y_ranges(
+                            ax.sx(l).min(base)..=ax.sx(l).max(base),
+                            (y - 7.0)..=(y + 7.0),
+                        );
+                        painter.rect_filled(r, 2.0, palette(0));
+                    }
+                    if let Some(h) = b.hi {
+                        let r = Rect::from_x_y_ranges(
+                            ax.sx(h).min(base)..=ax.sx(h).max(base),
+                            (y - 7.0)..=(y + 7.0),
+                        );
+                        painter.rect_filled(r, 2.0, palette(1));
+                    }
+                    painter.line_segment(
+                        [Pos2::new(base, y - 9.0), Pos2::new(base, y + 9.0)],
+                        Stroke::new(1.5, fg),
+                    );
+                    let text = format!(
+                        "{} … {}",
+                        b.lo.map(fmt).unwrap_or_default(),
+                        b.hi.map(fmt).unwrap_or_default()
+                    );
+                    painter.text(
+                        Pos2::new(plot.right() + 6.0, y),
+                        Align2::LEFT_CENTER,
+                        text,
+                        small.clone(),
+                        fg,
+                    );
+                } else {
+                    let x0 = ax.sx(0.0);
+                    let x1 = ax.sx(b.value);
+                    let r = Rect::from_x_y_ranges(x0.min(x1)..=x0.max(x1), (y - 7.0)..=(y + 7.0));
+                    painter.rect_filled(r, 2.0, palette(0));
+                    painter.text(
+                        Pos2::new(plot.right() + 6.0, y),
+                        Align2::LEFT_CENTER,
+                        fmt(b.value),
+                        small.clone(),
+                        fg,
+                    );
+                }
+            }
+        });
+}
+
+// ---------------------------------------------------------------- drawing
+
+fn css(c: &str) -> Option<Color32> {
+    let h = c.trim().strip_prefix('#')?;
+    let v = u32::from_str_radix(h, 16).ok()?;
+    match h.len() {
+        6 => Some(Color32::from_rgb((v >> 16) as u8, (v >> 8) as u8, v as u8)),
+        3 => {
+            let (r, g, b) = ((v >> 8) & 15, (v >> 4) & 15, v & 15);
+            Some(Color32::from_rgb(
+                (r * 17) as u8,
+                (g * 17) as u8,
+                (b * 17) as u8,
+            ))
+        }
+        _ => None,
+    }
+    .or(match c {
+        "black" => Some(Color32::BLACK),
+        "white" => Some(Color32::WHITE),
+        _ => None,
+    })
+}
+
+pub fn drawing(
+    ui: &mut egui::Ui,
+    width: f64,
+    height: f64,
+    shapes: &[pflow_native_core::artifact::DrawShape],
+) {
+    use pflow_native_core::artifact::DrawShape as D;
+    let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::hover());
+    let r = resp.rect.shrink(6.0);
+    // Drawings are authored on white; keep that so their colors read.
+    let k = (r.width() as f64 / width.max(1.0)).min(r.height() as f64 / height.max(1.0)) as f32;
+    let origin = r.center() - Vec2::new(width as f32 * k, height as f32 * k) / 2.0;
+    let page = Rect::from_min_size(origin, Vec2::new(width as f32 * k, height as f32 * k));
+    painter.rect_filled(page, 4.0, Color32::WHITE);
+    let p = |x: f64, y: f64| origin + Vec2::new(x as f32 * k, y as f32 * k);
+    let ink = |c: &str| css(c).unwrap_or(Color32::from_gray(60));
+    for sh in shapes {
+        match sh {
+            D::Line {
+                points,
+                color,
+                width,
+                dashed,
+            } => {
+                let pts: Vec<Pos2> = points.iter().map(|&(x, y)| p(x, y)).collect();
+                let stroke = Stroke::new((*width as f32 * k).max(0.6), ink(color));
+                if *dashed {
+                    painter.extend(Shape::dashed_line(&pts, stroke, 6.0 * k, 4.0 * k));
+                } else {
+                    painter.add(Shape::line(pts, stroke));
+                }
+            }
+            D::Rect {
+                x,
+                y,
+                w,
+                h,
+                fill,
+                stroke,
+                radius,
+            } => {
+                let rr = Rect::from_min_size(p(*x, *y), Vec2::new(*w as f32 * k, *h as f32 * k));
+                let fill = fill
+                    .as_deref()
+                    .and_then(css)
+                    .unwrap_or(Color32::TRANSPARENT);
+                let st = stroke
+                    .as_deref()
+                    .and_then(css)
+                    .map(|c| Stroke::new(1.0, c))
+                    .unwrap_or(Stroke::NONE);
+                painter.rect(rr, *radius as f32 * k, fill, st, StrokeKind::Middle);
+            }
+            D::Circle {
+                x,
+                y,
+                r: rad,
+                fill,
+                stroke,
+            } => {
+                let fill = fill
+                    .as_deref()
+                    .and_then(css)
+                    .unwrap_or(Color32::TRANSPARENT);
+                let st = stroke
+                    .as_deref()
+                    .and_then(css)
+                    .map(|c| Stroke::new(1.0, c))
+                    .unwrap_or(Stroke::NONE);
+                painter.circle(p(*x, *y), *rad as f32 * k, fill, st);
+            }
+            D::Text {
+                x,
+                y,
+                text,
+                size,
+                anchor,
+                color,
+            } => {
+                // SVG text sits on its baseline; egui anchors boxes.
+                let align = match anchor.as_str() {
+                    "start" => Align2::LEFT_BOTTOM,
+                    "end" => Align2::RIGHT_BOTTOM,
+                    _ => Align2::CENTER_BOTTOM,
+                };
+                let fs = (*size as f32 * k).max(6.0);
+                painter.text(
+                    p(*x, *y) + Vec2::new(0.0, fs * 0.25),
+                    align,
+                    text,
+                    FontId::proportional(fs),
+                    ink(color),
+                );
+            }
+        }
+    }
+}
+
+// ---------------------------------------------------------------- graph
+
+/// Layered layout (levels left to right): BFS depth from the initial node (data.initial, else the
+/// first), unreached nodes on a final layer, two barycenter passes.
+fn layer_graph(
+    nodes: &[pflow_native_core::artifact::GraphNode],
+    edges: &[pflow_native_core::artifact::GraphEdge],
+) -> Vec<Pos2> {
+    use std::collections::{HashMap, VecDeque};
+    let idx: HashMap<&str, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.id.as_str(), i))
+        .collect();
+    let mut out: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+    let mut inn: Vec<Vec<usize>> = vec![vec![]; nodes.len()];
+    for e in edges {
+        if let (Some(&a), Some(&b)) = (idx.get(e.source.as_str()), idx.get(e.target.as_str())) {
+            out[a].push(b);
+            inn[b].push(a);
+        }
+    }
+    let start = nodes
+        .iter()
+        .position(|n| n.data.get("initial").and_then(Value::as_bool) == Some(true))
+        .unwrap_or(0);
+    let mut depth = vec![usize::MAX; nodes.len()];
+    let mut q = VecDeque::new();
+    if !nodes.is_empty() {
+        depth[start] = 0;
+        q.push_back(start);
+    }
+    while let Some(u) = q.pop_front() {
+        for &v in &out[u] {
+            if depth[v] == usize::MAX {
+                depth[v] = depth[u] + 1;
+                q.push_back(v);
+            }
+        }
+    }
+    let maxd = depth
+        .iter()
+        .filter(|d| **d != usize::MAX)
+        .max()
+        .copied()
+        .unwrap_or(0);
+    for d in depth.iter_mut() {
+        if *d == usize::MAX {
+            *d = maxd + 1;
+        }
+    }
+    let nl = depth.iter().max().map_or(0, |m| m + 1);
+    let mut layers: Vec<Vec<usize>> = vec![vec![]; nl];
+    for (i, &d) in depth.iter().enumerate() {
+        layers[d].push(i);
+    }
+    let mut order = vec![0.0_f32; nodes.len()];
+    for l in &layers {
+        for (k, &i) in l.iter().enumerate() {
+            order[i] = k as f32;
+        }
+    }
+    for _ in 0..2 {
+        for l in layers.iter_mut().skip(1) {
+            let bc = |i: usize| {
+                let ps: Vec<f32> = inn[i].iter().map(|&p| order[p]).collect();
+                if ps.is_empty() {
+                    order[i]
+                } else {
+                    ps.iter().sum::<f32>() / ps.len() as f32
+                }
+            };
+            l.sort_by(|&a, &b| bc(a).total_cmp(&bc(b)));
+            for (k, &i) in l.iter().enumerate() {
+                order[i] = k as f32;
+            }
+        }
+    }
+    let mut pos = vec![Pos2::ZERO; nodes.len()];
+    for (d, l) in layers.iter().enumerate() {
+        let w = l.len() as f32;
+        for (k, &i) in l.iter().enumerate() {
+            // Levels run left to right: the results panel is wide and short.
+            pos[i] = Pos2::new(d as f32 * 190.0, (k as f32 - (w - 1.0) / 2.0) * 44.0);
+        }
+    }
+    pos
+}
+
+pub fn graph(
+    ui: &mut egui::Ui,
+    st: &mut ViewState,
+    id: &str,
+    nodes: &[pflow_native_core::artifact::GraphNode],
+    edges: &[pflow_native_core::artifact::GraphEdge],
+) -> Action {
+    let mut act = None;
+    if nodes.is_empty() {
+        ui.label("Empty graph.");
+        return None;
+    }
+    if st.graph.as_ref().is_none_or(|p| p.len() != nodes.len()) {
+        st.graph = Some(layer_graph(nodes, edges));
+        st.zoom = 0.0;
+    }
+    let pos = st.graph.clone().unwrap();
+    let (resp, painter) = ui.allocate_painter(ui.available_size(), Sense::click_and_drag());
+    let rect = resp.rect;
+    let (fg, _) = colors(ui);
+    let dark = ui.visuals().dark_mode;
+    if st.zoom == 0.0 {
+        // Fit.
+        let (x0, x1) = range(pos.iter().map(|p| p.x as f64));
+        let (y0, y1) = range(pos.iter().map(|p| p.y as f64));
+        let w = (x1 - x0) as f32 + 200.0;
+        let h = (y1 - y0) as f32 + 80.0;
+        st.zoom = (rect.width() / w).min(rect.height() / h).clamp(0.05, 1.5);
+        st.pan = -Vec2::new((x0 + x1) as f32 / 2.0, (y0 + y1) as f32 / 2.0);
+    }
+    if resp.dragged() {
+        st.pan += resp.drag_delta() / st.zoom;
+    }
+    if resp.hovered() {
+        let (scroll, zd) = ui.input(|i| (i.smooth_scroll_delta(), i.zoom_delta()));
+        if zd != 1.0 {
+            st.zoom = (st.zoom * zd).clamp(0.03, 4.0);
+        } else if scroll.y != 0.0 {
+            st.zoom = (st.zoom * (1.0 + scroll.y * 0.002)).clamp(0.03, 4.0);
+        }
+    }
+    let z = st.zoom;
+    let to = |p: Pos2| rect.center() + (p.to_vec2() + st.pan) * z;
+    let painter = painter.with_clip_rect(rect);
+    let small = FontId::proportional((11.0 * z).clamp(6.0, 14.0));
+    let idx: std::collections::HashMap<&str, usize> = nodes
+        .iter()
+        .enumerate()
+        .map(|(i, n)| (n.id.as_str(), i))
+        .collect();
+    let box_size = |n: &pflow_native_core::artifact::GraphNode| {
+        Vec2::new(
+            (n.label.chars().count() as f32 * 6.5 + 16.0).clamp(40.0, 160.0),
+            26.0,
+        ) * z
+    };
+    let edge_col = if dark {
+        Color32::from_gray(120)
+    } else {
+        Color32::from_gray(150)
+    };
+    for e in edges {
+        let (Some(&a), Some(&b)) = (idx.get(e.source.as_str()), idx.get(e.target.as_str())) else {
+            continue;
+        };
+        let (pa, pb) = (to(pos[a]), to(pos[b]));
+        if !rect.expand(200.0).contains(pa) && !rect.expand(200.0).contains(pb) {
+            continue;
+        }
+        if a == b {
+            painter.circle_stroke(
+                pa + Vec2::new(box_size(&nodes[a]).x / 2.0, -8.0 * z),
+                8.0 * z,
+                Stroke::new(1.0, edge_col),
+            );
+            continue;
+        }
+        let d = (pb - pa).normalized();
+        let tip = pb - d * 14.0 * z;
+        painter.line_segment([pa + d * 14.0 * z, tip], Stroke::new(1.0, edge_col));
+        let nrm = Vec2::new(-d.y, d.x) * 4.0 * z;
+        painter.add(Shape::convex_polygon(
+            vec![tip, tip - d * 8.0 * z + nrm, tip - d * 8.0 * z - nrm],
+            edge_col,
+            Stroke::NONE,
+        ));
+        if z > 0.5 && edges.len() < 600 {
+            painter.text(
+                pa.lerp(pb, 0.5),
+                Align2::CENTER_CENTER,
+                &e.label,
+                small.clone(),
+                fg.gamma_multiply(0.75),
+            );
+        }
+    }
+    let hover = resp.hover_pos();
+    let mut hovered = None;
+    for (i, n) in nodes.iter().enumerate() {
+        let c = to(pos[i]);
+        if !rect.expand(100.0).contains(c) {
+            continue;
+        }
+        let r = Rect::from_center_size(c, box_size(n));
+        let initial = n.data.get("initial").and_then(Value::as_bool) == Some(true);
+        let deadlock = n.data.get("deadlock").and_then(Value::as_bool) == Some(true);
+        let fill = if deadlock {
+            Color32::from_rgb(220, 70, 70)
+        } else if dark {
+            Color32::from_gray(45)
+        } else {
+            Color32::WHITE
+        };
+        let stroke = if initial {
+            Stroke::new(2.5, Color32::from_rgb(16, 185, 129))
+        } else {
+            Stroke::new(1.0, fg.gamma_multiply(0.6))
+        };
+        painter.rect(r, 5.0 * z, fill, stroke, StrokeKind::Middle);
+        if z > 0.25 {
+            painter.text(
+                c,
+                Align2::CENTER_CENTER,
+                &n.label,
+                small.clone(),
+                if deadlock { Color32::WHITE } else { fg },
+            );
+        }
+        if hover.is_some_and(|h| r.contains(h)) {
+            hovered = Some(i);
+        }
+    }
+    if let Some(i) = hovered {
+        let n = &nodes[i];
+        let mut text = format!("{}\n{}", n.id, n.label);
+        if !n.data.is_null() {
+            text.push_str(&format!("\n{}", n.data));
+        }
+        text.push_str("\nclick: load this state onto the net");
+        tooltip(&painter, ui, hover.unwrap(), rect, &text);
+        if resp.clicked() {
+            act = Some(("sim.goto", serde_json::json!({ "id": id, "node": n.id })));
+        }
+    }
+    painter.text(
+        rect.left_bottom() + Vec2::new(6.0, -4.0),
+        Align2::LEFT_BOTTOM,
+        format!(
+            "{} states, {} edges · drag to pan, scroll to zoom",
+            nodes.len(),
+            edges.len()
+        ),
+        FontId::proportional(11.0),
+        fg.gamma_multiply(0.7),
+    );
+    act
 }

@@ -215,6 +215,29 @@ fn viewer(app: &mut App, ui: &mut egui::Ui, art: &Artifact) {
         (ArtifactData::Table { columns, rows }, _) => views::table(ui, columns, rows),
         (ArtifactData::Matrix { rows, cols, values }, _) => views::matrix(ui, rows, cols, values),
         (ArtifactData::Report(v), _) => views::report(ui, v),
-        (other, _) => views::report(ui, &serde_json::to_value(other).unwrap_or(Value::Null)),
+        (ArtifactData::Sets { sets }, _) => {
+            if let Some((cmd, args)) = views::sets(ui, st, &art.id, sets) {
+                app.queue(cmd, args);
+            }
+        }
+        (ArtifactData::Trace { steps }, _) => {
+            if let Some((cmd, args)) = views::trace(ui, st, &art.id, steps) {
+                app.queue(cmd, args);
+            }
+        }
+        (ArtifactData::Graph { nodes, edges }, _) => {
+            if let Some((cmd, args)) = views::graph(ui, st, &art.id, nodes, edges) {
+                app.queue(cmd, args);
+            }
+        }
+        (ArtifactData::Bars { value_label, bars }, _) => views::bars(ui, value_label, bars),
+        (
+            ArtifactData::Drawing {
+                width,
+                height,
+                shapes,
+            },
+            _,
+        ) => views::drawing(ui, *width, *height, shapes),
     }
 }

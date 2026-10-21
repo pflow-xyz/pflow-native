@@ -52,11 +52,16 @@ pub const SET: &[CommandSpec] = &[
     CommandSpec {
         id: "sim.goto",
         label: "Go to Trace Step",
-        help: "Load the marking after step `step` of a trace artifact (0 = before the first firing when the trace \
-               starts with an initial marking) and highlight that step's transition. One undo step.",
+        help: "Load a marking onto the net: step `step` of a trace artifact (0 = the start when the trace begins \
+               with an initial marking; that step's transition is highlighted), or node `node` of a graph artifact \
+               whose nodes carry data.marking (a reachability graph). One undo step.",
         menu: "",
         shortcut: None,
-        args: &[arg("id", Str, "trace artifact id"), arg("step", Int, "step index")],
+        args: &[
+            arg("id", Str, "trace or graph artifact id"),
+            opt("step", Int, "trace step index"),
+            opt("node", Str, "graph node id (its data.marking is loaded)"),
+        ],
         enabled: always,
         run: goto,
         journal: true,
@@ -127,46 +132,76 @@ fn show_set(sess: &mut Session, a: &Value) -> Result<Value> {
 
 fn goto(sess: &mut Session, a: &Value) -> Result<Value> {
     let id = req(a, "id");
-    let step = n(a, "step").unwrap();
     let art = sess
         .artifact(id)
         .ok_or_else(|| Error::NotFound(format!("no artifact {id:?}")))?;
-    let ArtifactData::Trace { steps } = &art.data else {
-        return Err(Error::BadArgs(format!(
-            "artifact {id} is a {}, not a trace",
-            art.data.kind()
-        )));
-    };
-    if step < 0.0 || step as usize >= steps.len() {
-        return Err(Error::BadArgs(format!(
-            "step {step} out of range (0..{})",
-            steps.len()
-        )));
-    }
-    let st = steps[step as usize].clone();
+    let (label, transition, marking): (String, String, BTreeMap<String, Vec<i64>>) =
+        match (&art.data, n(a, "step"), s(a, "node")) {
+            (ArtifactData::Trace { steps }, Some(step), None) => {
+                if step < 0.0 || step as usize >= steps.len() {
+                    return Err(Error::BadArgs(format!(
+                        "step {step} out of range (0..{})",
+                        steps.len()
+                    )));
+                }
+                let st = &steps[step as usize];
+                (
+                    format!("step {step}: {}", st.transition),
+                    st.transition.clone(),
+                    st.marking.clone(),
+                )
+            }
+            (ArtifactData::Graph { nodes, .. }, None, Some(node)) => {
+                let gn = nodes
+                    .iter()
+                    .find(|g| g.id == node)
+                    .ok_or_else(|| Error::NotFound(format!("no node {node:?} in graph {id}")))?;
+                let mk: BTreeMap<String, Vec<i64>> =
+                    serde_json::from_value(gn.data["marking"].clone()).map_err(|_| {
+                        Error::BadArgs(format!("graph node {node} carries no data.marking"))
+                    })?;
+                (format!("state {node}: {}", gn.label), String::new(), mk)
+            }
+            (ArtifactData::Trace { .. }, _, _) => {
+                return Err(Error::BadArgs(
+                    "a trace needs `step` (and no `node`)".into(),
+                ))
+            }
+            (ArtifactData::Graph { .. }, _, _) => {
+                return Err(Error::BadArgs(
+                    "a graph needs `node` (and no `step`)".into(),
+                ))
+            }
+            (other, _, _) => {
+                return Err(Error::BadArgs(format!(
+                    "artifact {id} is a {}, not a trace or graph",
+                    other.kind()
+                )))
+            }
+        };
     let n_colors = sess.doc.colors();
     let mut mk = sess.marking.clone();
-    for (place, v) in &st.marking {
+    for (place, v) in &marking {
         if sess.doc.place(place).is_none() {
             return Err(Error::Invalid(format!(
-                "trace names place {place:?}, not in this net (was it edited?)"
+                "{label} names place {place:?}, not in this net (was it edited?)"
             )));
         }
         let mut v = v.clone();
         v.resize(n_colors, 0);
         mk.insert(place.clone(), v);
     }
-    sess.set_marking(mk, &format!("trace step {step}"));
-    let nodes = if sess.doc.transition(&st.transition).is_some() {
-        vec![st.transition.clone()]
+    sess.set_marking(mk, &label);
+    let nodes = if sess.doc.transition(&transition).is_some() {
+        vec![transition.clone()]
     } else {
         vec![]
     };
     sess.highlight = Some(Highlight {
-        label: format!("step {step}: {}", st.transition),
+        label: label.clone(),
         nodes,
         arcs: vec![],
         weights: BTreeMap::new(),
     });
-    Ok(json!({ "step": step, "transition": st.transition, "marking": sess.marking }))
+    Ok(json!({ "loaded": label, "transition": transition, "marking": sess.marking }))
 }
