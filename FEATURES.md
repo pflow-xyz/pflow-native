@@ -117,12 +117,12 @@ How to read it:
 | crosscheck | SSA vs ODE vs conservation | `sim.crosscheck {t_end, runs, seed, points}` | pflow-solver ssa + ODE; Farkas P-invariants in core | TimeSeries overlay (ssa/ode), Report | 3 ✅ (no move-ranking check) |
 | dataset | synthetic event log | `data.generate {cases, seed}` | pflow-solver ssa + pflow-eventlog | Table, CSV export | 5 |
 | run_pipeline | bound models, loop fixed point | `compose.run_pipeline` | port | TimeSeries per model, Graph | 6 |
-| diagnose | resource/rate influence, knee, lumpability | `analysis.diagnose` | pflow-results sensitivity + port | Tornado (bars), curve, Report | 4 |
+| diagnose | resource/rate influence, knee, lumpability | `analysis.diagnose {observable, t_end, delta, noise, seed}` | pflow-solver ODE (sweep Runner) + portable SSA noise floor | Tornado (bars), Report | 4 🟡 (influence of every rate at ×(1 ± delta) and of +1 token per place on one observable, read on the ODE; sim's 3-seed SSA noise floor, `inert`, dormant-sources / something-binds findings. No knob kinds, outcome scoring, relief rounds, knee, classes or lumpability) |
 | invariants | P/T invariants, siphons/traps, deadlock witnesses | `analysis.invariants`, `analysis.siphons` | pflow-reachability (+ **port** siphons/traps) | Matrix, canvas overlay | 4 |
 | — (incidence) | incidence matrix | `analysis.incidence` | pflow-zk IncidenceMatrix / metamodel | Matrix | 4 |
-| verify | deadlock-free, bounded, live, reachable, invariant, mutex | `analysis.verify {properties}` | pflow-verify | Report + counterexample Trace | 4 |
-| reach | reachability with firing trace | `analysis.reach {from,to}` | pflow-reachability | Trace (replay on canvas) | 4 |
-| — (graph) | full reachability / coverability graph | `analysis.reachability_graph` | pflow-reachability | Graph view | 4 |
+| verify | deadlock-free, bounded, live, reachable, invariant, mutex | `analysis.verify {properties, max_states, from_current}` | pflow-verify; bounded k in core | Report + counterexample Trace | 4 ✅ (every go-pflow kind in sim's JSON, plus `bounded` with `bound` k; document place ids sum their colors; each replayable counterexample stored as a trace) |
+| reach | reachability with firing trace | `analysis.reach {to, from, from_current, max_states}` | core search on the metamodel firing rule; P-invariant certificates (exact elimination + Farkas) | Trace (replay on canvas), Report | 4 ✅ (yes = shortest trace; no = separating P-invariant or exhaustive; unknown = state budget / token cap. No systems, guards, stored answers or independent checker) |
+| — (graph) | full reachability / coverability graph | `analysis.reachability {max_states ≤ 20000, from_current}` | core BFS on the metamodel firing rule + Karp–Miller ω | Graph view, Report | 4 ✅ (ω only through monotone pumps, as pflow-reachability's witness; deadlocks by its rule) |
 | check_witness | re-check witnesses and derivations | `analysis.check_witness` | port (morphism) / remote | Report | 7 |
 | canonical, classify, refine, propose_types | automorphisms, orbits, parameter classes | `analysis.canonical`, `analysis.classify`, `net.refine` | **port** (orbits.go, classify.go) | canvas orbit coloring | 4 |
 | prove | isomorphic / subnet / refines / preserves invariant | `analysis.prove` | **port** (pkg/morphism) / remote | side-by-side nets + mapping | 7 |
@@ -150,9 +150,9 @@ How to read it:
 | Heatmap | param_heatmap | CSV, JSON, SVG | 3 | 🟡 artifact + CSV/JSON (`opt.heatmap`) | ✅ view with color bar + hover; CSV/JSON/SVG 
 | Scatter / Pareto | optimize | CSV, JSON | 3 | 🟡 artifact + CSV/JSON (`opt.optimize`) | ✅ view with Pareto front + hover; CSV/JSON/SVG 
 | Matrix table (incidence, P/T invariants) | analysis | CSV, JSON | 4 | | 🟡 view ready (phase 4 produces the data) 
-| Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | |
-| Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | |
-| Tornado / ranked bars | diagnose, evaluate | CSV | 4 | |
+| Reachability / coverability graph | analysis | JSON, DOT, SVG | 4 | 🟡 graph artifact (`analysis.reachability`: node label = marking, data = marking per color, ω as -1, initial/terminal/deadlock); JSON/DOT export |
+| Trace / timeline (replayable on canvas) | reach, verify, replay, token game history | JSON, CSV | 4 | 🟡 trace artifacts from `analysis.reach` and `analysis.verify` counterexamples (step 0 = start marking), replayed by `sim.goto` |
+| Tornado / ranked bars | diagnose, evaluate | CSV | 4 | 🟡 bars artifact from `analysis.diagnose` (value = baseline, lo/hi = outcomes) |
 | Table (conformance, calibrate, dataset) | data | CSV | 5 | | ✅ generic table view (scenario/compare/evaluate tables today) 
 | System / pipeline / knowledge graph | compose, store | JSON, SVG | 6–7 | |
 | Side-by-side mapping | prove, diff | SVG | 6–7 | |
