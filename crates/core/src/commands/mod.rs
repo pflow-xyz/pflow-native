@@ -20,6 +20,7 @@ pub mod opt;
 pub mod overlay;
 pub mod settings;
 pub mod sim;
+pub mod statespace;
 pub mod stochastic;
 pub mod view;
 
@@ -34,6 +35,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     sim::SET,
     opt::SET,
     stochastic::SET,
+    statespace::SET,
     view::SET,
     diagram::SET,
     overlay::SET,
