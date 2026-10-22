@@ -103,6 +103,7 @@ fn build_args(spec: &CommandSpec, fields: &[String]) -> Result<Value, String> {
 
 pub fn ui(app: &mut App, ctx: &egui::Context) {
     confirm_send(app, ctx);
+    #[cfg(feature = "services")]
     accounts(app, ctx);
     args_dialog(app, ctx);
     palette(app, ctx);
@@ -353,6 +354,7 @@ fn confirm_send(app: &mut App, ctx: &egui::Context) {
     }
 }
 
+#[cfg(feature = "services")]
 /// Sign-in to sim.pflow.xyz and pflow.xyz (`auth.*`). The status is re-read
 /// every second while a sign-in is waiting on the browser.
 fn accounts(app: &mut App, ctx: &egui::Context) {

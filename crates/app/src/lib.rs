@@ -835,6 +835,7 @@ mod control_policy_tests {
 
     /// A remote send that arrives over the control port is not sent: it is
     /// previewed and waits for the user's Send in the app.
+    #[cfg(feature = "services")]
     #[test]
     fn port_sends_wait_for_the_user() {
         let mut a = app();
@@ -853,6 +854,7 @@ mod control_policy_tests {
         assert_eq!(args["send"], true, "Send re-runs with the caller's args");
     }
 
+    #[cfg(feature = "services")]
     #[test]
     fn port_batches_cannot_carry_remote_sends() {
         let mut a = app();
@@ -872,8 +874,12 @@ mod control_policy_tests {
             &json!({"id": 3, "command": "net.add_place", "args": {"x": 5, "y": 5}}),
         );
         assert_eq!(r["ok"], true, "{r}");
-        let r = a.handle_control(&json!({"id": 4, "command": "remote.pflow.share", "args": {}}));
-        assert_eq!(r["ok"], true, "pure commands are unaffected: {r}");
+        #[cfg(feature = "services")]
+        {
+            let r =
+                a.handle_control(&json!({"id": 4, "command": "remote.pflow.share", "args": {}}));
+            assert_eq!(r["ok"], true, "pure commands are unaffected: {r}");
+        }
         assert!(a.dialogs.confirm_send.is_none());
     }
 }

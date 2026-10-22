@@ -15,6 +15,10 @@ pflow-native-core = { workspace = true, features = ["http"] }
 serde_json.workspace = true
 
 [features]
+default = ["services"]
+# pflow.xyz, sim.pflow.xyz and GitHub (remote.*, auth.*, login). Build with
+# --no-default-features for a CLI that never contacts them.
+services = ["pflow-native-core/services"]
 # Groth16 firing proofs (zk.*). Opt-in: the upstream circuit does not yet
 # prove enabledness (FEATURES.md §D 9). `cargo build --features zk`.
 zk = ["pflow-native-core/zk"]

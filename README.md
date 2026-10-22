@@ -18,6 +18,12 @@ cargo run -p pflow-native -- --example sir --cmd 'sim.ode {"t_end":15}' \
 make test && make lint && make wasm-check
 ```
 
+**Offline build.** `make build-offline` builds the app and CLI without the `services` feature (`--no-default-features`). That build never contacts pflow.xyz, sim.pflow.xyz or GitHub:
+- Gone: the Remote and Share menus, Accounts, `remote.*`, `auth.*`, `remote.credentials`, `file.open_cid` and `file.permalink`.
+- Still there: everything local (editing, simulation, analysis, the store, provenance), plus `file.open_url` for a URL you give it.
+
+`make test-offline` runs the tests for that build.
+
 ## Using the editor
 
 | Key | Tool / action |

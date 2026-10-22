@@ -25,6 +25,10 @@ wasm-bindgen-futures = "0.4"
 web-sys = { version = "0.3", features = ["Window", "Document", "HtmlCanvasElement"] }
 
 [features]
+default = ["services"]
+# pflow.xyz, sim.pflow.xyz and GitHub (Remote and Share menus, Accounts).
+# Build with --no-default-features for an app that never contacts them.
+services = ["pflow-native-core/services"]
 # Groth16 firing proofs (zk.*), native only. Opt-in: the upstream circuit
 # does not yet prove enabledness (FEATURES.md §D 9).
 zk = ["pflow-native-core/zk"]

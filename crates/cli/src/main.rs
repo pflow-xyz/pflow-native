@@ -28,7 +28,7 @@ USAGE:
                                                      else runs headless. -i alone implies headless; with
                                                      --attach it opens NET in the app.
 
-  pflow-native-cli login sim|pflow [--no-browser]   sign in: sim.pflow.xyz (browser, Google) or pflow.xyz
+  pflow-native-cli login sim|pflow [--no-browser]   (services builds) sign in: sim.pflow.xyz (browser, Google) or pflow.xyz
                                                      (GitHub: enter the printed code); waits until done
   pflow-native-cli logout sim|pflow                  forget that sign-in (auth.logout)
   pflow-native-cli accounts                          what you are signed in to (auth.status)
@@ -133,9 +133,18 @@ fn main() -> ExitCode {
                 be.exec("file.save", args)
             });
         }
+        #[cfg(feature = "services")]
         "login" => return login(&mut sess, args.first().map(String::as_str), no_browser),
+        #[cfg(feature = "services")]
         "logout" => sess.execute("auth.logout", json!({ "service": args.first() })),
+        #[cfg(feature = "services")]
         "accounts" => sess.execute("auth.status", Value::Null),
+        #[cfg(not(feature = "services"))]
+        "login" | "logout" | "accounts" => {
+            let _ = no_browser;
+            eprintln!("error: this build has no web services (built without feature \"services\")");
+            return ExitCode::FAILURE;
+        }
         "-h" | "--help" | "help" => {
             print!("{USAGE}");
             return ExitCode::SUCCESS;
@@ -195,6 +204,7 @@ fn take_switch(args: &mut Vec<String>, flag: &str) -> bool {
     }
 }
 
+#[cfg(feature = "services")]
 /// `login SERVICE`: starts the sign-in, says on stderr what to do in the
 /// browser, and waits for it.
 fn login(sess: &mut Session, service: Option<&str>, no_browser: bool) -> ExitCode {

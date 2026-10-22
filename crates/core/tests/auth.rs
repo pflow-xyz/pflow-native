@@ -3,7 +3,7 @@
 //! device flow. The tests play the browser themselves; nothing reaches a
 //! real host, and no token ever appears in a command's result.
 
-#![cfg(all(feature = "http", not(target_arch = "wasm32")))]
+#![cfg(all(feature = "services", feature = "http", not(target_arch = "wasm32")))]
 
 use std::collections::BTreeMap;
 use std::io::{BufRead, BufReader, Read, Write};

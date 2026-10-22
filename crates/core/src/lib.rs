@@ -9,6 +9,7 @@
 
 pub mod analysis;
 pub mod artifact;
+#[cfg(feature = "services")]
 pub mod auth;
 pub mod cid;
 pub mod commands;
@@ -26,6 +27,7 @@ pub mod provenance;
 pub mod registry;
 pub mod session;
 pub mod sim;
+#[cfg(feature = "services")]
 pub mod simclient;
 pub mod statespace;
 pub mod stochastic;

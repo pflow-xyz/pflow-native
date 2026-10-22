@@ -1,9 +1,11 @@
 //! Command sets by namespace. Each file exports `SET`; [`ALL`] is what the
-//! core registry is built from.
+//! core registry is built from. Sets that talk to pflow.xyz, sim.pflow.xyz
+//! or GitHub exist only with the `services` feature.
 
 use crate::registry::CommandSpec;
 
 pub mod analysis;
+#[cfg(feature = "services")]
 pub mod auth;
 pub mod cid;
 pub mod clipboard;
@@ -22,9 +24,11 @@ pub mod macros;
 pub mod models;
 pub mod net;
 pub mod opt;
+#[cfg(feature = "services")]
 pub mod outbound;
 pub mod overlay;
 pub mod provenance;
+#[cfg(feature = "services")]
 pub mod remote;
 pub mod settings;
 pub mod sim;
@@ -37,6 +41,8 @@ pub mod view;
 pub const ALL: &[&[CommandSpec]] = &[
     file::SET,
     fileio::SET,
+    #[cfg(feature = "services")]
+    fileio::SERVICE_SET,
     cid::SET,
     edit::SET,
     clipboard::SET,
@@ -58,8 +64,11 @@ pub const ALL: &[&[CommandSpec]] = &[
     models::SET,
     compose::SET,
     systems::SET,
+    #[cfg(feature = "services")]
     outbound::SET,
+    #[cfg(feature = "services")]
     auth::SET,
+    #[cfg(feature = "services")]
     remote::SET,
     store::SET,
     provenance::SET,

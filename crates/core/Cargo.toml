@@ -47,6 +47,13 @@ default = []
 # Network loading (file.open_url / file.open_cid). Native builds turn it on;
 # the wasm build leaves it off.
 http = ["dep:ureq"]
+# Everything that talks to the author's web services: pflow.xyz (save, list,
+# share, Gist, open by CID, permalinks), sim.pflow.xyz (MCP bridge) and the
+# sign-ins (auth.*). The app and CLI turn it on by default; build them with
+# --no-default-features (`make build-offline`) for an app that never
+# contacts those services. Fetching a URL the user gives (file.open_url)
+# only needs `http`.
+services = []
 # Groth16 proofs of firings (zk.*). Opt-in (the CLI's and app's `zk` features
 # forward here): the upstream circuit does not yet prove enabledness
 # (FEATURES.md §D 9). Without it the zk.* commands exist but refuse.

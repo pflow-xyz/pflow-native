@@ -112,9 +112,14 @@ Call list_commands first (optionally with a prefix like \"net.\" or \"analysis.\
 (a batch is one undo step and rolls back on the first failure). \
 The document is the pflow.xyz editor JSON; places/transitions are referenced by id. \
 Typical flow: net.add_place / net.add_transition / net.add_arc, then sim.enabled, sim.fire, sim.ode \
-(stores a time-series artifact; export.artifact {{format:\"csv\"|\"svg\"}}), file.save {{path}}. \
-Remote writes (remote.*) return a preview unless called with send: true; when attached to the app, a send waits for the user's confirmation there.",
-        ns.join(", ")
+(stores a time-series artifact; export.artifact {{format:\"csv\"|\"svg\"}}), file.save {{path}}.{}",
+        ns.join(", "),
+        if cfg!(feature = "services") {
+            " Remote writes (remote.*) return a preview unless called with send: true; \
+when attached to the app, a send waits for the user's confirmation there."
+        } else {
+            ""
+        }
     )
 }
 

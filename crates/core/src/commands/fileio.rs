@@ -1,15 +1,20 @@
 //! Loading from the network and sharing: pflow.xyz permalinks (`?data=`,
 //! `?cid=`), plain JSON URLs, and generating a `?data=` permalink. Fetching
 //! needs the `http` feature (native builds); without it these commands
-//! explain that instead of failing obscurely.
+//! explain that instead of failing obscurely. Opening by CID and making
+//! permalinks are pflow.xyz features ([`SERVICE_SET`], feature `services`);
+//! opening a URL the user gives works in any build.
 
 use serde_json::{json, Value};
 
 use crate::doc::Document;
-use crate::registry::{always, arg, opt, s, ArgType::*, CommandSpec};
+#[cfg(feature = "services")]
+use crate::registry::opt;
+use crate::registry::{always, arg, s, ArgType::*, CommandSpec};
 use crate::session::Session;
 use crate::{Error, Result};
 
+#[cfg(feature = "services")]
 pub const DEFAULT_SERVER: &str = "https://pflow.xyz";
 
 pub const SET: &[CommandSpec] = &[
@@ -24,13 +29,20 @@ pub const SET: &[CommandSpec] = &[
         run: open_url,
         journal: true,
     },
+];
+
+#[cfg(feature = "services")]
+pub const SERVICE_SET: &[CommandSpec] = &[
     CommandSpec {
         id: "file.open_cid",
         label: "Open CID",
         help: "Load a sealed net by CID from a pflow.xyz server (GET {server}/o/{cid}).",
         menu: "File",
         shortcut: None,
-        args: &[arg("cid", Str, "content id (z4EB…)"), opt("server", Str, "default https://pflow.xyz")],
+        args: &[
+            arg("cid", Str, "content id (z4EB…)"),
+            opt("server", Str, "default https://pflow.xyz"),
+        ],
         enabled: always,
         run: open_cid,
         journal: true,
@@ -157,6 +169,7 @@ fn open_url(sess: &mut Session, a: &Value) -> Result<Value> {
     load(sess, doc, url)
 }
 
+#[cfg(feature = "services")]
 fn open_cid(sess: &mut Session, a: &Value) -> Result<Value> {
     let cid = s(a, "cid").unwrap();
     if !cid.chars().all(|c| c.is_ascii_alphanumeric()) {
@@ -170,6 +183,7 @@ fn open_cid(sess: &mut Session, a: &Value) -> Result<Value> {
     load(sess, doc, &url)
 }
 
+#[cfg(feature = "services")]
 fn permalink(sess: &mut Session, a: &Value) -> Result<Value> {
     let server = s(a, "server")
         .unwrap_or(DEFAULT_SERVER)
@@ -182,6 +196,7 @@ fn permalink(sess: &mut Session, a: &Value) -> Result<Value> {
 mod tests {
     use super::*;
 
+    #[cfg(feature = "services")]
     #[test]
     fn data_permalink_round_trip() {
         let mut s = Session::default();

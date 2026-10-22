@@ -1,4 +1,4 @@
-.PHONY: build build-zk run test test-zk lint wasm-check web web-build screenshot mcp
+.PHONY: build build-zk build-offline run test test-zk test-offline lint wasm-check web web-build screenshot mcp
 
 build:
 	cargo build --release
@@ -13,6 +13,15 @@ lint:
 	cargo fmt --all --check
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo clippy --workspace --all-targets --features pflow-native-core/zk -- -D warnings
+	cargo clippy --workspace --all-targets --no-default-features -- -D warnings
+
+# Without pflow.xyz, sim.pflow.xyz or GitHub: no remote.*, auth.*, open by
+# CID or permalinks. Everything local, and opening a URL you give, remains.
+build-offline:
+	cargo build --release -p pflow-native -p pflow-native-cli --no-default-features
+
+test-offline:
+	cargo test --workspace --no-default-features
 
 # ZK firing proofs are opt-in (FEATURES.md §D 9).
 build-zk:

@@ -16,6 +16,7 @@ Native (egui/eframe; wasm later) Petri-net editor and simulator on pflow-rs.
 - **Data-producing commands store an `Artifact`** (`crates/core/src/artifact.rs`). Views render artifacts by kind, and `export.artifact` writes them out.
 - **Undo is whole-snapshot.** Use `Session::edit` for document edits. A batch, or a macro played as a batch, is one undo step.
 - **Queries and view commands set `journal: false`**, so they are not recorded into macros.
+- **Anything that talks to pflow.xyz, sim.pflow.xyz or GitHub sits behind the `services` feature.** That covers commands, modules and app UI. The app and CLI turn it on by default, and `make build-offline` turns it off.
 
 ## Build & test
 
@@ -23,6 +24,7 @@ Native (egui/eframe; wasm later) Petri-net editor and simulator on pflow-rs.
 make test        # cargo test --workspace (core unit + command tests, CLI MCP stdio test)
 make lint        # fmt --check + clippy -D warnings
 make wasm-check  # core + app for wasm32-unknown-unknown
+make test-offline  # the build without the `services` feature (no pflow.xyz / sim / GitHub)
 make screenshot  # regenerate docs/screenshot-sir.png
 ```
 

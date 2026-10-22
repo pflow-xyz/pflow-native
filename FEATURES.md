@@ -25,6 +25,8 @@ How to read it:
 | **6 Composition & systems** | Components, compose, extend, diff, bindings, systems, pipelines | Matches sim's composition family |
 | **7 Store, share, provenance** | Local CID store, pflow.xyz/sim bridges, publish, knowledge graph, receipts, ZK, LLM tools | Matches sim's store family; signed or proven results |
 
+Every row backed by `remote` (pflow.xyz, sim.pflow.xyz, GitHub), along with the sign-in, `file.open_cid` and `file.permalink`, exists only with the `services` cargo feature. The app and CLI turn it on by default, and `make build-offline` builds without it.
+
 ## A. pflow.xyz editor
 
 ### A1. Editing

@@ -5,6 +5,7 @@
 
 // Sending tests need the `http` feature (on in `cargo test --workspace`,
 // which unifies the CLI's and app's features); previews run without it.
+#![cfg(feature = "services")]
 #![cfg_attr(not(feature = "http"), allow(dead_code, unused_imports))]
 
 use std::io::{BufRead, BufReader, Read, Write};
