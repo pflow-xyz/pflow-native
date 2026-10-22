@@ -634,8 +634,7 @@ fn diagnose_ranks_recovery_above_infection_for_r() {
         knobs.iter().find(|k| k["name"] == "rate infect").unwrap()["inert"],
         true
     );
-    // Deterministic without noise.
-    // (to the solver's last bits: FEATURES.md §D 7).
+    // Deterministic without noise, to the bit.
     let a = run(
         &mut s,
         "analysis.diagnose",
@@ -657,7 +656,7 @@ fn diagnose_ranks_recovery_above_infection_for_r() {
             x["influence"].as_f64().unwrap(),
             y["influence"].as_f64().unwrap(),
         );
-        assert!((p - q).abs() < 1e-9, "{p} vs {q}");
+        assert_eq!(p, q);
     }
     assert_eq!(a["noise"], Value::Null);
 

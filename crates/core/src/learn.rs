@@ -474,11 +474,10 @@ pub fn remap_log(log: &EventLog, mapping: &ActivityMap) -> EventLog {
 /// or activity), the harsher `token_fitness`, ETC precision, and the five
 /// worst traces. It is the same gate-aware replay as `data.conformance`
 /// (`crate::conformance`), so read and inhibitor arcs count here too and the
-/// two commands agree. (pflow-mining's `check_conformance` at our pin treats
-/// an inhibitor as a consuming input and ignores read arcs. pflow-rs
-/// `a0a2eb1` fixes the gates, but still ignores capacity, reads weight-0
-/// arcs as 1 and maps activities by label only, so it does not replace this;
-/// see FEATURES.md §D 10.)
+/// two commands agree. (pflow-mining's `check_conformance` is gate-aware
+/// since pflow-rs `a0a2eb1`, pinned at `fcb38ac`, but it ignores capacity,
+/// reads weight-0 arcs as 1 and maps activities by label only, so it does
+/// not replace this; see FEATURES.md §D 10.)
 pub fn conformance(doc: &Document, log: &EventLog) -> Result<Value> {
     let c = crate::conformance::check(doc, log, None)?;
     let r = &c.report;

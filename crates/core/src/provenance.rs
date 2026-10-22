@@ -43,7 +43,7 @@ use crate::{Error, Result};
 
 /// The pflow-rs revision this build is pinned to (root `Cargo.toml`; a
 /// test keeps the two equal).
-pub const PFLOW_RS_REV: &str = "98bfd8355d96991a66ac3e1d9c107a797813fff6";
+pub const PFLOW_RS_REV: &str = "fcb38acd69f6325414e32ffc58416befa6e93e64";
 
 /// Where the receipt key lives, under the data directory.
 pub const KEY_FILE: &str = "keys/receipt-ed25519.json";
@@ -611,8 +611,10 @@ pub struct CertifiedRun {
 }
 
 /// How a result is digested: SSA results are byte-exact; ODE results are
-/// rounded first, since pflow-rs sums ODE derivatives in hash order and
-/// the last bits vary between runs (FEATURES.md §D 7).
+/// rounded first. Before pflow-rs fcb38ac the ODE summed derivatives in hash
+/// order, so the last bits varied between runs (FEATURES.md §D 7). It is
+/// bit-reproducible now, but the rule stays: receipts already issued name
+/// it, and other platforms' floating point can still differ in the last bits.
 pub const DIGEST_EXACT: &str = "sha256 over the canonical JSON of the result";
 pub const DIGEST_ODE: &str =
     "sha256 over the canonical JSON of the result, every number rounded to 9 significant digits (pflow-rs ODE sums are not bit-reproducible, FEATURES.md §D 7)";

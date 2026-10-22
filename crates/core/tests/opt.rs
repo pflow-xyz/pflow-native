@@ -367,7 +367,7 @@ fn optimize_is_seeded_and_flags_exactly_the_non_dominated() {
     for (a, b) in rows.iter().zip(rows2) {
         assert_eq!(a[1], b[1]);
         assert_eq!(a[2], b[2]);
-        assert!(close(f(&a[3]), f(&b[3])) || (f(&a[3]) - f(&b[3])).abs() < 1e-6);
+        assert_eq!(a[3], b[3]);
     }
     let other = run(&mut s, "opt.optimize", optimize_args(60, 8));
     let t3 = s

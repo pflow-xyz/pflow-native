@@ -247,9 +247,9 @@ fn compare_groups_by_scenario_on_one_seed() {
             {"hours": 2, "realizations": 4, "engine": "ode"}
         ], "seed": 9}),
     );
-    // Seeded SSA groups repeat exactly; the ODE group only to ~1e-9, since
-    // pflow-solver's derivative sums follow HashMap order (FEATURES §D 7).
-    assert_close(&first, &data(&s, &again["timeseries"]));
+    // Seeded SSA groups and the ODE group all repeat exactly (pflow-solver
+    // sums derivatives in sorted order since fcb38ac).
+    assert_same(&first, &data(&s, &again["timeseries"]));
     let e = err(
         &mut s,
         "sim.compare",
@@ -381,7 +381,7 @@ fn stochastic_commands_are_journaled() {
     assert_eq!(s.journal.last().unwrap().command, "sim.ssa");
 }
 
-fn assert_close(a: &ArtifactData, b: &ArtifactData) {
+fn assert_same(a: &ArtifactData, b: &ArtifactData) {
     match (a, b) {
         (
             ArtifactData::TimeSeries {
@@ -395,18 +395,7 @@ fn assert_close(a: &ArtifactData, b: &ArtifactData) {
             assert_eq!(sa.len(), sb.len());
             for (p, q) in sa.iter().zip(sb) {
                 assert_eq!((&p.name, &p.group), (&q.name, &q.group));
-                let exact = p.group.as_deref() != Some("scenario 3");
-                for (u, v) in p.values.iter().zip(&q.values) {
-                    if exact {
-                        assert_eq!(u, v, "{} {:?}", p.name, p.group);
-                    } else {
-                        assert!(
-                            (u - v).abs() <= 1e-9 * u.abs().max(1.0),
-                            "{} {u} vs {v}",
-                            p.name
-                        );
-                    }
-                }
+                assert_eq!(p.values, q.values, "{} {:?}", p.name, p.group);
             }
         }
         _ => assert_eq!(a, b),
