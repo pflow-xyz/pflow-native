@@ -9,6 +9,7 @@ pub mod control;
 mod dialogs;
 mod inspector;
 mod json_pane;
+mod notes;
 mod panels;
 mod plot;
 mod results;
@@ -90,6 +91,8 @@ pub struct App {
     /// Whether the window is on screen (not minimized, hidden or covered),
     /// as of the last logic pass. A hidden window cannot be captured.
     window_visible: bool,
+    /// What was last sent to view.report_focus.
+    last_focus: Option<(Option<String>, BottomTab, bool, bool)>,
 }
 
 impl App {
@@ -126,6 +129,7 @@ impl App {
             screenshot_done: Arc::new(AtomicBool::new(false)),
             screenshot_pending: false,
             window_visible: true,
+            last_focus: None,
         };
         let restore = storage.filter(|_| !opts.fresh && app.exit_after_screenshot.is_none());
         if let Some(st) = restore.and_then(|s| s.get_string(KEY_SETTINGS)) {
@@ -530,6 +534,32 @@ impl App {
         });
     }
 
+    /// Tells the session what the window shows (view.report_focus) when that
+    /// changes, so an agent's view.focus matches what the person sees.
+    fn report_focus(&mut self) {
+        let now = (
+            self.results.selected.clone(),
+            self.bottom,
+            self.sess.view.settings.bottom_panel,
+            self.window_visible,
+        );
+        if self.last_focus.as_ref() == Some(&now) {
+            return;
+        }
+        let tab = match now.1 {
+            BottomTab::Plot => "results",
+            BottomTab::Workbench => "workbench",
+            BottomTab::Run => "run",
+            BottomTab::Models => "models",
+            BottomTab::Console => "console",
+        };
+        let _ = self.sess.execute(
+            "view.report_focus",
+            json!({ "artifact": now.0, "tab": tab, "bottom_panel": now.2, "window_visible": now.3 }),
+        );
+        self.last_focus = Some(now);
+    }
+
     fn handle_ui_requests(&mut self, ctx: &egui::Context) {
         for req in std::mem::take(&mut self.sess.ui_requests) {
             match req {
@@ -790,6 +820,7 @@ impl eframe::App for App {
         // Finished background jobs join the session (their results appear
         // in the Results tab); while any runs, keep checking.
         self.sess.poll_jobs();
+        self.report_focus();
         if self.sess.jobs.running() > 0 {
             ctx.request_repaint_after(std::time::Duration::from_millis(200));
         }

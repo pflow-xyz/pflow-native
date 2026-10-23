@@ -5,7 +5,7 @@
 use std::collections::HashMap;
 
 use eframe::egui;
-use pflow_native_core::{Artifact, ArtifactData};
+use pflow_native_core::{Artifact, ArtifactData, NoteTarget};
 use serde_json::{json, Value};
 
 use crate::views::{self, ViewState};
@@ -161,6 +161,8 @@ fn viewer(app: &mut App, ui: &mut egui::Ui, art: &Artifact) {
             app.queue("artifact.delete", json!({ "id": art.id }));
         }
     });
+    let id = art.id.clone();
+    crate::notes::cards(app, ui, |t| *t == NoteTarget::Artifact(id.clone()));
     let st = app.results.views.entry(art.id.clone()).or_default();
     match (&art.data, app.results.mode) {
         (ArtifactData::TimeSeries { series, .. }, Mode::Phase) => views::phase(ui, st, series),

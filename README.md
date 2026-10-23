@@ -155,6 +155,8 @@ pflow-native-cli mcp                                # MCP over stdio (attaches t
 - `pflow-native-cli mcp` attaches to that port when the app is running, so the agent and you share one window. Otherwise it runs a private headless session. Use `--headless` or `--attach ADDR` to force either.
 - Commands are answered while the window is minimized, hidden or covered too.
 - `view.show_artifact {id}` opens a result in the Results tab, so you and the agent look at the same thing.
+- `view.focus` tells the agent what you are looking at: the selected nodes (tokens, enablement, rate), the result open in the Results tab, the bottom tab, the nodes in view, the highlight, whether the window is on screen, and the last commands.
+- `note.add {text, node | artifact | x,y}` pins a note where you will see it: a sticky note on the canvas, a card above a result, and a list in the Inspector with delete buttons (`note.list / delete / clear`). Notes stay in the session and are never saved into the document.
 - In attached mode the `screenshot` tool returns the window as a PNG. It needs the window on screen; a hidden window refuses at once, so export instead (`export.svg`, `export.artifact`).
 
 ![Driven over MCP](docs/screenshot-mcp.png)

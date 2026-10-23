@@ -145,6 +145,52 @@ pub struct Highlight {
     pub weights: BTreeMap<String, f64>,
 }
 
+/// A note pinned for the person at the window (`note.*`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Note {
+    pub id: String,
+    pub text: String,
+    pub author: String,
+    pub target: NoteTarget,
+}
+
+/// Where a note is pinned.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub enum NoteTarget {
+    /// The net as a whole (shown in the Inspector and the canvas corner).
+    Net,
+    Node(String),
+    Artifact(String),
+    /// A canvas point, in world coordinates.
+    Point {
+        x: f64,
+        y: f64,
+    },
+}
+
+/// What the app last reported it shows (`view.report_focus`).
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct Focus {
+    /// False until a front end reports (headless).
+    pub reported: bool,
+    pub artifact: Option<String>,
+    pub tab: Option<String>,
+    pub bottom_panel: bool,
+    pub window_visible: bool,
+}
+
+impl Default for Focus {
+    fn default() -> Self {
+        Self {
+            reported: false,
+            artifact: None,
+            tab: None,
+            bottom_panel: true,
+            window_visible: true,
+        }
+    }
+}
+
 /// Work a command hands to the front end because it needs pixels.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UiRequest {
@@ -214,6 +260,11 @@ pub struct Session {
     pub ui_requests: Vec<UiRequest>,
     /// Background jobs (`job.*`).
     pub jobs: crate::jobs::Jobs,
+    /// Notes pinned for the person at the window (`note.*`).
+    pub notes: Vec<Note>,
+    next_note: u64,
+    /// What the app shows (`view.report_focus`, read by `view.focus`).
+    pub focus: Focus,
     pub(crate) undo: Vec<Snapshot>,
     pub(crate) redo: Vec<Snapshot>,
     compiled: Option<std::result::Result<Compiled, String>>,
@@ -259,6 +310,9 @@ impl Session {
             has_ui: false,
             ui_requests: vec![],
             jobs: Default::default(),
+            notes: vec![],
+            next_note: 0,
+            focus: Focus::default(),
             undo: vec![],
             redo: vec![],
             compiled: None,
@@ -286,6 +340,8 @@ impl Session {
         s.macros = self.macros.clone();
         s.models = self.models.clone();
         s.systems = self.systems.clone();
+        s.notes = self.notes.clone();
+        s.next_note = self.next_note;
         s
     }
 
@@ -524,6 +580,11 @@ impl Session {
             self.artifacts.remove(0);
         }
         id
+    }
+
+    pub(crate) fn next_note_id(&mut self) -> String {
+        self.next_note += 1;
+        format!("n{}", self.next_note)
     }
 
     pub fn artifact(&self, id: &str) -> Option<&Artifact> {

@@ -565,6 +565,9 @@ fn draw(app: &mut App, painter: &egui::Painter, rect: Rect, dark: bool, hover: O
         }
     }
 
+    // Notes on nodes, points and the net (`note.*`).
+    crate::notes::draw(painter, rect, &s.notes, z, pos, |x, y| xf.to_screen(x, y));
+
     // Box select rubber band.
     if let (Some(a), Some(h)) = (app.canvas.box_from, hover) {
         let r = Rect::from_two_pos(xf.to_screen(a.x as f64, a.y as f64), h);

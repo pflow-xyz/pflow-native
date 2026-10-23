@@ -41,7 +41,9 @@ pub mod zk;
 pub use artifact::{Artifact, ArtifactData};
 pub use doc::{Arc, Document, NodeKind, Place, Transition};
 pub use registry::{ArgSpec, ArgType, CommandSpec, Registry};
-pub use session::{Highlight, Session, Settings, Step, Theme, Tool, UiRequest, View};
+pub use session::{
+    Focus, Highlight, Note, NoteTarget, Session, Settings, Step, Theme, Tool, UiRequest, View,
+};
 pub use sim::{Marking, OdeResult};
 
 /// An error from a command, surfaced verbatim to whichever front end ran it.

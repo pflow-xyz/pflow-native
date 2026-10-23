@@ -3,6 +3,7 @@
 //! typed value is one undo step, not one per keystroke.
 
 use eframe::egui;
+use pflow_native_core::NoteTarget;
 use serde_json::{json, Value};
 
 use crate::App;
@@ -57,6 +58,10 @@ pub fn ui(app: &mut App, ui: &mut egui::Ui) {
     egui::ScrollArea::vertical().show(ui, |ui| {
         let sel = app.sess.selection.clone();
         let arc = app.canvas.selected_arc.clone();
+        if let [id] = sel.as_slice() {
+            let id = id.clone();
+            crate::notes::cards(app, ui, |t| *t == NoteTarget::Node(id.clone()));
+        }
         match (sel.as_slice(), arc) {
             ([id], _) if app.sess.doc.place(id).is_some() => place(app, ui, id),
             ([id], _) if app.sess.doc.transition(id).is_some() => transition(app, ui, id),
@@ -274,6 +279,16 @@ fn document(app: &mut App, ui: &mut egui::Ui) {
                 }
             }
         });
+    }
+    if !app.sess.notes.is_empty() {
+        ui.separator();
+        ui.horizontal(|ui| {
+            ui.strong(format!("Notes ({})", app.sess.notes.len()));
+            if ui.small_button("clear").clicked() {
+                app.queue("note.clear", Value::Null);
+            }
+        });
+        crate::notes::cards(app, ui, |_| true);
     }
     ui.separator();
     ui.label("Select a node or arc to edit it.");

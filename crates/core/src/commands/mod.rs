@@ -25,6 +25,7 @@ pub mod learn;
 pub mod macros;
 pub mod models;
 pub mod net;
+pub mod note;
 pub mod opt;
 #[cfg(feature = "services")]
 pub mod outbound;
@@ -58,6 +59,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     stochastic::SET,
     statespace::SET,
     view::SET,
+    note::SET,
     diagram::SET,
     overlay::SET,
     settings::SET,
