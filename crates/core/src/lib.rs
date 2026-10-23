@@ -23,6 +23,8 @@ pub mod jobs;
 pub mod layout;
 pub mod learn;
 pub mod mining;
+#[cfg(feature = "rnn")]
+pub(crate) mod mlp_net;
 pub mod outbound;
 #[cfg(feature = "rnn")]
 pub(crate) mod par;

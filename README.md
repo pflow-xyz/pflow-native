@@ -130,9 +130,13 @@ Tokens are written to `credentials.json` (owner-only) and never returned by a co
 
 ![Confirm before sending](docs/screenshot-confirm-send.png)
 
-## Experimental: RNN policies
+## Experimental: learned policies
 
-`make build-rnn` (or `--features rnn`) adds a **Learn** menu with an Elman RNN from pflow-tropical that learns which transition fires next:
+`make build-rnn` (or `--features rnn`) adds a **Learn** menu with a policy that learns which transition fires next. There are two kinds:
+- **`arch: "rnn"`** (the default) is an Elman RNN from pflow-tropical, with `hidden` units.
+- **`arch: "mlp"`** is a feed-forward ReLU network over the marking, with `layers` hidden layers (e.g. `[64, 64]`). It has no memory of earlier moves. It doesn't need one, because the marking is the net's whole state.
+
+`rnn.train` and `rnn.imitate` take `arch`; the other commands work with either kind of model. The commands:
 - `rnn.train` plays seeded random games through the firing rule and trains on them. It plots the loss against the floor a perfect imitator of random play would reach.
 - `rnn.play` lets a model choose each firing. The game is stored as a trace, so `sim.goto` replays it and `provenance.check_witness` re-checks it.
 - `rnn.self_play` improves a model by self-play against a reward read from the final marking, e.g. `{"win_x": 1, "win_o": -1}` on tic-tac-toe.
@@ -142,7 +146,7 @@ Tokens are written to `credentials.json` (owner-only) and never returned by a co
 - Games and training use every core. Each game has its own seed, so a run gives the same result on any machine. `batch` (default 16) is how many games' gradients are computed at once per update; `batch: 1` is one update per game.
 - `auto` (on every rnn command) names transitions that fire as soon as they are enabled, before anyone chooses. On tic-tac-toe, `["x_win_", "o_win_"]` makes a line end the game when it is made.
 
-On tic-tac-toe with `sides {"x_": 1, "o_": -1}`, the teacher solves all 5,478 positions (the empty board included). Every opening draws with best play, and the centre is the tie-break. A model trained with `rnn.imitate` opens in the centre and draws every game against the teacher. With 2,000 games and 150 epochs it wins 98.8% as X against random play, without a loss.
+On tic-tac-toe with `sides {"x_": 1, "o_": -1}`, the teacher solves all 5,478 positions (the empty board included). Every opening draws with best play, and the centre is the tie-break. A model trained with `rnn.imitate` opens in the centre and draws every game against the teacher. With 2,000 games and 150 epochs it wins 98.8% as X against random play, without a loss. An MLP with `layers: [64, 64]` trained the same way loses no games from either side (as O: 437 wins, 63 draws).
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

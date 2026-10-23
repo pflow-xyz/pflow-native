@@ -276,3 +276,79 @@ fn two_sided_commands_need_sides_and_one_mover() {
         .execute("rnn.evaluate", with(rules(), json!({"opponent": "god"})))
         .is_err());
 }
+
+#[test]
+fn an_mlp_policy_learns_tic_tac_toe_from_the_teacher() {
+    let mut s = example("tic-tac-toe");
+    let out = run(
+        &mut s,
+        "rnn.imitate",
+        with(
+            rules(),
+            json!({"arch": "mlp", "layers": [64, 32], "games": 300, "epochs": 40}),
+        ),
+    );
+    let m = s.artifact(out["model"].as_str().unwrap()).unwrap();
+    let ArtifactData::Report(r) = &m.data else {
+        panic!("the model is a report")
+    };
+    assert_eq!(r["arch"], "mlp");
+    assert_eq!(r["layers"], json!([64, 32]));
+    assert_eq!(r["weights"]["layers"].as_array().unwrap().len(), 3);
+    assert!(m.title.starts_with("MLP model"), "{}", m.title);
+    // It opens in the centre and never loses to perfect play.
+    let p = run(&mut s, "rnn.policy", json!({}));
+    assert_eq!(p["moves"][0]["transition"], "x_play_11", "{p}");
+    let e = run(
+        &mut s,
+        "rnn.evaluate",
+        with(rules(), json!({"opponent": "minimax", "games": 2})),
+    );
+    for side in e["results"].as_array().unwrap() {
+        assert_eq!(side["losses"], 0, "{e}");
+    }
+    // The other commands take it too: play, and self-play to a new MLP.
+    let g = run(&mut s, "rnn.play", json!({"auto": ["x_win_", "o_win_"]}));
+    assert!(g["moves_chosen"].as_u64().unwrap() >= 5, "{g}");
+    let sp = run(
+        &mut s,
+        "rnn.self_play",
+        with(rules(), json!({"rounds": 2, "games": 20})),
+    );
+    let next = s.artifact(sp["model"].as_str().unwrap()).unwrap();
+    let ArtifactData::Report(r) = &next.data else {
+        panic!("a report")
+    };
+    assert_eq!(r["arch"], "mlp");
+}
+
+#[test]
+fn arch_and_its_shape_arguments_are_checked() {
+    let mut s = example("tic-tac-toe");
+    for (args, needle) in [
+        (json!({"arch": "lstm"}), "arch must be rnn or mlp"),
+        (json!({"layers": [8]}), "layers is for arch mlp"),
+        (
+            json!({"arch": "mlp", "hidden": 8}),
+            "hidden is for arch rnn",
+        ),
+        (json!({"arch": "mlp", "layers": [0]}), "layers must be"),
+        (
+            json!({"arch": "mlp", "layers": [8, 8, 8, 8, 8]}),
+            "layers must be",
+        ),
+        (json!({"arch": "mlp", "layers": [8.5]}), "layers must be"),
+    ] {
+        let e = s
+            .execute("rnn.train", args.clone())
+            .unwrap_err()
+            .to_string();
+        assert!(e.contains(needle), "{args}: {e}");
+    }
+    let out = run(
+        &mut s,
+        "rnn.train",
+        json!({"arch": "mlp", "layers": 16, "games": 20, "epochs": 3}),
+    );
+    assert!(out["training"]["loss"].as_f64().unwrap().is_finite());
+}

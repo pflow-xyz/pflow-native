@@ -58,7 +58,7 @@ fn flat(m: &[Vec<f64>]) -> Vec<f64> {
 /// in `j` order (only the `j` in `idx`, when given). Four rows at a time,
 /// so four independent sums are in flight; each row's own sum keeps its
 /// order.
-fn rows_dot(acc: &mut [f64], w: &[f64], cols: usize, v: &[f64], idx: Option<&[usize]>) {
+pub(crate) fn rows_dot(acc: &mut [f64], w: &[f64], cols: usize, v: &[f64], idx: Option<&[usize]>) {
     let n = acc.len();
     let mut i = 0;
     while i + 4 <= n {
@@ -100,14 +100,14 @@ fn rows_dot(acc: &mut [f64], w: &[f64], cols: usize, v: &[f64], idx: Option<&[us
 }
 
 /// `dst[j] += w_row[j] · s` for every `j`.
-fn axpy(dst: &mut [f64], w_row: &[f64], s: f64) {
+pub(crate) fn axpy(dst: &mut [f64], w_row: &[f64], s: f64) {
     for (d, &w) in dst.iter_mut().zip(w_row) {
         *d += w * s;
     }
 }
 
 /// `dst[j] += s · v[j]` for every `j` (the product in that order).
-fn axpy_s(dst: &mut [f64], s: f64, v: &[f64]) {
+pub(crate) fn axpy_s(dst: &mut [f64], s: f64, v: &[f64]) {
     for (d, &x) in dst.iter_mut().zip(v) {
         *d += s * x;
     }
@@ -123,16 +123,16 @@ pub(crate) fn softmax_into(logits: &[f64], out: &mut [f64]) {
     out.iter_mut().for_each(|o| *o /= sum);
 }
 
-fn nonzero(x: &[f64], idx: &mut Vec<usize>) {
+pub(crate) fn nonzero(x: &[f64], idx: &mut Vec<usize>) {
     idx.clear();
     idx.extend((0..x.len()).filter(|&j| x[j] != 0.0));
 }
 
-fn clip(v: &mut [f64]) {
+pub(crate) fn clip(v: &mut [f64]) {
     v.iter_mut().for_each(|x| *x = x.clamp(-CLIP, CLIP));
 }
 
-fn descend(w: &mut [f64], g: &[f64], lr: f64) {
+pub(crate) fn descend(w: &mut [f64], g: &[f64], lr: f64) {
     for (w, &g) in w.iter_mut().zip(g) {
         *w -= lr * g;
     }

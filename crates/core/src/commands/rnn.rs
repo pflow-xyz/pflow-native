@@ -19,7 +19,8 @@ use serde_json::{json, Value};
 
 use crate::analysis::Structure;
 use crate::artifact::{ArtifactData, Bar, Series, TraceStep};
-use crate::registry::{always, b, n, opt, s, strs, ArgType::*, CommandSpec};
+use crate::mlp_net::Mlp;
+use crate::registry::{always, b, n, nums, opt, s, strs, ArgType::*, CommandSpec};
 use crate::rnn_net::{softmax_into, Rnn, Seq};
 use crate::session::{Session, Step};
 use crate::sim::{self, Compiled, Marking};
@@ -41,7 +42,9 @@ pub const SET: &[CommandSpec] = &[
         menu: MENU,
         shortcut: None,
         args: &[
-            opt("hidden", Int, "hidden units (default 32, 1..256)"),
+            opt("arch", Str, "rnn (default): an Elman RNN with `hidden` units; mlp: a feed-forward ReLU network over the marking with `layers`"),
+            opt("hidden", Int, "rnn hidden units (default 32, 1..256)"),
+            opt("layers", NumList, "mlp hidden layer widths, input side first (default [64, 64]; 1..4 layers of 1..512)"),
             opt("games", Int, "random games to learn from (default 200, 1..5000)"),
             opt("epochs", Int, "passes over the games (default 40, 1..1000)"),
             opt("learning_rate", Num, "step size (default 0.01)"),
@@ -119,7 +122,9 @@ pub const SET: &[CommandSpec] = &[
             opt("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
             opt("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
             opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled (e.g. win claims)"),
-            opt("hidden", Int, "hidden units (default 32, 1..256)"),
+            opt("arch", Str, "rnn (default): an Elman RNN with `hidden` units; mlp: a feed-forward ReLU network over the marking with `layers`"),
+            opt("hidden", Int, "rnn hidden units (default 32, 1..256)"),
+            opt("layers", NumList, "mlp hidden layer widths, input side first (default [64, 64]; 1..4 layers of 1..512)"),
             opt("games", Int, "teacher games to learn from (default 300, 1..5000)"),
             opt("epochs", Int, "passes over the games (default 40, 1..1000)"),
             opt("explore", Num, "share of moves played at random (default 0.3, 0..1)"),
@@ -390,11 +395,113 @@ fn uniform(enabled: &[usize], rng: &mut SimpleRng) -> usize {
     enabled[(rng.next_u64() % enabled.len() as u64) as usize]
 }
 
-/// The RNN's next step: updates `h` and returns the policy over every
-/// transition, masked to `enabled`.
-fn rnn_probs(rnn: &Rnn, h: &mut Vec<f64>, input: &[f64], enabled: &[usize]) -> Vec<f64> {
-    let mut logits = vec![0.0; rnn.out];
-    rnn.step(input, h, &mut logits);
+/// A trained policy: the Elman RNN (state carried from move to move) or
+/// the MLP (none: the marking is the whole state).
+enum Policy {
+    Rnn(Rnn),
+    Mlp(Mlp),
+}
+
+impl Policy {
+    /// Builds an untrained one from `arch`, `hidden` and `layers`.
+    fn new(v: &View, a: &Value, seed: u64) -> Result<Self> {
+        let (inp, out) = (v.st.places.len(), v.st.transitions.len());
+        match s(a, "arch").unwrap_or("rnn") {
+            "rnn" => {
+                if a.get("layers").is_some_and(|x| !x.is_null()) {
+                    return Err(Error::BadArgs(
+                        "layers is for arch mlp; an rnn has `hidden`".into(),
+                    ));
+                }
+                Ok(Self::Rnn(Rnn::new(
+                    inp,
+                    int(a, "hidden", 32, 1, 256)?,
+                    out,
+                    seed,
+                )))
+            }
+            "mlp" => {
+                if a.get("hidden").is_some_and(|x| !x.is_null()) {
+                    return Err(Error::BadArgs(
+                        "hidden is for arch rnn; an mlp has `layers`".into(),
+                    ));
+                }
+                let widths = nums(a, "layers").unwrap_or_else(|| vec![64.0, 64.0]);
+                if widths.is_empty()
+                    || widths.len() > 4
+                    || widths
+                        .iter()
+                        .any(|&w| w.fract() != 0.0 || !(1.0..=512.0).contains(&w))
+                {
+                    return Err(Error::BadArgs(format!(
+                        "layers must be 1..4 integer widths in 1..512, got {widths:?}"
+                    )));
+                }
+                let mut sizes = vec![inp];
+                sizes.extend(widths.iter().map(|&w| w as usize));
+                sizes.push(out);
+                Ok(Self::Mlp(Mlp::new(sizes, seed)))
+            }
+            other => Err(Error::BadArgs(format!(
+                "arch must be rnn or mlp, got {other}"
+            ))),
+        }
+    }
+
+    /// "RNN" or "MLP", for titles.
+    fn name(&self) -> &'static str {
+        match self {
+            Self::Rnn(_) => "RNN",
+            Self::Mlp(_) => "MLP",
+        }
+    }
+
+    /// Its shape, for titles: "hidden 32" or "layers 64-64".
+    fn shape(&self) -> String {
+        match self {
+            Self::Rnn(r) => format!("hidden {}", r.hs),
+            Self::Mlp(m) => {
+                let w: Vec<String> = m.sizes[1..m.sizes.len() - 1]
+                    .iter()
+                    .map(|n| n.to_string())
+                    .collect();
+                format!("layers {}", w.join("-"))
+            }
+        }
+    }
+
+    /// The state a game starts from (empty for the MLP).
+    fn state(&self) -> Vec<f64> {
+        match self {
+            Self::Rnn(r) => vec![0.0; r.hs],
+            Self::Mlp(_) => vec![],
+        }
+    }
+
+    /// The logits at `input`, advancing the RNN's state `h`.
+    fn logits(&self, input: &[f64], h: &mut Vec<f64>) -> Vec<f64> {
+        match self {
+            Self::Rnn(r) => {
+                let mut logits = vec![0.0; r.out];
+                r.step(input, h, &mut logits);
+                logits
+            }
+            Self::Mlp(m) => m.logits(input),
+        }
+    }
+
+    fn train(&mut self, seqs: &[Seq], lr: f64, epochs: usize, batch: usize) -> f64 {
+        match self {
+            Self::Rnn(r) => r.train(seqs, lr, epochs, batch),
+            Self::Mlp(m) => m.train(seqs, lr, epochs, batch),
+        }
+    }
+}
+
+/// The policy's next step: updates `h` and returns its probabilities over
+/// every transition, masked to `enabled`.
+fn rnn_probs(rnn: &Policy, h: &mut Vec<f64>, input: &[f64], enabled: &[usize]) -> Vec<f64> {
+    let mut logits = rnn.logits(input, h);
     let mut masked = vec![f64::NEG_INFINITY; logits.len()];
     for &t in enabled {
         masked[t] = logits[t];
@@ -423,9 +530,9 @@ fn pick(p: &[f64], enabled: &[usize], sample: bool, rng: &mut SimpleRng) -> usiz
     }
 }
 
-/// A chooser that asks the RNN at every move.
-fn rnn_chooser<'a>(rnn: &'a Rnn, sample: bool) -> Box<Chooser<'a>> {
-    let mut h = vec![0.0; rnn.hs];
+/// A chooser that asks the policy at every move.
+fn rnn_chooser<'a>(rnn: &'a Policy, sample: bool) -> Box<Chooser<'a>> {
+    let mut h = rnn.state();
     Box::new(move |_, input, enabled, rng| {
         let p = rnn_probs(rnn, &mut h, input, enabled);
         Ok((pick(&p, enabled, sample, rng), p))
@@ -623,23 +730,77 @@ fn best_move(en: &[usize], vals: Vec<(f64, f64)>) -> (Vec<(f64, f64)>, usize) {
     (vals, en[best])
 }
 
-fn to_json(rnn: &Rnn, v: &View, mode: &str, training: Value) -> Value {
-    let [w_xh, w_hh, w_hy] = rnn.rows();
-    json!({
+fn to_json(net: &Policy, v: &View, mode: &str, training: Value) -> Value {
+    let mut out = json!({
         "kind": KIND,
         "mode": mode,
         "places": v.st.display,
         "transitions": v.st.transitions,
-        "hidden": rnn.hs,
         "training": training,
-        "weights": {
-            "w_xh": w_xh, "w_hh": w_hh, "b_h": rnn.b_h,
-            "w_hy": w_hy, "b_y": rnn.b_y,
-        },
-    })
+    });
+    match net {
+        Policy::Rnn(rnn) => {
+            let [w_xh, w_hh, w_hy] = rnn.rows();
+            out["arch"] = json!("rnn");
+            out["hidden"] = json!(rnn.hs);
+            out["weights"] = json!({
+                "w_xh": w_xh, "w_hh": w_hh, "b_h": rnn.b_h,
+                "w_hy": w_hy, "b_y": rnn.b_y,
+            });
+        }
+        Policy::Mlp(mlp) => {
+            out["arch"] = json!("mlp");
+            out["layers"] = json!(mlp.sizes[1..mlp.sizes.len() - 1]);
+            let layers: Vec<Value> = (1..=mlp.depth())
+                .map(|l| {
+                    let (w, b) = mlp.layer(l);
+                    let rows: Vec<&[f64]> = w.chunks(mlp.sizes[l - 1]).collect();
+                    json!({ "w": rows, "b": b })
+                })
+                .collect();
+            out["weights"] = json!({ "layers": layers });
+        }
+    }
+    out
 }
 
-fn from_json(m: &Value) -> Result<Rnn> {
+fn from_json(m: &Value, v: &View) -> Result<Policy> {
+    let net = parse_model(m)?;
+    let (inp, out) = match &net {
+        Policy::Rnn(r) => (r.inp, r.out),
+        Policy::Mlp(p) => (p.sizes[0], *p.sizes.last().expect("sizes")),
+    };
+    if inp != v.st.places.len() || out != v.st.transitions.len() {
+        return Err(Error::Invalid(
+            "that model's weights do not fit this net's places and transitions".into(),
+        ));
+    }
+    Ok(net)
+}
+
+fn parse_model(m: &Value) -> Result<Policy> {
+    match m["arch"].as_str().unwrap_or("rnn") {
+        "rnn" => rnn_from_json(m).map(Policy::Rnn),
+        "mlp" => {
+            let bad = || Error::Invalid("not an mlp model artifact (rnn.train makes one)".into());
+            let layers: Vec<(Vec<Vec<f64>>, Vec<f64>)> = m["weights"]["layers"]
+                .as_array()
+                .ok_or_else(bad)?
+                .iter()
+                .map(|l| {
+                    Ok((
+                        serde_json::from_value(l["w"].clone()).map_err(|_| bad())?,
+                        serde_json::from_value(l["b"].clone()).map_err(|_| bad())?,
+                    ))
+                })
+                .collect::<Result<_>>()?;
+            Mlp::from_layers(&layers).map(Policy::Mlp).ok_or_else(bad)
+        }
+        other => Err(Error::Invalid(format!("unknown model arch {other}"))),
+    }
+}
+
+fn rnn_from_json(m: &Value) -> Result<Rnn> {
     let bad = || Error::Invalid("not an rnn model artifact (rnn.train makes one)".into());
     let w = &m["weights"];
     let mat = |k: &str| -> Result<Vec<Vec<f64>>> {
@@ -705,7 +866,6 @@ fn model(sess: &Session, a: &Value) -> Result<(String, Value)> {
 // ================================================================ commands
 
 fn train(sess: &mut Session, a: &Value) -> Result<Value> {
-    let hidden = int(a, "hidden", 32, 1, 256)?;
     let games = int(a, "games", 200, 1, 5000)?;
     let epochs = int(a, "epochs", 40, 1, 1000)?;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
@@ -755,7 +915,8 @@ fn train(sess: &mut Session, a: &Value) -> Result<Value> {
     // averages over games, so the floor is on that scale too.
     let floor = floor / seqs.len() as f64;
 
-    let mut rnn = Rnn::new(v.st.places.len(), hidden, v.st.transitions.len(), seed);
+    let mut rnn = Policy::new(&v, a, seed)?;
+    let (name, shape) = (rnn.name(), rnn.shape());
     let mut losses = Vec::with_capacity(epochs);
     for _ in 0..epochs {
         losses.push(rnn.train(&seqs, lr, 1, batch));
@@ -769,7 +930,7 @@ fn train(sess: &mut Session, a: &Value) -> Result<Value> {
         "loss": loss, "floor": floor,
     });
     let curve = sess.add_artifact(
-        format!("RNN training loss (hidden {hidden}, seed {seed})"),
+        format!("{name} training loss ({shape}, seed {seed})"),
         source("rnn.train", a),
         ArtifactData::TimeSeries {
             x_label: "epoch".into(),
@@ -781,7 +942,7 @@ fn train(sess: &mut Session, a: &Value) -> Result<Value> {
         },
     );
     let m = sess.add_artifact(
-        format!("RNN model (hidden {hidden}, seed {seed})"),
+        format!("{name} model ({shape}, seed {seed})"),
         source("rnn.train", a),
         ArtifactData::Report(to_json(&rnn, &v, "imitation", training.clone())),
     );
@@ -798,7 +959,7 @@ fn play(sess: &mut Session, a: &Value) -> Result<Value> {
     let (mid, m) = model(sess, a)?;
     let v = View::new(sess)?;
     v.check(&m)?;
-    let rnn = from_json(&m)?;
+    let rnn = from_json(&m, &v)?;
     let stochastic = b(a, "stochastic").unwrap_or(false);
     let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
@@ -851,7 +1012,7 @@ fn play(sess: &mut Session, a: &Value) -> Result<Value> {
         "greedy".into()
     };
     let trace = sess.add_artifact(
-        format!("RNN game ({mid}, {how})"),
+        format!("{} game ({mid}, {how})", rnn.name()),
         source("rnn.play", a),
         ArtifactData::Trace { steps },
     );
@@ -861,7 +1022,7 @@ fn play(sess: &mut Session, a: &Value) -> Result<Value> {
         "note": "a learned policy's game: legal by construction (every firing went through the firing rule), not optimal by any proof",
     });
     let report = sess.add_artifact(
-        format!("RNN game report ({mid}, {how})"),
+        format!("{} game report ({mid}, {how})", rnn.name()),
         source("rnn.play", a),
         ArtifactData::Report(out.clone()),
     );
@@ -947,7 +1108,7 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
     let (mid, m) = model(sess, a)?;
     let v = View::new(sess)?;
     v.check(&m)?;
-    let mut rnn = from_json(&m)?;
+    let mut rnn = from_json(&m, &v)?;
     let reward = reward(&v, a)?;
     let sides = sides(&v, a)?;
     let auto = auto(&v, a)?;
@@ -1028,7 +1189,7 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
         "final": {"mean_reward": mean.last(), "positive": pos.last(), "zero": zero.last(), "negative": neg.last()},
     });
     let curve = sess.add_artifact(
-        format!("RNN self-play ({mid}, seed {seed})"),
+        format!("{} self-play ({mid}, seed {seed})", rnn.name()),
         source("rnn.self_play", a),
         ArtifactData::TimeSeries {
             x_label: "round".into(),
@@ -1042,7 +1203,7 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
         },
     );
     let out_model = sess.add_artifact(
-        format!("RNN model (self-play from {mid}, seed {seed})"),
+        format!("{} model (self-play from {mid}, seed {seed})", rnn.name()),
         source("rnn.self_play", a),
         ArtifactData::Report(to_json(&rnn, &v, "self-play", training)),
     );
@@ -1076,7 +1237,6 @@ fn game_rules(v: &View, a: &Value) -> Result<Rules> {
 }
 
 fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
-    let hidden = int(a, "hidden", 32, 1, 256)?;
     let games = int(a, "games", 300, 1, 5000)?;
     let epochs = int(a, "epochs", 40, 1, 1000)?;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
@@ -1089,6 +1249,8 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
         Some(x) => return Err(Error::BadArgs(format!("explore must be in 0..1, got {x}"))),
     };
     let v = View::new(sess)?;
+    let mut rnn = Policy::new(&v, a, seed)?;
+    let (name, shape) = (rnn.name(), rnn.shape());
     let Rules { sign, reward, auto } = game_rules(&v, a)?;
     let from = sim::initial_marking(&sess.doc);
     let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
@@ -1141,7 +1303,6 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
         .collect();
     let positions = teacher.value.len();
 
-    let mut rnn = Rnn::new(v.st.places.len(), hidden, v.st.transitions.len(), seed);
     let mut losses = Vec::with_capacity(epochs);
     for _ in 0..epochs {
         losses.push(rnn.train(&seqs, lr, 1, batch));
@@ -1153,7 +1314,7 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
         "positions_solved": positions,
     });
     let curve = sess.add_artifact(
-        format!("RNN imitation loss (hidden {hidden}, seed {seed})"),
+        format!("{name} imitation loss ({shape}, seed {seed})"),
         source("rnn.imitate", a),
         ArtifactData::TimeSeries {
             x_label: "epoch".into(),
@@ -1162,7 +1323,7 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
         },
     );
     let m = sess.add_artifact(
-        format!("RNN model (minimax teacher, hidden {hidden}, seed {seed})"),
+        format!("{name} model (minimax teacher, {shape}, seed {seed})"),
         source("rnn.imitate", a),
         ArtifactData::Report(to_json(&rnn, &v, "minimax-imitation", training.clone())),
     );
@@ -1176,7 +1337,7 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
     let (mid, m) = model(sess, a)?;
     let v = View::new(sess)?;
     v.check(&m)?;
-    let rnn = from_json(&m)?;
+    let rnn = from_json(&m, &v)?;
     let Rules { sign, reward, auto } = game_rules(&v, a)?;
     let games = int(a, "games", 200, 1, 5000)?;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
@@ -1211,7 +1372,7 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
     let (mut bars, mut rows) = (vec![], vec![]);
     for (k, (side, seat)) in prefixes.iter().enumerate() {
         let rewards = each_game(games, |i| {
-            let mut h = vec![0.0; rnn.hs];
+            let mut h = rnn.state();
             let mut choose = |mk: &Marking, input: &[f64], en: &[usize], rng: &mut SimpleRng| {
                 // The model's hidden state follows every move, both sides'.
                 let p = rnn_probs(&rnn, &mut h, input, en);
@@ -1262,7 +1423,7 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
     }
     let how = if stochastic { "sampled" } else { "greedy" };
     let chart = sess.add_artifact(
-        format!("RNN vs {opponent} ({mid}, {how}, seed {seed})"),
+        format!("{} vs {opponent} ({mid}, {how}, seed {seed})", rnn.name()),
         source("rnn.evaluate", a),
         ArtifactData::Bars {
             value_label: "share of games".into(),
@@ -1270,7 +1431,10 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
         },
     );
     let table = sess.add_artifact(
-        format!("RNN vs {opponent} table ({mid}, {how}, seed {seed})"),
+        format!(
+            "{} vs {opponent} table ({mid}, {how}, seed {seed})",
+            rnn.name()
+        ),
         source("rnn.evaluate", a),
         ArtifactData::Table {
             columns: ["side", "wins", "draws", "losses", "win share"]
@@ -1312,18 +1476,18 @@ fn policy(sess: &mut Session, a: &Value) -> Result<Value> {
         } else {
             let (mid, m) = model(sess, a)?;
             v.check(&m)?;
-            let rnn = from_json(&m)?;
+            let rnn = from_json(&m, &v)?;
             let auto = auto(&v, a)?;
             let en: Vec<usize> = v.enabled(&mk).into_iter().filter(|&t| !auto[t]).collect();
             if en.is_empty() {
                 return Err(Error::Invalid("no move to choose at this marking".into()));
             }
-            let mut h = vec![0.0; rnn.hs];
+            let mut h = rnn.state();
             let p = rnn_probs(&rnn, &mut h, &v.input(&mk), &en);
             (
                 en.iter().map(|&t| (t, p[t])).collect(),
-                format!("RNN policy here ({mid})"),
-                format!("RNN policy ({mid}): probability per move"),
+                format!("{} policy here ({mid})", rnn.name()),
+                format!("{} policy ({mid}): probability per move", rnn.name()),
                 Some(mid),
             )
         };
@@ -1372,5 +1536,5 @@ fn policy(sess: &mut Session, a: &Value) -> Result<Value> {
 fn _shared_across_threads() {
     fn sync<T: Sync + Send>() {}
     sync::<View>();
-    sync::<Rnn>();
+    sync::<Policy>();
 }
