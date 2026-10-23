@@ -136,6 +136,12 @@ Tokens are written to `credentials.json` (owner-only) and never returned by a co
 - `rnn.train` plays seeded random games through the firing rule and trains on them. It plots the loss against the floor a perfect imitator of random play would reach.
 - `rnn.play` lets a model choose each firing. The game is stored as a trace, so `sim.goto` replays it and `provenance.check_witness` re-checks it.
 - `rnn.self_play` improves a model by self-play against a reward read from the final marking, e.g. `{"win_x": 1, "win_o": -1}` on tic-tac-toe.
+- `rnn.imitate` trains a model on an exact minimax teacher, which solves the whole game (small games only). Ties between moves of equal value go to the move that does best against random play.
+- `rnn.evaluate` plays a model against a random or minimax opponent from each side and charts wins, draws and losses.
+- `rnn.policy` shows what a model would play at the canvas marking, or the teacher's value for each move with `teacher`, as badges on the canvas and a bar chart.
+- `auto` (on every rnn command) names transitions that fire as soon as they are enabled, before anyone chooses. On tic-tac-toe, `["x_win_", "o_win_"]` makes a line end the game when it is made.
+
+On tic-tac-toe with `sides {"x_": 1, "o_": -1}`, the teacher solves all 5,477 positions. Every opening draws with best play, and the centre is the tie-break. A model trained with `rnn.imitate` opens in the centre and draws every game against the teacher. With 2,000 games and 150 epochs it wins 98.6% as X against random play, without a loss.
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

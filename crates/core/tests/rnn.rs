@@ -186,3 +186,93 @@ fn games_on_a_net_that_never_stops_are_capped() {
     assert_eq!(g["steps"], 30);
     assert_eq!(g["capped"], true);
 }
+
+// ---------------------------------------------------------- the minimax teacher
+
+fn rules() -> Value {
+    json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1, "win_o": -1}, "auto": ["x_win_", "o_win_"]})
+}
+
+fn with(mut base: Value, extra: Value) -> Value {
+    for (k, v) in extra.as_object().unwrap() {
+        base[k] = v.clone();
+    }
+    base
+}
+
+#[test]
+fn the_teacher_solves_tic_tac_toe_and_the_model_opens_in_the_centre() {
+    let mut s = example("tic-tac-toe");
+    let out = run(
+        &mut s,
+        "rnn.imitate",
+        with(rules(), json!({"games": 300, "epochs": 40})),
+    );
+    // Every position of the game, solved: every opening draws with best
+    // play, and the centre is the best tie-break against random play.
+    assert_eq!(out["training"]["positions_solved"], 5477);
+    let opening = &out["teacher_opening"];
+    assert_eq!(opening["best"], "x_play_11");
+    for m in opening["moves"].as_array().unwrap() {
+        assert_eq!(f(&m["value"]), 0.0, "{m}");
+    }
+    // The acceptance test: the trained model plays the centre first.
+    let p = run(&mut s, "rnn.policy", json!({}));
+    assert_eq!(p["moves"][0]["transition"], "x_play_11", "{p}");
+    assert!(s
+        .highlight
+        .as_ref()
+        .unwrap()
+        .weights
+        .contains_key("x_play_11"));
+    // Against perfect play it never loses, from either side.
+    let e = run(
+        &mut s,
+        "rnn.evaluate",
+        with(rules(), json!({"opponent": "minimax", "games": 2})),
+    );
+    for side in e["results"].as_array().unwrap() {
+        assert_eq!(side["losses"], 0, "{e}");
+    }
+    // Against random play, X wins more than it loses.
+    let e = run(&mut s, "rnn.evaluate", with(rules(), json!({"games": 100})));
+    let x = &e["results"][0];
+    assert_eq!(x["side"], "x_");
+    assert!(x["wins"].as_u64() > x["losses"].as_u64(), "{e}");
+}
+
+#[test]
+fn the_teacher_shows_move_values_on_the_canvas() {
+    let mut s = example("tic-tac-toe");
+    let p = run(
+        &mut s,
+        "rnn.policy",
+        with(rules(), json!({"teacher": true})),
+    );
+    assert_eq!(p["moves"].as_array().unwrap().len(), 9);
+    assert_eq!(s.highlight.as_ref().unwrap().weights.len(), 9);
+}
+
+#[test]
+fn two_sided_commands_need_sides_and_one_mover() {
+    let mut s = example("tic-tac-toe");
+    let e = s
+        .execute("rnn.imitate", json!({"reward": {"win_x": 1}}))
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("sides is required"), "{e}");
+    // Without `auto`, a win claim is enabled on the other side's turn.
+    let mut s = example("tic-tac-toe");
+    let e = s
+        .execute(
+            "rnn.imitate",
+            json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1, "win_o": -1}, "games": 5, "epochs": 1}),
+        )
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("auto"), "{e}");
+    assert!(s.execute("rnn.train", json!({"auto": ["nope_"]})).is_err());
+    assert!(s
+        .execute("rnn.evaluate", with(rules(), json!({"opponent": "god"})))
+        .is_err());
+}

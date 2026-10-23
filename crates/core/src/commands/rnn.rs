@@ -10,12 +10,14 @@
 //! `provenance.check_witness` re-checks. A learned policy is a guess, not a
 //! verdict: these commands prove nothing about the net.
 
+use std::collections::HashMap;
+
 use pflow_tropical::rnn::{ElmanRnn, SimpleRng};
 use serde_json::{json, Value};
 
 use crate::analysis::Structure;
-use crate::artifact::{ArtifactData, Series, TraceStep};
-use crate::registry::{always, b, n, opt, s, ArgType::*, CommandSpec};
+use crate::artifact::{ArtifactData, Bar, Series, TraceStep};
+use crate::registry::{always, b, n, opt, s, strs, ArgType::*, CommandSpec};
 use crate::session::{Session, Step};
 use crate::sim::{self, Compiled, Marking};
 use crate::{Error, Result};
@@ -43,6 +45,7 @@ pub const SET: &[CommandSpec] = &[
             opt("max_steps", Int, "firings per game at most (default 200, 1..10000)"),
             opt("seed", Int, "seed for the games and the initial weights (default 1)"),
             opt("from_current", Bool, "start games from the canvas marking instead of the initial marking"),
+            opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled, before anyone chooses (e.g. [\"x_win_\", \"o_win_\"]: a line ends the game when it is made)"),
         ],
         enabled: always,
         run: train,
@@ -62,6 +65,7 @@ pub const SET: &[CommandSpec] = &[
             opt("seed", Int, "seed for stochastic play (default 1)"),
             opt("max_steps", Int, "firings at most (default 200, 1..10000)"),
             opt("from_current", Bool, "start from the canvas marking instead of the initial marking"),
+            opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled, before anyone chooses (e.g. [\"x_win_\", \"o_win_\"]: a line ends the game when it is made)"),
         ],
         enabled: always,
         run: play,
@@ -90,10 +94,80 @@ pub const SET: &[CommandSpec] = &[
             opt("max_steps", Int, "firings per game at most (default 200, 1..10000)"),
             opt("seed", Int, "seed (default 1)"),
             opt("from_current", Bool, "start games from the canvas marking instead of the initial marking"),
+            opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled, before anyone chooses (e.g. [\"x_win_\", \"o_win_\"]: a line ends the game when it is made)"),
         ],
         enabled: always,
         run: self_play,
         journal: true,
+    },
+    CommandSpec {
+        id: "rnn.imitate",
+        label: "Train RNN from Minimax Teacher (experimental)",
+        help: "Experimental. Train an RNN to play like an exact minimax teacher: the teacher searches the whole game (two sides by \
+               `sides`, scored by `reward`, automatic transitions by `auto`; small games only, ≤ 200k positions) and names the \
+               best move at every position, ties broken by the move that does best against random play. Games follow the \
+               teacher, with a random move a share `explore` of the time so the model sees mistakes too. Stores the loss per \
+               epoch, the teacher's values for the opening moves, and the model (for rnn.play, rnn.evaluate, rnn.policy).",
+        menu: MENU,
+        shortcut: None,
+        args: &[
+            opt("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
+            opt("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
+            opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled (e.g. win claims)"),
+            opt("hidden", Int, "hidden units (default 32, 1..256)"),
+            opt("games", Int, "teacher games to learn from (default 300, 1..5000)"),
+            opt("epochs", Int, "passes over the games (default 40, 1..1000)"),
+            opt("explore", Num, "share of moves played at random (default 0.3, 0..1)"),
+            opt("learning_rate", Num, "step size (default 0.01)"),
+            opt("max_steps", Int, "firings per game at most (default 200, 1..10000)"),
+            opt("seed", Int, "seed (default 1)"),
+        ],
+        enabled: always,
+        run: imitate,
+        journal: true,
+    },
+    CommandSpec {
+        id: "rnn.evaluate",
+        label: "Evaluate RNN Policy (experimental)",
+        help: "Experimental. Play a model against an opponent from each side of `sides`: `games` games per side, the model greedy \
+               unless `stochastic`, the opponent random or the minimax teacher. Stores wins, draws and losses per side as a bar \
+               chart (shares of games) and a table.",
+        menu: MENU,
+        shortcut: None,
+        args: &[
+            opt("model", Str, "rnn model artifact id (default: the newest)"),
+            opt("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
+            opt("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
+            opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled (e.g. win claims)"),
+            opt("opponent", Str, "random (default) or minimax"),
+            opt("games", Int, "games per side (default 200, 1..5000)"),
+            opt("stochastic", Bool, "sample the model's moves instead of taking the most likely"),
+            opt("max_steps", Int, "firings per game at most (default 200, 1..10000)"),
+            opt("seed", Int, "seed (default 1)"),
+        ],
+        enabled: always,
+        run: evaluate,
+        journal: true,
+    },
+    CommandSpec {
+        id: "rnn.policy",
+        label: "Show RNN Policy Here (experimental)",
+        help: "Experimental. What a model would play at the canvas marking: its probability for each enabled move, as badges on \
+               the canvas (view.highlight) and a bar chart. With `teacher`, the minimax teacher's value of each move instead \
+               (+1: the +1 side wins with best play, 0: draw, −1: loses; needs sides and reward). The model sees the marking \
+               fresh (hidden state zero), which is exact at the start of a game.",
+        menu: MENU,
+        shortcut: None,
+        args: &[
+            opt("model", Str, "rnn model artifact id (default: the newest)"),
+            opt("teacher", Bool, "show the minimax teacher's move values instead of a model's probabilities"),
+            opt("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
+            opt("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
+            opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled (e.g. win claims)"),
+        ],
+        enabled: always,
+        run: policy,
+        journal: false,
     },
 ];
 
@@ -191,35 +265,45 @@ fn start(sess: &Session, a: &Value) -> Marking {
     }
 }
 
-/// One game: the marking before each move, the move, and the enabled moves.
+/// One game: the input, choice and policy probabilities at each chosen
+/// move, every firing (automatic ones too) with the marking after it, and
+/// the end.
 struct Game {
     inputs: Vec<Vec<f64>>,
     moves: Vec<usize>,
     probs: Vec<Vec<f64>>,
     markings: Vec<Marking>,
+    /// (transition, automatic, marking after), in firing order.
+    fired: Vec<(usize, bool, Marking)>,
     end: Marking,
     capped: bool,
 }
 
-/// Plays one game. `policy` None picks uniformly among the enabled moves;
-/// Some((rnn, sample)) asks the RNN, masked to the enabled moves, and takes
-/// the most likely move unless `sample`.
+/// Picks a move: given the marking, its input vector and the enabled
+/// moves (never automatic ones), the transition to fire and the policy's
+/// probabilities over every transition (empty when not an RNN).
+type Chooser<'a> =
+    dyn FnMut(&Marking, &[f64], &[usize], &mut SimpleRng) -> Result<(usize, Vec<f64>)> + 'a;
+
+/// Plays one game from `from`. A transition marked `auto` fires as soon as
+/// it is enabled, before anyone chooses (a win claim ends the game the
+/// moment the line is made); otherwise `choose` picks among the enabled
+/// moves. Stops when nothing is enabled or after `max_steps` firings.
 fn game(
     v: &View,
     from: &Marking,
     max_steps: usize,
-    policy: Option<(&ElmanRnn, bool)>,
+    auto: &[bool],
     rng: &mut SimpleRng,
+    choose: &mut Chooser,
 ) -> Result<Game> {
     let mut mk = from.clone();
-    let mut h = policy
-        .map(|(r, _)| vec![0.0; r.hidden_size])
-        .unwrap_or_default();
     let mut g = Game {
         inputs: vec![],
         moves: vec![],
         probs: vec![],
         markings: vec![],
+        fired: vec![],
         end: Marking::new(),
         capped: false,
     };
@@ -228,53 +312,229 @@ fn game(
         if enabled.is_empty() {
             break;
         }
-        if g.moves.len() >= max_steps {
+        if g.fired.len() >= max_steps {
             g.capped = true;
             break;
         }
+        if let Some(&t) = enabled.iter().find(|&&t| auto[t]) {
+            mk = v.fire(&mk, t)?;
+            g.fired.push((t, true, mk.clone()));
+            continue;
+        }
         let input = v.input(&mk);
-        let (t, probs) = match policy {
-            None => {
-                let t = enabled[(rng.next_u64() % enabled.len() as u64) as usize];
-                (t, vec![])
-            }
-            Some((rnn, sample)) => {
-                let (h2, logits) = rnn.step(&input, &h);
-                h = h2;
-                let mut masked = vec![f64::NEG_INFINITY; logits.len()];
-                for &t in &enabled {
-                    masked[t] = logits[t];
-                }
-                let p = ElmanRnn::softmax(&masked);
-                let t = if sample {
-                    let r = rng.uniform();
-                    let mut acc = 0.0;
-                    let mut pick = *enabled.last().expect("non-empty");
-                    for &t in &enabled {
-                        acc += p[t];
-                        if r < acc {
-                            pick = t;
-                            break;
-                        }
-                    }
-                    pick
-                } else {
-                    *enabled
-                        .iter()
-                        .max_by(|&&x, &&y| p[x].total_cmp(&p[y]))
-                        .expect("non-empty")
-                };
-                (t, p)
-            }
-        };
+        let (t, probs) = choose(&mk, &input, &enabled, rng)?;
         g.inputs.push(input);
         g.moves.push(t);
         g.probs.push(probs);
         g.markings.push(mk.clone());
         mk = v.fire(&mk, t)?;
+        g.fired.push((t, false, mk.clone()));
     }
     g.end = mk;
     Ok(g)
+}
+
+fn uniform(enabled: &[usize], rng: &mut SimpleRng) -> usize {
+    enabled[(rng.next_u64() % enabled.len() as u64) as usize]
+}
+
+/// The RNN's next step: updates `h` and returns the policy over every
+/// transition, masked to `enabled`.
+fn rnn_probs(rnn: &ElmanRnn, h: &mut Vec<f64>, input: &[f64], enabled: &[usize]) -> Vec<f64> {
+    let (h2, logits) = rnn.step(input, h);
+    *h = h2;
+    let mut masked = vec![f64::NEG_INFINITY; logits.len()];
+    for &t in enabled {
+        masked[t] = logits[t];
+    }
+    ElmanRnn::softmax(&masked)
+}
+
+/// The most likely enabled move, or one sampled from `p`.
+fn pick(p: &[f64], enabled: &[usize], sample: bool, rng: &mut SimpleRng) -> usize {
+    if sample {
+        let r = rng.uniform();
+        let mut acc = 0.0;
+        for &t in enabled {
+            acc += p[t];
+            if r < acc {
+                return t;
+            }
+        }
+        *enabled.last().expect("non-empty")
+    } else {
+        *enabled
+            .iter()
+            .max_by(|&&x, &&y| p[x].total_cmp(&p[y]))
+            .expect("non-empty")
+    }
+}
+
+/// A chooser that asks the RNN at every move.
+fn rnn_chooser<'a>(rnn: &'a ElmanRnn, sample: bool) -> Box<Chooser<'a>> {
+    let mut h = vec![0.0; rnn.hidden_size];
+    Box::new(move |_, input, enabled, rng| {
+        let p = rnn_probs(rnn, &mut h, input, enabled);
+        Ok((pick(&p, enabled, sample, rng), p))
+    })
+}
+
+/// `auto` resolved to a flag per transition (prefixes of transition ids).
+fn auto(v: &View, a: &Value) -> Result<Vec<bool>> {
+    let prefixes = strs(a, "auto").unwrap_or_default();
+    for p in &prefixes {
+        if !v.st.transitions.iter().any(|t| t.starts_with(p.as_str())) {
+            return Err(Error::BadArgs(format!(
+                "auto names {p}, which no transition id starts with"
+            )));
+        }
+    }
+    Ok(v.st
+        .transitions
+        .iter()
+        .map(|t| prefixes.iter().any(|p| t.starts_with(p.as_str())))
+        .collect())
+}
+
+/// The side to move: the sign every enabled move shares.
+fn mover(v: &View, sign: &[f64], enabled: &[usize]) -> Result<f64> {
+    let s = sign[enabled[0]];
+    if s == 0.0 || enabled.iter().any(|&t| sign[t] != s) {
+        let names: Vec<&str> = enabled
+            .iter()
+            .map(|&t| v.st.transitions[t].as_str())
+            .collect();
+        return Err(Error::Invalid(format!(
+            "the enabled moves {names:?} do not all belong to one side of `sides`; give every transition a side, and mark \
+             transitions nobody chooses (e.g. win claims) `auto`"
+        )));
+    }
+    Ok(s)
+}
+
+/// Exact minimax over the token game, for two sides that alternate by the
+/// net's own rules: the side with sign +1 maximizes the reward, −1
+/// minimizes it. Values are memoized per marking; `cap` bounds the search.
+struct Teacher<'a> {
+    v: &'a View,
+    auto: &'a [bool],
+    sign: &'a [f64],
+    reward: &'a [(usize, f64)],
+    value: HashMap<Vec<i64>, f64>,
+    random: HashMap<Vec<i64>, f64>,
+    cap: usize,
+}
+
+impl<'a> Teacher<'a> {
+    const CAP: usize = 200_000;
+
+    fn new(v: &'a View, auto: &'a [bool], sign: &'a [f64], reward: &'a [(usize, f64)]) -> Self {
+        Self {
+            v,
+            auto,
+            sign,
+            reward,
+            value: HashMap::new(),
+            random: HashMap::new(),
+            cap: Self::CAP,
+        }
+    }
+
+    /// Fires automatic transitions until none is enabled.
+    fn settle(&self, mk: &Marking) -> Result<Marking> {
+        let mut mk = mk.clone();
+        for _ in 0..10_000 {
+            match self.v.enabled(&mk).into_iter().find(|&t| self.auto[t]) {
+                Some(t) => mk = self.v.fire(&mk, t)?,
+                None => return Ok(mk),
+            }
+        }
+        Err(Error::Invalid(
+            "automatic transitions never stop firing".into(),
+        ))
+    }
+
+    fn score(&self, mk: &Marking) -> f64 {
+        let x = self.v.input(mk);
+        self.reward.iter().map(|&(i, w)| w * x[i]).sum()
+    }
+
+    fn check_cap(&self) -> Result<()> {
+        if self.value.len() + self.random.len() > self.cap {
+            return Err(Error::Invalid(format!(
+                "the game has more than {} positions; the minimax teacher is for small games like tic-tac-toe",
+                self.cap
+            )));
+        }
+        Ok(())
+    }
+
+    /// The game's value from `mk` with both sides playing perfectly.
+    fn value(&mut self, mk: &Marking) -> Result<f64> {
+        let mk = self.settle(mk)?;
+        let key = self.v.st.marking(&mk);
+        if let Some(&x) = self.value.get(&key) {
+            return Ok(x);
+        }
+        self.check_cap()?;
+        let en = self.v.enabled(&mk);
+        let x = if en.is_empty() {
+            self.score(&mk)
+        } else {
+            let s = mover(self.v, self.sign, &en)?;
+            let mut best = f64::NEG_INFINITY;
+            for &t in &en {
+                best = best.max(s * self.value(&self.v.fire(&mk, t)?)?);
+            }
+            s * best
+        };
+        self.value.insert(key, x);
+        Ok(x)
+    }
+
+    /// The expected reward from `mk` when both sides play uniformly at
+    /// random: the tie-break between moves of equal value.
+    fn random(&mut self, mk: &Marking) -> Result<f64> {
+        let mk = self.settle(mk)?;
+        let key = self.v.st.marking(&mk);
+        if let Some(&x) = self.random.get(&key) {
+            return Ok(x);
+        }
+        self.check_cap()?;
+        let en = self.v.enabled(&mk);
+        let x = if en.is_empty() {
+            self.score(&mk)
+        } else {
+            let mut sum = 0.0;
+            for &t in &en {
+                sum += self.random(&self.v.fire(&mk, t)?)?;
+            }
+            sum / en.len() as f64
+        };
+        self.random.insert(key, x);
+        Ok(x)
+    }
+
+    /// Each enabled move's (perfect-play value, random-play value) from the
+    /// mover's side, and the best move: highest value, ties broken by the
+    /// random-play value.
+    fn advise(&mut self, mk: &Marking, en: &[usize]) -> Result<(Vec<(f64, f64)>, usize)> {
+        let s = mover(self.v, self.sign, en)?;
+        let mut vals = Vec::with_capacity(en.len());
+        for &t in en {
+            let next = self.v.fire(mk, t)?;
+            vals.push((s * self.value(&next)?, s * self.random(&next)?));
+        }
+        let best = (0..en.len())
+            .max_by(|&i, &j| {
+                vals[i]
+                    .0
+                    .total_cmp(&vals[j].0)
+                    .then(vals[i].1.total_cmp(&vals[j].1))
+            })
+            .expect("non-empty");
+        Ok((vals, en[best]))
+    }
 }
 
 fn to_json(rnn: &ElmanRnn, v: &View, mode: &str, training: Value) -> Value {
@@ -362,13 +622,16 @@ fn train(sess: &mut Session, a: &Value) -> Result<Value> {
     let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
     let lr = rate(a)?;
     let v = View::new(sess)?;
+    let auto = auto(&v, a)?;
     let from = start(sess, a);
 
     let mut rng = SimpleRng::new(seed);
     let mut seqs = vec![];
     let (mut moves, mut floor, mut capped) = (0usize, 0.0f64, 0usize);
+    let mut random =
+        |_: &Marking, _: &[f64], en: &[usize], rng: &mut SimpleRng| Ok((uniform(en, rng), vec![]));
     for _ in 0..games {
-        let g = game(&v, &from, max_steps, None, &mut rng)?;
+        let g = game(&v, &from, max_steps, &auto, &mut rng, &mut random)?;
         if g.moves.is_empty() {
             continue;
         }
@@ -435,30 +698,29 @@ fn play(sess: &mut Session, a: &Value) -> Result<Value> {
     let stochastic = b(a, "stochastic").unwrap_or(false);
     let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
+    let auto = auto(&v, a)?;
     let from = start(sess, a);
     let g = game(
         &v,
         &from,
         max_steps,
-        Some((&rnn, stochastic)),
+        &auto,
         &mut SimpleRng::new(seed),
+        &mut *rnn_chooser(&rnn, stochastic),
     )?;
 
     let mut steps = vec![TraceStep {
         transition: String::new(),
         marking: from.clone(),
     }];
+    for (t, _, after) in &g.fired {
+        steps.push(TraceStep {
+            transition: v.st.transitions[*t].clone(),
+            marking: after.clone(),
+        });
+    }
     let mut moves = vec![];
     for (i, &t) in g.moves.iter().enumerate() {
-        let after = g
-            .markings
-            .get(i + 1)
-            .cloned()
-            .unwrap_or_else(|| g.end.clone());
-        steps.push(TraceStep {
-            transition: v.st.transitions[t].clone(),
-            marking: after,
-        });
         let p = &g.probs[i];
         let mut alt: Vec<usize> = (0..p.len()).filter(|&j| j != t && p[j] > 0.0).collect();
         alt.sort_by(|&x, &y| p[y].total_cmp(&p[x]));
@@ -490,7 +752,7 @@ fn play(sess: &mut Session, a: &Value) -> Result<Value> {
         ArtifactData::Trace { steps },
     );
     let out = json!({
-        "model": mid, "trace": trace, "steps": g.moves.len(), "capped": g.capped,
+        "model": mid, "trace": trace, "steps": g.fired.len(), "moves_chosen": g.moves.len(), "capped": g.capped,
         "end": end, "moves": moves,
         "note": "a learned policy's game: legal by construction (every firing went through the firing rule), not optimal by any proof",
     });
@@ -584,6 +846,7 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
     let mut rnn = from_json(&m)?;
     let reward = reward(&v, a)?;
     let sides = sides(&v, a)?;
+    let auto = auto(&v, a)?;
     let rounds = int(a, "rounds", 20, 1, 500)?;
     let games = int(a, "games", 50, 1, 2000)?;
     let epochs = int(a, "epochs", 1, 1, 100)?;
@@ -600,7 +863,14 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
         let mut per_move = Vec::with_capacity(games);
         let (mut total, mut p, mut z, mut q) = (0.0, 0usize, 0usize, 0usize);
         for _ in 0..games {
-            let g = game(&v, &from, max_steps, Some((&rnn, true)), &mut rng)?;
+            let g = game(
+                &v,
+                &from,
+                max_steps,
+                &auto,
+                &mut rng,
+                &mut *rnn_chooser(&rnn, true),
+            )?;
             let end = v.input(&g.end);
             let r: f64 = reward.iter().map(|&(i, w)| w * end[i]).sum();
             total += r;
@@ -662,5 +932,295 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
         "first": {"mean_reward": mean[0], "positive": pos[0], "zero": zero[0], "negative": neg[0]},
         "last": {"mean_reward": mean.last(), "positive": pos.last(), "zero": zero.last(), "negative": neg.last()},
         "loss": loss,
+    }))
+}
+
+/// The rules of a two-sided game: each transition's side, the reward
+/// read from the final marking, and the automatic transitions.
+struct Rules {
+    sign: Vec<f64>,
+    reward: Vec<(usize, f64)>,
+    auto: Vec<bool>,
+}
+
+fn game_rules(v: &View, a: &Value) -> Result<Rules> {
+    let sign = sides(v, a)?.ok_or_else(|| {
+        Error::BadArgs(
+            "sides is required: {transition-id prefix: sign}, e.g. {\"x_\": 1, \"o_\": -1}".into(),
+        )
+    })?;
+    Ok(Rules {
+        sign,
+        reward: reward(v, a)?,
+        auto: auto(v, a)?,
+    })
+}
+
+fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
+    let hidden = int(a, "hidden", 32, 1, 256)?;
+    let games = int(a, "games", 300, 1, 5000)?;
+    let epochs = int(a, "epochs", 40, 1, 1000)?;
+    let max_steps = int(a, "max_steps", 200, 1, 10000)?;
+    let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
+    let lr = rate(a)?;
+    let explore = match n(a, "explore") {
+        None => 0.3,
+        Some(x) if (0.0..=1.0).contains(&x) => x,
+        Some(x) => return Err(Error::BadArgs(format!("explore must be in 0..1, got {x}"))),
+    };
+    let v = View::new(sess)?;
+    let Rules { sign, reward, auto } = game_rules(&v, a)?;
+    let from = sim::initial_marking(&sess.doc);
+    let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
+
+    let mut rng = SimpleRng::new(seed);
+    let mut seqs = vec![];
+    let mut moves = 0usize;
+    for _ in 0..games {
+        let mut labels = vec![];
+        let mut follow = |mk: &Marking, _: &[f64], en: &[usize], rng: &mut SimpleRng| {
+            let (_, best) = teacher.advise(mk, en)?;
+            labels.push(best);
+            let t = if rng.uniform() < explore {
+                uniform(en, rng)
+            } else {
+                best
+            };
+            Ok((t, vec![]))
+        };
+        let g = game(&v, &from, max_steps, &auto, &mut rng, &mut follow)?;
+        if !g.inputs.is_empty() {
+            moves += labels.len();
+            seqs.push((g.inputs, labels));
+        }
+    }
+    if seqs.is_empty() {
+        return Err(Error::Invalid(
+            "nothing to choose at the start marking".into(),
+        ));
+    }
+    // What the teacher thinks of the opening.
+    let start = teacher.settle(&from)?;
+    let en = v.enabled(&start);
+    let (vals, best) = teacher.advise(&start, &en)?;
+    let opening: Vec<Value> = en
+        .iter()
+        .zip(&vals)
+        .map(|(&t, &(value, random))| json!({ "transition": v.st.transitions[t], "value": value, "vs_random": random }))
+        .collect();
+    let positions = teacher.value.len();
+
+    let mut rnn = ElmanRnn::new(v.st.places.len(), hidden, v.st.transitions.len(), seed);
+    let mut losses = Vec::with_capacity(epochs);
+    for _ in 0..epochs {
+        losses.push(rnn.train(&seqs, lr, 1));
+    }
+    let training = json!({
+        "teacher": "minimax", "games": seqs.len(), "moves": moves, "epochs": epochs, "explore": explore,
+        "learning_rate": lr, "max_steps": max_steps, "seed": seed, "loss": losses.last(),
+        "sides": a.get("sides"), "reward": a.get("reward"), "auto": a.get("auto"),
+        "positions_solved": positions,
+    });
+    let curve = sess.add_artifact(
+        format!("RNN imitation loss (hidden {hidden}, seed {seed})"),
+        source("rnn.imitate", a),
+        ArtifactData::TimeSeries {
+            x_label: "epoch".into(),
+            x: (1..=epochs).map(|e| e as f64).collect(),
+            series: vec![Series::new("loss", losses)],
+        },
+    );
+    let m = sess.add_artifact(
+        format!("RNN model (minimax teacher, hidden {hidden}, seed {seed})"),
+        source("rnn.imitate", a),
+        ArtifactData::Report(to_json(&rnn, &v, "minimax-imitation", training.clone())),
+    );
+    Ok(json!({
+        "model": m, "artifact": curve, "artifacts": [curve, m], "training": training,
+        "teacher_opening": { "best": v.st.transitions[best], "moves": opening },
+    }))
+}
+
+fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
+    let (mid, m) = model(sess, a)?;
+    let v = View::new(sess)?;
+    v.check(&m)?;
+    let rnn = from_json(&m)?;
+    let Rules { sign, reward, auto } = game_rules(&v, a)?;
+    let games = int(a, "games", 200, 1, 5000)?;
+    let max_steps = int(a, "max_steps", 200, 1, 10000)?;
+    let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
+    let stochastic = b(a, "stochastic").unwrap_or(false);
+    let opponent = s(a, "opponent").unwrap_or("random");
+    if !matches!(opponent, "random" | "minimax") {
+        return Err(Error::BadArgs(format!(
+            "opponent must be random or minimax, got {opponent}"
+        )));
+    }
+    let from = sim::initial_marking(&sess.doc);
+    let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
+    let prefixes: Vec<(String, f64)> = match a.get("sides") {
+        Some(Value::Object(o)) => o
+            .iter()
+            .map(|(k, w)| (k.clone(), w.as_f64().unwrap_or(0.0)))
+            .collect(),
+        Some(Value::String(t)) => serde_json::from_str::<serde_json::Map<String, Value>>(t)
+            .map(|o| {
+                o.iter()
+                    .map(|(k, w)| (k.clone(), w.as_f64().unwrap_or(0.0)))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        _ => vec![],
+    };
+    let mut rng = SimpleRng::new(seed);
+    let (mut bars, mut rows) = (vec![], vec![]);
+    for (side, seat) in &prefixes {
+        let (mut w, mut d, mut l) = (0usize, 0usize, 0usize);
+        for _ in 0..games {
+            let mut h = vec![0.0; rnn.hidden_size];
+            let mut choose = |mk: &Marking, input: &[f64], en: &[usize], rng: &mut SimpleRng| {
+                // The model's hidden state follows every move, both sides'.
+                let p = rnn_probs(&rnn, &mut h, input, en);
+                if mover(&v, &sign, en)? == *seat {
+                    return Ok((pick(&p, en, stochastic, rng), vec![]));
+                }
+                let t = match opponent {
+                    "minimax" => teacher.advise(mk, en)?.1,
+                    _ => uniform(en, rng),
+                };
+                Ok((t, vec![]))
+            };
+            let g = game(&v, &from, max_steps, &auto, &mut rng, &mut choose)?;
+            let x = v.input(&g.end);
+            let r: f64 = seat * reward.iter().map(|&(i, wt)| wt * x[i]).sum::<f64>();
+            match r.partial_cmp(&0.0) {
+                Some(std::cmp::Ordering::Greater) => w += 1,
+                Some(std::cmp::Ordering::Less) => l += 1,
+                _ => d += 1,
+            }
+        }
+        let k = games as f64;
+        for (what, c) in [("win", w), ("draw", d), ("loss", l)] {
+            bars.push(Bar {
+                name: format!("as {side} · {what}"),
+                value: c as f64 / k,
+                lo: None,
+                hi: None,
+            });
+        }
+        rows.push(vec![
+            json!(side),
+            json!(w),
+            json!(d),
+            json!(l),
+            json!(w as f64 / k),
+        ]);
+    }
+    let how = if stochastic { "sampled" } else { "greedy" };
+    let chart = sess.add_artifact(
+        format!("RNN vs {opponent} ({mid}, {how}, seed {seed})"),
+        source("rnn.evaluate", a),
+        ArtifactData::Bars {
+            value_label: "share of games".into(),
+            bars,
+        },
+    );
+    let table = sess.add_artifact(
+        format!("RNN vs {opponent} table ({mid}, {how}, seed {seed})"),
+        source("rnn.evaluate", a),
+        ArtifactData::Table {
+            columns: ["side", "wins", "draws", "losses", "win share"]
+                .map(String::from)
+                .to_vec(),
+            rows: rows.clone(),
+        },
+    );
+    Ok(json!({
+        "model": mid, "opponent": opponent, "games_per_side": games, "artifact": chart, "artifacts": [chart, table],
+        "results": rows.iter().map(|r| json!({"side": r[0], "wins": r[1], "draws": r[2], "losses": r[3]})).collect::<Vec<_>>(),
+    }))
+}
+
+fn policy(sess: &mut Session, a: &Value) -> Result<Value> {
+    let v = View::new(sess)?;
+    let teacher_mode = b(a, "teacher").unwrap_or(false);
+    let mk = sess.marking.clone();
+    let (weights, title, label, mid): (Vec<(usize, f64)>, String, String, Option<String>) =
+        if teacher_mode {
+            let Rules { sign, reward, auto } = game_rules(&v, a)?;
+            let mut t = Teacher::new(&v, &auto, &sign, &reward);
+            let here = t.settle(&mk)?;
+            let en = v.enabled(&here);
+            if en.is_empty() {
+                return Err(Error::Invalid("the game is over at this marking".into()));
+            }
+            let (vals, _) = t.advise(&here, &en)?;
+            let s = mover(&v, &sign, &en)?;
+            (
+                en.iter()
+                    .zip(&vals)
+                    .map(|(&t, &(val, _))| (t, s * val))
+                    .collect(),
+                "Minimax value per move".into(),
+                "minimax value per move (+1: the +1 side wins with best play)".into(),
+                None,
+            )
+        } else {
+            let (mid, m) = model(sess, a)?;
+            v.check(&m)?;
+            let rnn = from_json(&m)?;
+            let auto = auto(&v, a)?;
+            let en: Vec<usize> = v.enabled(&mk).into_iter().filter(|&t| !auto[t]).collect();
+            if en.is_empty() {
+                return Err(Error::Invalid("no move to choose at this marking".into()));
+            }
+            let mut h = vec![0.0; rnn.hidden_size];
+            let p = rnn_probs(&rnn, &mut h, &v.input(&mk), &en);
+            (
+                en.iter().map(|&t| (t, p[t])).collect(),
+                format!("RNN policy here ({mid})"),
+                format!("RNN policy ({mid}): probability per move"),
+                Some(mid),
+            )
+        };
+    let mut sorted = weights.clone();
+    sorted.sort_by(|x, y| y.1.total_cmp(&x.1));
+    let chart = sess.add_artifact(
+        title,
+        source("rnn.policy", a),
+        ArtifactData::Bars {
+            value_label: if teacher_mode {
+                "value".into()
+            } else {
+                "probability".into()
+            },
+            bars: sorted
+                .iter()
+                .map(|&(t, w)| Bar {
+                    name: v.st.transitions[t].clone(),
+                    value: w,
+                    lo: None,
+                    hi: None,
+                })
+                .collect(),
+        },
+    );
+    let badges: serde_json::Map<String, Value> = weights
+        .iter()
+        .map(|&(t, w)| {
+            (
+                v.st.transitions[t].clone(),
+                json!((w * 100.0).round() / 100.0),
+            )
+        })
+        .collect();
+    sess.execute(
+        "view.highlight",
+        json!({ "nodes": weights.iter().map(|&(t, _)| v.st.transitions[t].clone()).collect::<Vec<_>>(), "label": label, "weights": badges }),
+    )?;
+    Ok(json!({
+        "model": mid, "artifact": chart,
+        "moves": sorted.iter().map(|&(t, w)| json!({"transition": v.st.transitions[t], "value": w})).collect::<Vec<_>>(),
     }))
 }
