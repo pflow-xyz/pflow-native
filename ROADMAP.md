@@ -2,87 +2,92 @@
 
 Investigations for the experimental learned policies (`--features rnn`). FEATURES.md stays the plan of record for shipped commands.
 
-Where things stand (tic-tac-toe, 2,000 imitation games, 150 epochs): MLP [64, 64]
-draws every sampled game against a minimax that varies its moves. RNN 64 loses 8 of
-1,000 as O. The plain ODE player loses 35 of 100 as O. `rnn.verify` walks every
-opponent line. It finds the MLP has no value-losing moves but misses 2 wins as X, and
-the ODE player makes value-losing moves at 12 positions as O. Every result is one
-seed.
+## Where things stand
+
+On tic-tac-toe, an MLP trained on every reachable position once (`positions: "all"`, 4,520 positions) is **minimax-equivalent on both seats**, checked by `rnn.verify`'s exhaustive referee on 4 of 4 seeds (`layers` [64, 64] or [128, 64], 300 epochs, `learning_rate` 0.005–0.01). It clears the same bar sim-pflow-xyz `experiments/ode-minimax` cleared. That experiment needed hand-calibrated structure; the MLP learns it from the teacher's labels.
+
+How it got there, in order of effect:
+1. **Coverage.** The first imitation games followed one tie-broken line, and were graded against a minimax that played that same line, so "draws every game" was an artifact. Once games played any of the teacher's best moves, RNN 64 dropped from 104 to 8 losses in 1,000 as O, with no change to the model.
+2. **Architecture.** On the same data, under the referee (value-losing / missed wins): RNN 64 scores 2 / 18 as X and 13 / 32 as O; MLP [64, 64] scores 0 / 2 and 0 / 0.
+3. **Full coverage.** `positions: "all"` removed the MLP's last 2 missed wins. It is MLP-only: an RNN's move depends on the path to a position, so "each position once" isn't defined for it.
+
+The plain ODE player (sim_evaluate's play scorer) is exact as X and has 12 value-losing positions as O (finding 10).
+
+## What is and isn't new
+
+Nothing so far is new as learning:
+- Imitating an exact minimax teacher on tic-tac-toe is supervised learning on a solved game. With 4,520 decision positions, a lookup table is minimax-equivalent too. The MLP reaching that checks the pipeline; it is not a result.
+- An MLP beating an RNN when the input is the full state is the Markov property at work.
+- Coverage beating architecture is the usual lesson about training data.
+- The ODE findings are ode-minimax's, reproduced here in a weaker form.
+- Checking a small learned policy exhaustively against a solver has been done before.
+
+What the representation buys is a harness. Every part of the learning setup comes from the net, with no game-specific code:
+- the input (the marking) and the actions (the transitions)
+- which moves are legal (enablement)
+- the reward (read from the final marking) and the sides (transition prefixes)
+- the teacher and the referee (both search over the firing rule)
+- replayable, checkable games (`sim.goto`, `provenance.check_witness`)
+
+OpenSpiel or Gym make you write each of those per game. Here they come from one formal model, and the ODE evaluator runs on the same model. So learned, search and continuous-relaxation players are all graded by the same exact referee. That is real leverage, but not a new method.
+
+The claim gets tested past the solver's cap (§6):
+- Does the raw marking (token counts per place) still make a good input on connect-4, or does a generic encoding lose to one written for the game?
+- With no exact teacher and no exhaustive referee, can the pieces that come from the net, the ODE player especially, take the solver's place as teacher or referee?
+
+Either that is where something new shows up, or the harness turns out to be only convenient. Both are worth knowing.
+
+## Why the MLP is the right default
+
+A fully modelled Petri net's marking is its whole state. Anything the future depends on has to be a place, or the firing rule couldn't work. History a game needs (castling rights, a repetition count) is modelled as places, and then it is in the marking. So a policy over the marking needs no memory, and an RNN's hidden state is something it has to learn to ignore. This is ode-minimax's lesson again: put what matters into the net's structure, not into the evaluator.
+
+Memory only earns its place where the player can't see the whole marking, where modelling the history is too costly, or where there is no net yet (§3).
 
 Each item below gives a question, a method, and what would settle it.
 
-## 0. Measurement first
-- **Headline metric = `rnn.verify`**, not tournaments: distinct value-losing positions
-  and missed wins, per side. Tournaments stay as a sanity check.
-- **Seeds:** every configuration gets 3–5 seeds; report the median and range. Re-run the
-  current table that way before drawing conclusions.
-- **Done when:** the README table is filled from `rnn.verify`, over several seeds.
+## 0. Measurement ✅ mostly
+- `rnn.verify` is the headline metric: distinct value-losing positions and missed wins, per side. Tournaments are a sanity check.
+- Still to do: report the median and range over 3–5 seeds for every row of the README's referee table, not only the last one.
 
-## 1. Coverage: what the model never sees
-- Q: Are the MLP's 2 missed wins a coverage gap (positions that only follow an
-  opponent blunder)?
-- Method: `positions: "all"` (every reachable position once) vs `games` at `explore`
-  0, 0.1, 0.3, 0.5. Optionally, a mix: all positions plus teacher games.
-- Done when: some setting gives 0 value-losing moves and 0 missed wins over every seed,
-  or the residual errors are explained.
+## 1. Coverage ✅ answered on tic-tac-toe
+- `positions: "all"` closes the gap. Open: how far `games` gets with more games or a higher `explore`, which matters once a game is too big to enumerate (§6).
 
-## 2. Architecture: separate memory from depth
-At 64 units both nets have about 8.4k parameters, and the only structural difference is
-what the 64×64 matrix does: recurrence (W_hh) or a second layer. Also mixed in: tanh vs
-ReLU, and 0.1-scale init vs He.
-- Grid (about 4 s per run): RNN 64, RNN 128, MLP [64], MLP [64, 64], MLP [32].
-- Follow-ups if the grid points at init or activation: an RNN with Xavier/He init, and
-  an RNN with W_hh fixed at 0 (a one-layer tanh MLP). The first may belong upstream in
-  pflow-tropical.
-- Done when: the RNN's deficit is attributed to memory, depth, init, or seed noise.
+## 2. Defaults and naming
+- Make `arch: "mlp"` the default for `rnn.imitate` and `rnn.train`; keep `arch: "rnn"` for §3.
+- The `rnn.*` namespace no longer fits. Consider `policy.*` once the current work settles. It is a rename across commands, tests, README, FEATURES.md and the Learn menu.
+- Narrow the README's "it doesn't need one, because the marking is the net's whole state" to: true for a fully modelled net whose player can see every place.
+- Optional ablation, to finish the memory-versus-depth story: MLP [64] (one layer), RNN 128, and the RNN with He/Xavier init, scored by `rnn.verify`. Low priority now that the default is settled.
 
-## 3. A task where memory is actually needed
-On a fully observed game the marking is the whole state, so an RNN shouldn't win. Test
-it where history matters:
-- **Moves-only input:** the input is a one-hot of the last fired transition, not the
-  marking, so the RNN has to rebuild the board itself. Needs an `input` option in
-  imitate/evaluate/verify.
-- **Hidden places:** some places are left out of the input (partial observation).
-- **Path-dependent reward:** a reward that depends on the path, not only the final
-  marking. The README's "doesn't need memory" claim fails here.
-- Done when: an RNN beats an MLP that gets the same input on one of these.
+## 3. Where memory is real
+Not "hide the marking from the RNN": that throws away state the net already provides. Three honest cases:
+- **What a player may see.** A hidden-information game (cards, fog of war) where the net models everything, but a fair policy for one player reads only that player's places. It has to infer the rest from the moves it has seen. Needs an `observe` option (place prefixes a side may read) in imitate, evaluate and verify, and a teacher for imperfect information. Exact minimax over the full marking cheats here.
+- **Cost.** Modelling history as places multiplies the reachable markings. Measure how much, on a game that needs history, and compare it with a policy that carries memory instead.
+- **No net yet.** From event logs before a net has been discovered, a sequence model over events is all there is. This belongs with `data.*`.
+- Done when: one of these has a measured case where an RNN beats an MLP given the same input.
 
 ## 4. The ODE player as O (finding 10)
-- Q: How much of the gap do tuned rates close in this implementation?
-- Method: `opt.distill` (already here: a hinge rank loss against exact minimax), then
-  `rnn.evaluate player: ode` and `rnn.verify`. Compare with ode-minimax's two-knob
-  policy bias (finding 9), and sweep `horizon`.
-- Done when: the ODE player's value-losing positions as O are counted after
-  distillation, and checked against the sim-pflow-xyz result.
+- First, reproduce sim's plain play scorer: 93 draws, 7 losses as O in ode-minimax, against 35 losses here. The likely causes are the net (`examples/tic-tac-toe.json` against sim's model with `game_active`, `move_tokens` and the weight-9 draw), how the draw is scored (ode-minimax saw O's losses swing from 7 to 84 on that alone), rates and `horizon`.
+- Then tune with `opt.distill` (a hinge rank loss against exact minimax) and score with `rnn.verify`. Compare with ode-minimax's two-knob policy bias (finding 9).
+- Done when: both numbers are reproduced, or the difference is explained.
 
 ## 5. Learning without a teacher
-- Q: Can `rnn.self_play` reach the imitation result, or keep it from slipping?
-- Method: self-play from scratch, and from an imitation-trained start; score each
-  round with `rnn.verify`, since the exact teacher can still referee tic-tac-toe.
+- Can `rnn.self_play` reach the imitation result, or keep it from slipping? Run self-play from scratch and from an imitation-trained start, and score each round with `rnn.verify`, since the exact teacher can still referee tic-tac-toe.
 - Done when: a curve of value-losing positions per round, from both starts.
 
 ## 6. Bigger games (connect-3, connect-4)
-The exact teacher is capped at 200k positions.
-- Find out which petri-pilot `ode-connect3`/`ode-connect4` nets fit under the cap.
-- Above it, candidate teachers: depth-limited alpha-beta with the ODE player as the
-  leaf evaluator, the distilled ODE player itself, or self-play. `rnn.verify` stops
-  being exhaustive, so there it falls back to sampled tournaments plus spot checks.
-- Done when: MLP imitation is measured on one game too large to solve exhaustively,
-  against a stated referee.
+This is the test of the harness claim above, and where the MLP result and the ODE approach part ways: imitation needs a teacher that has solved the game, and the exact teacher is capped at 200k positions. The ODE player needs no solved game.
+- `examples/connect-3.json` (52 places, 80 transitions) is in progress. First question: does it fit under the cap? If so, repeat the tic-tac-toe table on it, including `positions: "all"`.
+- Above the cap, candidate teachers: depth-limited alpha-beta with the ODE player as the leaf evaluator, the distilled ODE player itself, or self-play (§5). `rnn.verify` stops being exhaustive there, so it falls back to sampled tournaments plus spot checks against deeper search.
+- Done when: MLP imitation is measured on one game too large to solve exhaustively, against a stated referee.
 
 ## 7. Training stability
-- Batches of 64 or more diverge because the update sums the steps of every game in the
-  batch. Try averaging them (an lr that doesn't scale with batch size) and/or Adam,
-  then re-measure speed against batch size.
-- Done when: batch size changes speed, not correctness, at the default learning rate.
+- Batches of 64 or more diverge because the update sums the steps of every game in the batch. With `positions: "all"` each example is one move and gets the full rate, so 0.02 is already too large. Try averaging the steps instead (a rate that doesn't scale with batch size or game length) and/or Adam, then re-measure speed against batch size.
+- Done when: batch size and `positions` change speed, not correctness, at the default learning rate.
 
 ## 8. Engineering, alongside
-- Upstream to pflow-tropical: a firing callback and a step cap (FEATURES.md §D 11), and
-  the flat-buffer layout.
-- Models are session artifacts: decide whether a trained model can be saved and
-  re-verified later.
+- Upstream to pflow-tropical: a firing callback and a step cap (FEATURES.md §D 11), and the flat-buffer layout.
+- Models are session artifacts: decide whether a trained model can be saved with the document and re-verified later.
 - Re-check wasm (`make wasm-check`) whenever a new `rnn` option is added.
 
 ## Order
-0 → 1 and 2 (cheap, in parallel) → 4 → 3 (new input modes) → 5 → 6 (new games) → 7
-when batch size starts to block speed.
+2 (defaults, small) → 4 (reproduce the ODE baseline) → 6 (connect-3, already started) → 5 → 7 when batch size starts limiting speed → 3 once there is a hidden-information game to test on.
