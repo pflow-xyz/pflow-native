@@ -87,6 +87,9 @@ pub struct App {
     exit_after_screenshot: Option<String>,
     screenshot_done: Arc<AtomicBool>,
     screenshot_pending: bool,
+    /// Whether the window is on screen (not minimized, hidden or covered),
+    /// as of the last logic pass. A hidden window cannot be captured.
+    window_visible: bool,
 }
 
 impl App {
@@ -122,6 +125,7 @@ impl App {
             exit_after_screenshot: opts.screenshot,
             screenshot_done: Arc::new(AtomicBool::new(false)),
             screenshot_pending: false,
+            window_visible: true,
         };
         let restore = storage.filter(|_| !opts.fresh && app.exit_after_screenshot.is_none());
         if let Some(st) = restore.and_then(|s| s.get_string(KEY_SETTINGS)) {
@@ -624,8 +628,8 @@ impl App {
         None
     }
 
-    /// Starts the control port on the first frame (it needs the egui
-    /// context to wake the UI), then answers what has arrived.
+    /// Starts the control port on the first logic pass (it needs the egui
+    /// context to wake the app), then answers what has arrived.
     fn serve_control(&mut self, ctx: &egui::Context) {
         #[cfg(not(target_arch = "wasm32"))]
         {
@@ -696,6 +700,12 @@ impl App {
                     }
                     v
                 })
+            } else if cmd == "view.screenshot" && !self.window_visible {
+                Err(pflow_native_core::Error::Invalid(
+                    "the app's window is minimized, hidden or covered, so there are no pixels to capture; \
+                     bring it to the front, or export instead (export.svg for the net, export.artifact for a result)"
+                        .into(),
+                ))
             } else {
                 let r = self.sess.execute(cmd, args.clone());
                 self.console.record(cmd, &args, &r);
@@ -764,10 +774,24 @@ impl eframe::App for App {
         );
     }
 
+    /// Runs before every `ui` pass and also while the window is hidden,
+    /// minimized or covered, when `ui` is not called: agents on the control
+    /// port get answers whether or not anyone is looking at the window.
+    fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.window_visible = ctx.input(|i| i.viewport().visible().unwrap_or(true));
+        self.serve_control(ctx);
+        // A screenshot is taken by a `ui` pass, which a hidden window gets
+        // only when the platform lets eframe paint it (not macOS: there a
+        // covered window gets logic passes only, so handle_control refuses).
+        if !self.sess.ui_requests.is_empty() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaintWhileHidden);
+            ctx.request_repaint();
+        }
+    }
+
     fn ui(&mut self, ui: &mut egui::Ui, _frame: &mut eframe::Frame) {
         let ctx = ui.ctx().clone();
         self.frame += 1;
-        self.serve_control(&ctx);
         self.apply_theme(&ctx);
         shortcuts::handle(self, &ctx);
         let settings = self.sess.view.settings;

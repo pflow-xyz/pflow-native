@@ -244,7 +244,7 @@ fn screenshot(be: &mut Backend) -> Result<Vec<u8>, String> {
         }
         last = size;
     }
-    Err("the app did not produce a screenshot within 10 s (is its window minimized?)".into())
+    Err("the app did not produce a screenshot within 10 s (is its window minimized, hidden or covered?)".into())
 }
 
 fn base64(data: &[u8]) -> String {

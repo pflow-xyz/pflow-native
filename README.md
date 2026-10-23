@@ -153,7 +153,8 @@ pflow-native-cli mcp                                # MCP over stdio (attaches t
 
 **Driving the live window.** The app listens on `127.0.0.1:7979` for the same JSON-lines protocol. `--control ADDR` moves it and `--no-control` turns it off.
 - `pflow-native-cli mcp` attaches to that port when the app is running, so the agent and you share one window. Otherwise it runs a private headless session. Use `--headless` or `--attach ADDR` to force either.
-- In attached mode the `screenshot` tool returns the window as a PNG.
+- Commands are answered while the window is minimized, hidden or covered too.
+- In attached mode the `screenshot` tool returns the window as a PNG. It needs the window on screen; a hidden window refuses at once, so export instead (`export.svg`, `export.artifact`).
 
 ![Driven over MCP](docs/screenshot-mcp.png)
 

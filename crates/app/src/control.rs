@@ -2,7 +2,8 @@
 //! `pflow-native-cli control`, on a local TCP socket, so agents (and
 //! `pflow-native-cli mcp`, which attaches when the port is up) drive the
 //! live window instead of a headless copy. Requests are handed to the UI
-//! thread and run between frames, through the registry like everything else.
+//! thread and run in `App::logic`, which eframe calls even while the window
+//! is hidden or covered, through the registry like everything else.
 //!
 //! Request:  `{"token": "…", "id": 1, "command": "net.info", "args": {}}` or `{"token": "…", "id": 2, "batch": [...]}`
 //! Reply:    `{"id": 1, "ok": true, "result": ...}` / `{"id": 1, "ok": false, "error": "..."}`
