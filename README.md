@@ -142,6 +142,8 @@ Tokens are written to `credentials.json` (owner-only) and never returned by a co
 - `rnn.self_play` improves a model by self-play against a reward read from the final marking, e.g. `{"win_x": 1, "win_o": -1}` on tic-tac-toe.
 - `rnn.imitate` trains a model on an exact minimax teacher, which solves the whole game (small games only). Ties between moves of equal value go to the move that does best against random play.
 - `rnn.evaluate` plays a `player` (the model by default) against an `opponent` from each side, and charts wins, draws and losses. Either can be the model, `random`, `minimax` (a random choice among the teacher's best moves, so games cover many lines) or `ode`. The `ode` player is sim_evaluate's play scorer: it fires each move, solves the mass-action ODE `horizon` ahead, and takes the best expected reward. `player: "ode", opponent: "minimax"` measures the ODE evaluator itself.
+- `rnn.verify` is the exhaustive referee from sim-pflow-xyz `experiments/ode-minimax`. For each side it walks every legal line of the opponent, optimal or not. At each of the player's decisions it checks the move against the exact game value, and counts value-losing moves (a drawn or won position thrown into a loss) and missed wins (a won position let slip to a draw). Zero of both on every side is minimax equivalence over the whole game, not a sample. The player can be a model, `ode` or `minimax`.
+- `rnn.imitate` with `positions: "all"` (MLP only) learns from every reachable position once, instead of from sampled games.
 - `rnn.policy` shows what a model would play at the canvas marking, or the teacher's value for each move with `teacher`, as badges on the canvas and a bar chart.
 - Games and training use every core. Each game has its own seed, so a run gives the same result on any machine. `batch` (default 16) is how many games' gradients are computed at once per update; `batch: 1` is one update per game.
 - `auto` (on every rnn command) names transitions that fire as soon as they are enabled, before anyone chooses. On tic-tac-toe, `["x_win_", "o_win_"]` makes a line end the game when it is made.
@@ -156,7 +158,17 @@ Results with 2,000 games, 150 epochs, the default `explore` of 0.3, and 1,000 ga
 | RNN, `hidden: 64` | 1,000 draws | 8 losses | 12 losses |
 | MLP, `layers: [64, 64]` | 1,000 draws | **1,000 draws** | **0 losses** |
 
-The ODE player's weak seat is the one predicted by sim-pflow-xyz `experiments/ode-minimax` (finding 10). Defending, the forks it falls into only show up in move order, and an order-free flow integral can't see that. That experiment closes the gap by adding transitions that bias play toward wins and blocks; the plain net here has no such tuning. These are sampled tournaments, not an exhaustive referee.
+The ODE player's weak seat is the one predicted by sim-pflow-xyz `experiments/ode-minimax` (finding 10). Defending, the forks it falls into only show up in move order, and an order-free flow integral can't see that. That experiment closes the gap by adding transitions that bias play toward wins and blocks; the plain net here has no such tuning. Those are sampled tournaments. Under `rnn.verify`, which checks every opponent line including blunders:
+
+| player | X: value-losing / missed wins | O: value-losing / missed wins |
+|---|---|---|
+| `minimax` (a check of the referee) | 0 / 0 (99 decisions) | 0 / 0 (308 decisions) |
+| `ode` | 0 / 0 | 12 / 0 |
+| RNN `hidden: 64`, games | 2 / 18 | 13 / 32 |
+| MLP `[64, 64]`, games | 0 / 2 | 0 / 0 |
+| **MLP `[128, 64]` or `[64, 64]`, `positions: "all"`, 300 epochs, `learning_rate` 0.005–0.01** | **0 / 0** | **0 / 0** |
+
+The last row held on all 4 seeds tried, so a trained MLP is minimax-equivalent on tic-tac-toe. Training on games misses a few wins after an opponent blunders, because sampled games rarely reach those positions. Each example in `positions: "all"` is a single move, so it gets the full learning rate: 0.02 is too large.
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

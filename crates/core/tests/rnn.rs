@@ -391,3 +391,70 @@ fn the_ode_player_is_perfect_attacking_and_beatable_defending() {
         "{bad}"
     );
 }
+
+#[test]
+fn the_exhaustive_referee_walks_every_line() {
+    let mut s = example("tic-tac-toe");
+    // The teacher itself is minimax-equivalent: a check of the referee.
+    let v = run(
+        &mut s,
+        "rnn.verify",
+        with(rules(), json!({"player": "minimax"})),
+    );
+    assert_eq!(v["minimax_equivalent"], true, "{v}");
+    let (x, o) = (&v["sides"][0], &v["sides"][1]);
+    assert_eq!(
+        (x["side"].as_str(), o["side"].as_str()),
+        (Some("x_"), Some("o_"))
+    );
+    assert!(
+        x["decisions"].as_u64().unwrap() > 50 && o["decisions"].as_u64().unwrap() > 200,
+        "{v}"
+    );
+    // The untuned ODE player is exact attacking and loses value defending,
+    // and the referee names the positions.
+    let v = run(
+        &mut s,
+        "rnn.verify",
+        with(rules(), json!({"player": "ode"})),
+    );
+    assert_eq!(v["minimax_equivalent"], false);
+    let (x, o) = (&v["sides"][0], &v["sides"][1]);
+    assert_eq!(
+        (x["value_losing"].as_u64(), x["missed_wins"].as_u64()),
+        (Some(0), Some(0)),
+        "{v}"
+    );
+    assert!(o["value_losing"].as_u64().unwrap() > 0, "{v}");
+    let f = &o["failures"][0];
+    assert_eq!(f["kind"], "value-losing");
+    assert!(
+        f["best"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|b| b != &f["move"]),
+        "{f}"
+    );
+}
+
+#[test]
+fn imitating_every_position_needs_a_memoryless_policy() {
+    let mut s = example("tic-tac-toe");
+    let e = s
+        .execute("rnn.imitate", with(rules(), json!({"positions": "all"})))
+        .unwrap_err()
+        .to_string();
+    assert!(e.contains("needs arch mlp"), "{e}");
+    let out = run(
+        &mut s,
+        "rnn.imitate",
+        with(
+            rules(),
+            json!({"arch": "mlp", "layers": [16], "positions": "all", "epochs": 1}),
+        ),
+    );
+    // Every reachable position with a move to choose, once.
+    assert_eq!(out["training"]["positions"], "all");
+    assert_eq!(out["training"]["moves"], 4520);
+}

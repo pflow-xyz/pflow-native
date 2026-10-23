@@ -128,6 +128,7 @@ pub const SET: &[CommandSpec] = &[
             opt("games", Int, "teacher games to learn from (default 300, 1..5000)"),
             opt("epochs", Int, "passes over the games (default 40, 1..1000)"),
             opt("explore", Num, "share of moves played at random (default 0.3, 0..1)"),
+            opt("positions", Str, "games (default): learn from `games` teacher games; all: from every reachable position once, labelled with the teacher's move (arch mlp only: an RNN's move depends on the path to a position)"),
             opt("learning_rate", Num, "step size (default 0.01)"),
             opt("batch", Int, "games per weight update (default 16, 1..5000): their gradients are worked out on every core at once and their steps summed, so a large batch takes a large step and can diverge (the loss climbs): lower learning_rate with it; 1 is one update per game"),
             opt("max_steps", Int, "firings per game at most (default 200, 1..10000)"),
@@ -163,6 +164,32 @@ pub const SET: &[CommandSpec] = &[
         ],
         enabled: always,
         run: evaluate,
+        journal: true,
+    },
+    CommandSpec {
+        id: "rnn.verify",
+        label: "Verify Policy Exhaustively (experimental)",
+        help: "Experimental. The exhaustive referee (sim-pflow-xyz experiments/ode-minimax): for each side of `sides`, walk \
+               every legal line of the other side (optimal or not) from the initial marking, and at each of `player`'s \
+               decisions check its move against the exact game value. A value-losing move turns a won or drawn position into a \
+               loss; a missed win turns a won position into a draw. Reports, per side, the decisions checked (distinct \
+               positions, and paths: an RNN's move depends on the path), both counts and the first failures (marking, the move, \
+               the values, the best moves). Zero of both on every side is minimax equivalence over the whole game, not a sample. \
+               player: model (greedy; default), ode or minimax (a check of the referee). Small games only (the teacher's \
+               200,000 positions, `max_nodes` paths).",
+        menu: MENU,
+        shortcut: None,
+        args: &[
+            opt("player", Str, "model (default), ode or minimax"),
+            opt("model", Str, "model artifact id (default: the newest)"),
+            opt("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
+            opt("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
+            opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled (e.g. win claims)"),
+            opt("horizon", Num, "ode: model time to solve ahead (default 3)"),
+            opt("max_nodes", Int, "positions visited along all paths, at most (default 1,000,000, ..10,000,000)"),
+        ],
+        enabled: always,
+        run: verify,
         journal: true,
     },
     CommandSpec {
@@ -690,6 +717,16 @@ impl<'a> Teacher<'a> {
             vals.push((s * self.value(&next)?, s * self.random(&next)?));
         }
         Ok(best_move(en, vals))
+    }
+
+    /// The perfect-play value (+1 side's view) of a position
+    /// [`Teacher::solve`] reached.
+    fn solved_value(&self, mk: &Marking) -> Result<f64> {
+        let key = self.v.st.marking(&self.settle(mk)?);
+        self.value
+            .get(&key)
+            .copied()
+            .ok_or_else(|| Error::Invalid("the teacher has not solved this position".into()))
     }
 
     /// [`Teacher::advise`] in a position [`Teacher::solve`] reached.
@@ -1316,8 +1353,23 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
     let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
     teacher.solve(&from)?;
     let teacher = &teacher;
+    let all = match s(a, "positions").unwrap_or("games") {
+        "games" => false,
+        "all" if matches!(rnn, Policy::Mlp(_)) => true,
+        "all" => {
+            return Err(Error::BadArgs(
+                "positions all needs arch mlp: an RNN's move depends on the path to a position"
+                    .into(),
+            ))
+        }
+        other => {
+            return Err(Error::BadArgs(format!(
+                "positions must be games or all, got {other}"
+            )))
+        }
+    };
 
-    let played = each_game(games, |i| {
+    let played = each_game(if all { 0 } else { games }, |i| {
         let mut labels = vec![];
         let mut follow = |mk: &Marking, _: &[f64], en: &[usize], rng: &mut SimpleRng| {
             let (vals, best) = teacher.advise_solved(mk, en)?;
@@ -1350,6 +1402,30 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
             seqs.push(Seq::plain(g.inputs, labels));
         }
     }
+    if all {
+        // Every reachable decision position once, in a seeded order.
+        let mut seen = std::collections::HashSet::new();
+        let mut stack = vec![settle(&v, &auto, &from)?];
+        while let Some(mk) = stack.pop() {
+            if !seen.insert(v.st.marking(&mk)) {
+                continue;
+            }
+            let en = v.enabled(&mk);
+            if en.is_empty() {
+                continue;
+            }
+            let (_, best) = teacher.advise_solved(&mk, &en)?;
+            seqs.push(Seq::plain(vec![v.input(&mk)], vec![best]));
+            for &t in &en {
+                stack.push(settle(&v, &auto, &v.fire(&mk, t)?)?);
+            }
+        }
+        let mut rng = SimpleRng::new(seed);
+        for i in (1..seqs.len()).rev() {
+            seqs.swap(i, (rng.next_u64() % (i as u64 + 1)) as usize);
+        }
+        moves = seqs.len();
+    }
     if seqs.is_empty() {
         return Err(Error::Invalid(
             "nothing to choose at the start marking".into(),
@@ -1371,7 +1447,8 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
         losses.push(rnn.train(&seqs, lr, 1, batch));
     }
     let training = json!({
-        "teacher": "minimax", "games": seqs.len(), "moves": moves, "epochs": epochs, "explore": explore,
+        "teacher": "minimax", "positions": if all { "all" } else { "games" },
+        "games": if all { 0 } else { seqs.len() }, "moves": moves, "epochs": epochs, "explore": explore,
         "learning_rate": lr, "batch": batch, "max_steps": max_steps, "seed": seed, "loss": losses.last(),
         "sides": a.get("sides"), "reward": a.get("reward"), "auto": a.get("auto"),
         "positions_solved": positions,
@@ -1561,6 +1638,221 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
         "model": mid, "player": player, "opponent": opponent, "games_per_side": games, "artifact": chart, "artifacts": [chart, table],
         "results": rows.iter().map(|r| json!({"side": r[0], "wins": r[1], "draws": r[2], "losses": r[3]})).collect::<Vec<_>>(),
     }))
+}
+
+/// What [`verify`] counts for one side.
+#[derive(Default)]
+struct Referee {
+    nodes: usize,
+    paths: usize,
+    /// Distinct decision positions, and those where some path's move lost
+    /// value or missed a win.
+    decisions: std::collections::HashSet<Vec<i64>>,
+    losing: std::collections::HashSet<Vec<i64>>,
+    missed: std::collections::HashSet<Vec<i64>>,
+    failures: Vec<Value>,
+}
+
+/// The pieces [`walk`] needs.
+struct Walk<'a> {
+    v: &'a View,
+    auto: &'a [bool],
+    sign: &'a [f64],
+    teacher: &'a Teacher<'a>,
+    ode: &'a OdePlayer<'a>,
+    net: Option<&'a Policy>,
+    player: &'a str,
+    seat: f64,
+    max_nodes: usize,
+}
+
+/// Depth-first over every line of the other side; `h` is the model's
+/// state along this path.
+fn walk(w: &Walk, mk: &Marking, h: &[f64], r: &mut Referee) -> Result<()> {
+    r.nodes += 1;
+    if r.nodes > w.max_nodes {
+        return Err(Error::Invalid(format!(
+            "more than {} positions along the paths; raise max_nodes or use rnn.evaluate on a game this large",
+            w.max_nodes
+        )));
+    }
+    let mk = settle(w.v, w.auto, mk)?;
+    let en: Vec<usize> = w.v.enabled(&mk);
+    if en.is_empty() {
+        r.paths += 1;
+        return Ok(());
+    }
+    // The model's state follows every move, both sides' (as in rnn.evaluate).
+    let mut h = h.to_vec();
+    let p = match w.net {
+        Some(net) => rnn_probs(net, &mut h, &w.v.input(&mk), &en),
+        None => vec![],
+    };
+    let s = mover(w.v, w.sign, &en)?;
+    if s != w.seat {
+        for &t in &en {
+            walk(w, &w.v.fire(&mk, t)?, &h, r)?;
+        }
+        return Ok(());
+    }
+    let t = match w.player {
+        "model" => pick(&p, &en, false, &mut SimpleRng::new(0)),
+        "ode" => w.ode.choose(w.auto, w.sign, &mk, &en)?,
+        _ => w.teacher.advise_solved(&mk, &en)?.1,
+    };
+    let next = w.v.fire(&mk, t)?;
+    let key = w.v.st.marking(&mk);
+    // (+ 0.0 turns −0 into 0 for the report.)
+    let (here, after) = (
+        s * w.teacher.solved_value(&mk)? + 0.0,
+        s * w.teacher.solved_value(&next)? + 0.0,
+    );
+    r.decisions.insert(key.clone());
+    let lost = after < here && after < 0.0;
+    let missed = after < here && here > 0.0 && after >= 0.0;
+    if (lost || missed)
+        && r.failures.len() < 5
+        && !r.losing.contains(&key)
+        && !r.missed.contains(&key)
+    {
+        let (vals, _) = w.teacher.advise_solved(&mk, &en)?;
+        let best: Vec<&str> = optimal(&en, &vals)
+            .iter()
+            .map(|&b| w.v.st.transitions[b].as_str())
+            .collect();
+        let marking: serde_json::Map<String, Value> =
+            w.v.st
+                .display
+                .iter()
+                .zip(w.v.st.marking(&mk))
+                .filter(|(_, n)| *n != 0)
+                .map(|(k, n)| (k.clone(), json!(n)))
+                .collect();
+        r.failures.push(json!({
+            "kind": if lost { "value-losing" } else { "missed win" },
+            "marking": marking, "move": w.v.st.transitions[t], "value_before": here, "value_after": after,
+            "best": best,
+        }));
+    }
+    if lost {
+        r.losing.insert(key);
+    } else if missed {
+        r.missed.insert(key);
+    }
+    walk(w, &next, &h, r)
+}
+
+fn verify(sess: &mut Session, a: &Value) -> Result<Value> {
+    let player = s(a, "player").unwrap_or("model");
+    if !matches!(player, "model" | "minimax" | "ode") {
+        return Err(Error::BadArgs(format!(
+            "player must be model, ode or minimax, got {player}"
+        )));
+    }
+    let horizon = match n(a, "horizon") {
+        None => 3.0,
+        Some(x) if x > 0.0 && x <= 10_000.0 => x,
+        Some(x) => {
+            return Err(Error::BadArgs(format!(
+                "horizon must be in (0, 10000], got {x}"
+            )))
+        }
+    };
+    let max_nodes = int(a, "max_nodes", 1_000_000, 1, 10_000_000)?;
+    let v = View::new(sess)?;
+    let (mid, net) = if player == "model" {
+        let (mid, m) = model(sess, a)?;
+        v.check(&m)?;
+        (Some(mid), Some(from_json(&m, &v)?))
+    } else {
+        (None, None)
+    };
+    let Rules { sign, reward, auto } = game_rules(&v, a)?;
+    let from = sim::initial_marking(&sess.doc);
+    let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
+    teacher.solve(&from)?;
+    let ode = OdePlayer {
+        v: &v,
+        doc: &sess.doc,
+        rates: &sess.rates,
+        horizon,
+        reward: reward
+            .iter()
+            .map(|&(i, w)| (v.st.display[i].clone(), w))
+            .collect(),
+        chosen: RwLock::default(),
+    };
+    let mut seats: Vec<(String, f64)> = vec![];
+    if let Some(Value::Object(o)) = a.get("sides") {
+        seats = o
+            .iter()
+            .map(|(k, w)| (k.clone(), w.as_f64().unwrap_or(0.0)))
+            .collect();
+    } else if let Some(Value::String(t)) = a.get("sides") {
+        if let Ok(o) = serde_json::from_str::<serde_json::Map<String, Value>>(t) {
+            seats = o
+                .iter()
+                .map(|(k, w)| (k.clone(), w.as_f64().unwrap_or(0.0)))
+                .collect();
+        }
+    }
+    let state = net.as_ref().map(Policy::state).unwrap_or_default();
+    let (mut rows, mut sides_out) = (vec![], vec![]);
+    let mut clean = true;
+    for (side, seat) in &seats {
+        let w = Walk {
+            v: &v,
+            auto: &auto,
+            sign: &sign,
+            teacher: &teacher,
+            ode: &ode,
+            net: net.as_ref(),
+            player,
+            seat: *seat,
+            max_nodes,
+        };
+        let mut r = Referee::default();
+        walk(&w, &from, &state, &mut r)?;
+        clean &= r.losing.is_empty() && r.missed.is_empty();
+        rows.push(vec![
+            json!(side),
+            json!(r.decisions.len()),
+            json!(r.paths),
+            json!(r.losing.len()),
+            json!(r.missed.len()),
+        ]);
+        sides_out.push(json!({
+            "side": side, "decisions": r.decisions.len(), "paths": r.paths,
+            "value_losing": r.losing.len(), "missed_wins": r.missed.len(), "failures": r.failures,
+        }));
+    }
+    let name = match (&net, &mid) {
+        (Some(net), Some(mid)) => format!("{} {mid}", net.name()),
+        _ => player.to_string(),
+    };
+    let table = sess.add_artifact(
+        format!("{name}: exhaustive referee"),
+        source("rnn.verify", a),
+        ArtifactData::Table {
+            columns: ["side", "decisions", "paths", "value-losing", "missed wins"]
+                .map(String::from)
+                .to_vec(),
+            rows,
+        },
+    );
+    let out = json!({
+        "model": mid, "player": player, "minimax_equivalent": clean, "sides": sides_out, "artifact": table,
+        "note": "every line of the opponent was walked; counts are distinct decision positions (an RNN's move can differ by path; a position counts once if any path's move failed)",
+    });
+    let report = sess.add_artifact(
+        format!("{name}: exhaustive referee report"),
+        source("rnn.verify", a),
+        ArtifactData::Report(out.clone()),
+    );
+    let mut out = out;
+    out["report"] = json!(report);
+    out["artifacts"] = json!([table, report]);
+    Ok(out)
 }
 
 fn policy(sess: &mut Session, a: &Value) -> Result<Value> {
