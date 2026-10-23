@@ -210,7 +210,7 @@ fn the_teacher_solves_tic_tac_toe_and_the_model_opens_in_the_centre() {
     );
     // Every position of the game, solved: every opening draws with best
     // play, and the centre is the best tie-break against random play.
-    assert_eq!(out["training"]["positions_solved"], 5477);
+    assert_eq!(out["training"]["positions_solved"], 5478);
     let opening = &out["teacher_opening"];
     assert_eq!(opening["best"], "x_play_11");
     for m in opening["moves"].as_array().unwrap() {

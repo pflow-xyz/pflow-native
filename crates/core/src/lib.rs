@@ -24,8 +24,12 @@ pub mod layout;
 pub mod learn;
 pub mod mining;
 pub mod outbound;
+#[cfg(feature = "rnn")]
+pub(crate) mod par;
 pub mod provenance;
 pub mod registry;
+#[cfg(feature = "rnn")]
+pub(crate) mod rnn_net;
 pub mod session;
 pub mod sim;
 #[cfg(feature = "services")]

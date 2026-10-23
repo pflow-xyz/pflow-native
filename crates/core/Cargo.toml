@@ -43,6 +43,10 @@ ark-serialize = { version = "0.5", optional = true }
 ark-snark = { version = "0.5", optional = true }
 ark-std = { version = "0.5", optional = true }
 
+# rnn.* games and training on every core (native only; wasm runs them in turn).
+[target.'cfg(not(target_arch = "wasm32"))'.dependencies]
+rayon = { version = "1.12", optional = true }
+
 [target.'cfg(target_arch = "wasm32")'.dependencies]
 getrandom = { version = "0.2", features = ["js"] }
 
@@ -75,7 +79,7 @@ zk = [
 # CLI's and app's `rnn` features forward here): a learned policy is a guess,
 # not a verdict, and pflow-tropical is research code. Without it the rnn.*
 # commands do not exist.
-rnn = ["dep:pflow-tropical"]
+rnn = ["dep:pflow-tropical", "dep:rayon"]
 # export.png: the net or a result rendered to PNG (resvg), for agents without
 # a window to screenshot. Native builds of the app and CLI turn it on.
 png = ["dep:resvg"]

@@ -3116,6 +3116,7 @@ dependencies = [
  "pflow-verify",
  "pflow-zk",
  "pflow-zk-arkworks",
+ "rayon",
  "resvg",
  "serde",
  "serde_json",
