@@ -21,7 +21,8 @@ pflow-rs crates (pinned git rev; sibling-path [patch] for development)
        │                                 compose/system, store/remote/provenance/zk, … (one
        │                                 module per area under src/commands/; the engines
        │                                 beside them under src/). Features: `http` (remote
-       │                                 sends, URL loading), `zk` (Groth16 proofs).
+       │                                 sends, URL loading), `zk` (Groth16 proofs),
+       │                                 `rnn` (experimental RNN policies).
        ├─ pflow-native       (crates/app)  eframe UI: views render artifacts, every action -> registry;
        │                                   control port for agents
        └─ pflow-native-cli   (crates/cli)  list / exec / batch / control (JSON lines) / mcp (stdio)

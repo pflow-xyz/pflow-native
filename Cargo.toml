@@ -26,6 +26,9 @@ pflow-compose = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "fcb38acd
 # Zero-knowledge proofs of firings (feature `zk` on pflow-native-core).
 pflow-zk = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "fcb38acd69f6325414e32ffc58416befa6e93e64" }
 pflow-zk-arkworks = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "fcb38acd69f6325414e32ffc58416befa6e93e64" }
+# Experimental RNN policies (feature `rnn` on pflow-native-core). Without its
+# default `pflow` feature it has no dependencies.
+pflow-tropical = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "fcb38acd69f6325414e32ffc58416befa6e93e64", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"

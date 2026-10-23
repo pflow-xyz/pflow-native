@@ -32,6 +32,8 @@ web-time = "1"
 # Zero-knowledge proofs of firings (zk.rs), feature `zk`.
 pflow-zk = { workspace = true, optional = true }
 pflow-zk-arkworks = { workspace = true, optional = true }
+# Elman RNN policies (commands/rnn.rs), feature `rnn`.
+pflow-tropical = { workspace = true, optional = true }
 ark-bn254 = { version = "0.5", optional = true }
 ark-groth16 = { version = "0.5", optional = true }
 ark-relations = { version = "0.5", optional = true }
@@ -67,3 +69,8 @@ zk = [
     "dep:ark-snark",
     "dep:ark-std",
 ]
+# Experimental: Elman RNN policies (rnn.*), from pflow-tropical. Opt-in (the
+# CLI's and app's `rnn` features forward here): a learned policy is a guess,
+# not a verdict, and pflow-tropical is research code. Without it the rnn.*
+# commands do not exist.
+rnn = ["dep:pflow-tropical"]

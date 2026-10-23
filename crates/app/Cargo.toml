@@ -32,3 +32,5 @@ services = ["pflow-native-core/services"]
 # Groth16 firing proofs (zk.*), native only. Opt-in: the upstream circuit
 # does not yet prove enabledness (FEATURES.md §D 9).
 zk = ["pflow-native-core/zk"]
+# Experimental RNN policies (rnn.*, the Learn menu). Opt-in: `make build-rnn`.
+rnn = ["pflow-native-core/rnn"]

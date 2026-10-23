@@ -3045,6 +3045,7 @@ dependencies = [
  "pflow-mining",
  "pflow-parser",
  "pflow-solver",
+ "pflow-tropical",
  "pflow-validation",
  "pflow-verify",
  "pflow-zk",

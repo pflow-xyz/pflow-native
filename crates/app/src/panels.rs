@@ -188,6 +188,7 @@ fn workbench(app: &mut App, ui: &mut egui::Ui) {
         "Workbench",
         "Analyze",
         "Data",
+        "Learn",
         "Compose",
         "Systems",
         "Store",

@@ -1,4 +1,4 @@
-.PHONY: build build-zk build-offline run test test-zk test-offline lint wasm-check web web-build screenshot mcp
+.PHONY: build build-zk build-rnn build-offline run test test-zk test-rnn test-offline lint wasm-check web web-build screenshot mcp
 
 build:
 	cargo build --release
@@ -13,6 +13,7 @@ lint:
 	cargo fmt --all --check
 	cargo clippy --workspace --all-targets -- -D warnings
 	cargo clippy --workspace --all-targets --features pflow-native-core/zk -- -D warnings
+	cargo clippy --workspace --all-targets --features pflow-native-core/rnn -- -D warnings
 	cargo clippy --workspace --all-targets --no-default-features -- -D warnings
 
 # Without pflow.xyz, sim.pflow.xyz or GitHub: no remote.*, auth.*, open by
@@ -29,6 +30,14 @@ build-zk:
 
 test-zk:
 	cargo test -p pflow-native-core --features zk --test provenance
+
+# Experimental RNN policies (rnn.*) are opt-in: a learned policy is a guess,
+# not a verdict, and pflow-tropical is research code.
+build-rnn:
+	cargo build --release --features pflow-native/rnn,pflow-native-cli/rnn
+
+test-rnn:
+	cargo test -p pflow-native-core --features rnn --test rnn
 
 # Core + app must keep compiling for the browser.
 wasm-check:
