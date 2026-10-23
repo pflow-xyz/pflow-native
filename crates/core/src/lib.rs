@@ -19,6 +19,7 @@ pub mod control_auth;
 pub mod doc;
 pub mod eventlog;
 pub mod export;
+pub mod jobs;
 pub mod layout;
 pub mod learn;
 pub mod mining;

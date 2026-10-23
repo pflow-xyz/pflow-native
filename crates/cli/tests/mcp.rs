@@ -36,6 +36,7 @@ fn mcp_session_builds_fires_and_simulates() {
             "list_commands",
             "execute",
             "batch",
+            "run_job",
             "screenshot",
             "get_state"
         ]
@@ -75,6 +76,21 @@ fn mcp_session_builds_fires_and_simulates() {
         6,
     ));
     assert_eq!(r["result"]["isError"], false, "{r}");
+    let r = call(tool(
+        "run_job",
+        json!({"command":"sim.ssa","args":{"t_end":5,"runs":20}}),
+        60,
+    ));
+    assert_eq!(r["result"]["isError"], false, "{r}");
+    let job: Value =
+        serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+    assert_eq!(job["state"], "done", "{job}");
+    assert!(job["result"]["artifact"].is_string(), "{job}");
+    let r = call(tool("run_job", json!({"command":"net.add_place"}), 61));
+    assert_eq!(
+        r["result"]["isError"], true,
+        "not a background command: {r}"
+    );
     let r = call(tool("list_commands", json!({"prefix":"macro."}), 7));
     assert!(r["result"]["content"][0]["text"]
         .as_str()

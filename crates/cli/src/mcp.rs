@@ -167,6 +167,20 @@ fn tools() -> Value {
             }
         },
         {
+            "name": "run_job",
+            "description": "Run a long command (a simulation, optimization, analysis, data or rnn command) as a background job and wait up to wait_s for it. Returns the job with its result when it finishes in time, else its id and state: follow it with execute job.status {\"job\": id}. The app stays responsive meanwhile, and the results it stores join the session.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "command": { "type": "string", "description": "command id, e.g. rnn.self_play" },
+                    "args": { "type": "object", "description": "its arguments" },
+                    "wait_s": { "type": "number", "description": "seconds to wait for it (default 50, 0..600)" }
+                },
+                "required": ["command"],
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "screenshot",
             "description": "A PNG of the running app window (only when attached to the app's control port; headless, use execute export.svg).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
@@ -184,6 +198,7 @@ fn call_tool(be: &mut Backend, name: &str, args: &Value) -> Result<Value, String
         "list_commands" => &["prefix"],
         "execute" => &["command", "args"],
         "batch" => &["steps"],
+        "run_job" => &["command", "args", "wait_s"],
         "get_state" | "screenshot" => &[],
         _ => return Err(format!("unknown tool {name:?}")),
     };
@@ -209,6 +224,22 @@ fn call_tool(be: &mut Backend, name: &str, args: &Value) -> Result<Value, String
             let steps = args.get("steps").ok_or("batch: missing \"steps\"")?;
             be.exec("command.batch", json!({ "steps": steps }))
         }
+        "run_job" => {
+            let cmd = args
+                .get("command")
+                .and_then(Value::as_str)
+                .ok_or("run_job: missing \"command\"")?;
+            let wait = args.get("wait_s").and_then(Value::as_f64).unwrap_or(50.0);
+            if !(0.0..=600.0).contains(&wait) {
+                return Err(format!("run_job: wait_s must be in 0..600, got {wait}"));
+            }
+            run_job(
+                be,
+                cmd,
+                args.get("args").cloned().unwrap_or(Value::Null),
+                wait,
+            )
+        }
         "get_state" => Ok(json!({
             "attached": be.attached(),
             "net": be.exec("net.info", Value::Null)?,
@@ -217,6 +248,27 @@ fn call_tool(be: &mut Backend, name: &str, args: &Value) -> Result<Value, String
             "macros": be.exec("macro.list", Value::Null)?,
         })),
         _ => unreachable!(),
+    }
+}
+
+/// Starts a background job and polls it for up to `wait` seconds.
+fn run_job(be: &mut Backend, cmd: &str, args: Value, wait: f64) -> Result<Value, String> {
+    let started = be.exec("job.start", json!({ "command": cmd, "args": args }))?;
+    let job = started["job"].clone();
+    let t0 = Instant::now();
+    loop {
+        let st = be.exec("job.status", json!({ "job": job }))?;
+        if st["state"] != "running" {
+            return Ok(st);
+        }
+        if t0.elapsed().as_secs_f64() >= wait {
+            let mut st = st;
+            st["note"] = json!(format!(
+                "still running after {wait} s; follow it with execute job.status {{\"job\": {job}}}"
+            ));
+            return Ok(st);
+        }
+        std::thread::sleep(Duration::from_millis(200));
     }
 }
 

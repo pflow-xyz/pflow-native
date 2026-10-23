@@ -116,7 +116,9 @@ fn serve(stream: std::net::TcpStream, tx: Sender<Request>, ctx: egui::Context, t
         ctx.request_repaint();
         let reply = match rrx.recv_timeout(std::time::Duration::from_secs(60)) {
             Ok(v) => v,
-            Err(_) => json!({ "id": null, "ok": false, "error": "app did not answer" }),
+            Err(_) => {
+                json!({ "id": null, "ok": false, "error": "app did not answer within 60 s: for a long command use job.start (or the MCP run_job tool)" })
+            }
         };
         if writeln!(out, "{reply}").and_then(|_| out.flush()).is_err() {
             break;

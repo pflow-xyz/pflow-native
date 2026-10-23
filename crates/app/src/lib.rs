@@ -780,6 +780,12 @@ impl eframe::App for App {
     fn logic(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         self.window_visible = ctx.input(|i| i.viewport().visible().unwrap_or(true));
         self.serve_control(ctx);
+        // Finished background jobs join the session (their results appear
+        // in the Results tab); while any runs, keep checking.
+        self.sess.poll_jobs();
+        if self.sess.jobs.running() > 0 {
+            ctx.request_repaint_after(std::time::Duration::from_millis(200));
+        }
         // A screenshot is taken by a `ui` pass, which a hidden window gets
         // only when the platform lets eframe paint it (not macOS: there a
         // covered window gets logic passes only, so handle_control refuses).

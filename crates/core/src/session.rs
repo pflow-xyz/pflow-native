@@ -206,6 +206,8 @@ pub struct Session {
     pub has_ui: bool,
     /// Requests only a UI can carry out (screenshots); the app drains them.
     pub ui_requests: Vec<UiRequest>,
+    /// Background jobs (`job.*`).
+    pub jobs: crate::jobs::Jobs,
     pub(crate) undo: Vec<Snapshot>,
     pub(crate) redo: Vec<Snapshot>,
     compiled: Option<std::result::Result<Compiled, String>>,
@@ -250,6 +252,7 @@ impl Session {
             clipboard: None,
             has_ui: false,
             ui_requests: vec![],
+            jobs: Default::default(),
             undo: vec![],
             redo: vec![],
             compiled: None,
@@ -259,6 +262,25 @@ impl Session {
 
     pub fn registry(&self) -> &'static Registry {
         self.registry
+    }
+
+    /// A copy of the session's data for a background job: the net, marking,
+    /// rates, results, library and systems, with no history, UI or jobs.
+    pub fn fork(&self) -> Session {
+        let mut s = Session::with_registry(self.doc.clone(), self.registry);
+        s.marking = self.marking.clone();
+        s.selection = self.selection.clone();
+        s.view = self.view;
+        s.path = self.path.clone();
+        s.revision = self.revision;
+        s.saved_doc = self.saved_doc.clone();
+        s.rates = self.rates.clone();
+        s.artifacts = self.artifacts.clone();
+        s.next_artifact = self.next_artifact;
+        s.macros = self.macros.clone();
+        s.models = self.models.clone();
+        s.systems = self.systems.clone();
+        s
     }
 
     /// The one entry point: run command `id` with JSON `args`.

@@ -162,6 +162,7 @@ The MCP server's tools are:
 - `list_commands` lists commands, optionally filtered by prefix.
 - `execute` runs one command.
 - `batch` runs `[{command,args}]` as one undo step and rolls back on failure.
+- `run_job` runs a long command (simulation, optimization, analysis, data, rnn) as a background job and waits up to `wait_s` for it. The window stays responsive, and the results join the session when it finishes; `job.status` follows one that is still running.
 - `get_state` returns the whole state.
 - `screenshot` returns the window as a PNG (attached mode only).
 

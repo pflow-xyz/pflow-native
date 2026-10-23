@@ -20,6 +20,7 @@ pub mod edit;
 pub mod export;
 pub mod file;
 pub mod fileio;
+pub mod job;
 pub mod learn;
 pub mod macros;
 pub mod models;
@@ -78,5 +79,6 @@ pub const ALL: &[&[CommandSpec]] = &[
     store::SET,
     provenance::SET,
     macros::SET,
+    job::SET,
     command::SET,
 ];
