@@ -534,6 +534,13 @@ impl App {
         for req in std::mem::take(&mut self.sess.ui_requests) {
             match req {
                 UiRequest::Screenshot { path } => self.screenshot(ctx, path, false),
+                UiRequest::ShowArtifact { id } => {
+                    self.results.selected = Some(id);
+                    self.bottom = BottomTab::Plot;
+                    let _ = self
+                        .sess
+                        .execute("view.set", json!({ "bottom_panel": true }));
+                }
             }
         }
     }

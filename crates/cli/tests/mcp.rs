@@ -37,6 +37,7 @@ fn mcp_session_builds_fires_and_simulates() {
             "execute",
             "batch",
             "run_job",
+            "render",
             "screenshot",
             "get_state"
         ]
@@ -103,6 +104,10 @@ fn mcp_session_builds_fires_and_simulates() {
         63,
     )));
     assert!(long["data"]["x"].is_array() && long.get("_summarized").is_none());
+    let r = call(tool("render", json!({"width": 300}), 64));
+    assert_eq!(r["result"]["content"][0]["type"], "image", "{r}");
+    let r = call(tool("render", json!({"artifact": "a999"}), 65));
+    assert_eq!(r["result"]["isError"], true, "{r}");
     let r = call(tool("run_job", json!({"command":"net.add_place"}), 61));
     assert_eq!(
         r["result"]["isError"], true,

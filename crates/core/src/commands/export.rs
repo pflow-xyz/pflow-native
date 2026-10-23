@@ -1,7 +1,7 @@
 use serde_json::{json, Value};
 
 use crate::export;
-use crate::registry::{always, arg, opt, s, ArgType::*, CommandSpec};
+use crate::registry::{always, arg, n, opt, s, ArgType::*, CommandSpec};
 use crate::session::Session;
 use crate::{Error, Result};
 
@@ -30,6 +30,23 @@ pub const SET: &[CommandSpec] = &[
         ],
         enabled: always,
         run: artifact,
+        journal: false,
+    },
+    CommandSpec {
+        id: "export.png",
+        label: "Export PNG…",
+        help: "The net (with current marking), or a result with an SVG view (`id`), rendered to PNG without a window: written \
+               to `path` if given, else returned as base64. What an agent uses to see a result when the app is hidden or \
+               there is no app.",
+        menu: "",
+        shortcut: None,
+        args: &[
+            opt("id", Str, "artifact id; default: the net"),
+            opt("width", Int, "pixels wide (default 1200, 200..4000)"),
+            opt("path", Str, "PNG file to write"),
+        ],
+        enabled: png_available,
+        run: png,
         journal: false,
     },
     CommandSpec {
@@ -118,6 +135,58 @@ fn artifact(sess: &mut Session, a: &Value) -> Result<Value> {
     };
     let body = export::artifact(art, s(a, "format").unwrap())?;
     write_or_return(s(a, "path"), body)
+}
+
+fn png_available(_: &Session) -> std::result::Result<(), String> {
+    if cfg!(feature = "png") {
+        Ok(())
+    } else {
+        Err("this build cannot render PNGs (feature `png`; the web build has none): use export.svg / export.artifact".into())
+    }
+}
+
+fn png(sess: &mut Session, a: &Value) -> Result<Value> {
+    let width = match n(a, "width") {
+        None => 1200,
+        Some(w) if w.fract() == 0.0 && (200.0..=4000.0).contains(&w) => w as u32,
+        Some(w) => {
+            return Err(Error::BadArgs(format!(
+                "width must be an integer in 200..4000, got {w}"
+            )))
+        }
+    };
+    let (svg, what) = match s(a, "id") {
+        None => {
+            let enabled = sess.enabled_transitions();
+            (
+                export::net_svg(&sess.doc, &sess.marking, &enabled),
+                "net".to_string(),
+            )
+        }
+        Some(id) => {
+            let art = sess
+                .artifact(id)
+                .ok_or_else(|| Error::NotFound(format!("no artifact {id:?}")))?;
+            if !art.data.formats().contains(&"svg") {
+                return Err(Error::Invalid(format!(
+                    "{id} ({}) has no picture to render; export.artifact gives it as {}",
+                    art.data.kind(),
+                    art.data.formats().join(" / ")
+                )));
+            }
+            (export::artifact(art, "svg")?, id.to_string())
+        }
+    };
+    let (bytes, w, h) = export::svg_to_png(&svg, width)?;
+    let mut out = json!({ "rendered": what, "width": w, "height": h, "bytes": bytes.len() });
+    match s(a, "path") {
+        Some(p) => {
+            std::fs::write(p, &bytes).map_err(|e| Error::Io(format!("{p}: {e}")))?;
+            out["path"] = json!(p);
+        }
+        None => out["png_base64"] = json!(crate::provenance::b64(&bytes)),
+    }
+    Ok(out)
 }
 
 fn list(sess: &mut Session, _: &Value) -> Result<Value> {

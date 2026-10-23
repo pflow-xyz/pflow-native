@@ -893,3 +893,44 @@ fn drawing_svg(width: f64, height: f64, shapes: &[crate::artifact::DrawShape]) -
     s.push_str("</svg>\n");
     s
 }
+
+/// Renders `svg` to PNG `width` pixels wide on white, with the system fonts
+/// (loaded once). Returns (bytes, width, height).
+#[cfg(feature = "png")]
+pub fn svg_to_png(svg: &str, width: u32) -> Result<(Vec<u8>, u32, u32)> {
+    use resvg::{tiny_skia, usvg};
+    use std::sync::{Arc, OnceLock};
+    static FONTS: OnceLock<Arc<usvg::fontdb::Database>> = OnceLock::new();
+    let fonts = FONTS.get_or_init(|| {
+        let mut db = usvg::fontdb::Database::new();
+        db.load_system_fonts();
+        Arc::new(db)
+    });
+    let opt = usvg::Options {
+        fontdb: fonts.clone(),
+        ..Default::default()
+    };
+    let tree = usvg::Tree::from_str(svg, &opt).map_err(|e| Error::Invalid(format!("svg: {e}")))?;
+    let size = tree.size();
+    let scale = width as f32 / size.width();
+    let height = (size.height() * scale).ceil().max(1.0) as u32;
+    let mut pixmap = tiny_skia::Pixmap::new(width, height)
+        .ok_or_else(|| Error::Invalid(format!("cannot render {width}×{height}")))?;
+    pixmap.fill(tiny_skia::Color::WHITE);
+    resvg::render(
+        &tree,
+        tiny_skia::Transform::from_scale(scale, scale),
+        &mut pixmap.as_mut(),
+    );
+    let bytes = pixmap
+        .encode_png()
+        .map_err(|e| Error::Invalid(format!("png: {e}")))?;
+    Ok((bytes, width, height))
+}
+
+#[cfg(not(feature = "png"))]
+pub fn svg_to_png(_: &str, _: u32) -> Result<(Vec<u8>, u32, u32)> {
+    Err(Error::Invalid(
+        "this build cannot render PNGs (feature `png`)".into(),
+    ))
+}

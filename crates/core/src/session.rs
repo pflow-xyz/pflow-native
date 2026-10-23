@@ -148,7 +148,13 @@ pub struct Highlight {
 /// Work a command hands to the front end because it needs pixels.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum UiRequest {
-    Screenshot { path: String },
+    Screenshot {
+        path: String,
+    },
+    /// Open this artifact in the Results tab.
+    ShowArtifact {
+        id: String,
+    },
 }
 
 #[derive(Clone)]

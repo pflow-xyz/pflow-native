@@ -113,6 +113,18 @@ pub const SET: &[CommandSpec] = &[
         journal: false,
     },
     CommandSpec {
+        id: "view.show_artifact",
+        label: "Show Result",
+        help: "Open a stored result in the app's Results tab (shown the next time the window is drawn). Headless, it only checks \
+               the id; use export.png to see it.",
+        menu: "",
+        shortcut: None,
+        args: &[arg("id", Str, "artifact id")],
+        enabled: always,
+        run: show_artifact,
+        journal: false,
+    },
+    CommandSpec {
         id: "view.get",
         label: "View State",
         help: "Viewport, tool and selection.",
@@ -136,6 +148,19 @@ fn screenshot(sess: &mut Session, a: &Value) -> Result<Value> {
     sess.ui_requests
         .push(crate::session::UiRequest::Screenshot { path: path.clone() });
     Ok(json!({ "requested": path }))
+}
+
+fn show_artifact(sess: &mut Session, a: &Value) -> Result<Value> {
+    let id = req(a, "id").to_string();
+    let art = sess
+        .artifact(&id)
+        .ok_or_else(|| Error::NotFound(format!("no artifact {id:?}")))?;
+    let title = art.title.clone();
+    if sess.has_ui {
+        sess.ui_requests
+            .push(crate::session::UiRequest::ShowArtifact { id: id.clone() });
+    }
+    Ok(json!({ "shown": id, "title": title, "ui": sess.has_ui }))
 }
 
 fn set_tool(sess: &mut Session, a: &Value) -> Result<Value> {

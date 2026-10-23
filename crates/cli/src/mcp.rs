@@ -184,6 +184,18 @@ fn tools() -> Value {
             }
         },
         {
+            "name": "render",
+            "description": "A PNG of the net (with its current marking) or of one stored result (`artifact`), drawn without the window: works headless and while the app is hidden. Use it to look at a chart, heatmap, trace or graph a command produced.",
+            "inputSchema": {
+                "type": "object",
+                "properties": {
+                    "artifact": { "type": "string", "description": "artifact id (default: the net)" },
+                    "width": { "type": "integer", "description": "pixels wide (default 1200, 200..4000)" }
+                },
+                "additionalProperties": false
+            }
+        },
+        {
             "name": "screenshot",
             "description": "A PNG of the running app window (only when attached to the app's control port; headless, use execute export.svg).",
             "inputSchema": { "type": "object", "properties": {}, "additionalProperties": false }
@@ -315,6 +327,30 @@ fn compact(v: &mut Value) -> bool {
     }
 }
 
+/// export.png of the net or an artifact, as base64 PNG.
+fn render(be: &mut Backend, args: &Value) -> Result<String, String> {
+    if let Some(k) = args.as_object().and_then(|o| {
+        o.keys()
+            .find(|k| !["artifact", "width"].contains(&k.as_str()))
+    }) {
+        return Err(format!(
+            "render: unknown argument {k:?}; takes [\"artifact\", \"width\"]"
+        ));
+    }
+    let mut a = json!({});
+    if let Some(id) = args.get("artifact") {
+        a["id"] = id.clone();
+    }
+    if let Some(w) = args.get("width") {
+        a["width"] = w.clone();
+    }
+    let out = be.exec("export.png", a)?;
+    out["png_base64"]
+        .as_str()
+        .map(String::from)
+        .ok_or_else(|| "export.png returned no image".into())
+}
+
 /// Starts a background job and polls it for up to `wait` seconds.
 fn run_job(be: &mut Backend, cmd: &str, args: Value, wait: f64) -> Result<Value, String> {
     let started = be.exec("job.start", json!({ "command": cmd, "args": args }))?;
@@ -405,6 +441,14 @@ fn handle(be: &mut Backend, req: &Value) -> Option<Value> {
         "tools/call" => {
             let name = params.get("name").and_then(Value::as_str).unwrap_or("");
             let args = params.get("arguments").cloned().unwrap_or(json!({}));
+            if name == "render" {
+                return Some(
+                    json!({ "jsonrpc": "2.0", "id": id, "result": match render(be, &args) {
+                        Ok(png) => json!({ "content": [{ "type": "image", "data": png, "mimeType": "image/png" }], "isError": false }),
+                        Err(e) => json!({ "content": [{ "type": "text", "text": e }], "isError": true }),
+                    }}),
+                );
+            }
             if name == "screenshot" {
                 return Some(
                     json!({ "jsonrpc": "2.0", "id": id, "result": match screenshot(be) {
