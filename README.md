@@ -141,12 +141,22 @@ Tokens are written to `credentials.json` (owner-only) and never returned by a co
 - `rnn.play` lets a model choose each firing. The game is stored as a trace, so `sim.goto` replays it and `provenance.check_witness` re-checks it.
 - `rnn.self_play` improves a model by self-play against a reward read from the final marking, e.g. `{"win_x": 1, "win_o": -1}` on tic-tac-toe.
 - `rnn.imitate` trains a model on an exact minimax teacher, which solves the whole game (small games only). Ties between moves of equal value go to the move that does best against random play.
-- `rnn.evaluate` plays a model against a random or minimax opponent from each side and charts wins, draws and losses.
+- `rnn.evaluate` plays a `player` (the model by default) against an `opponent` from each side, and charts wins, draws and losses. Either can be the model, `random`, `minimax` (a random choice among the teacher's best moves, so games cover many lines) or `ode`. The `ode` player is sim_evaluate's play scorer: it fires each move, solves the mass-action ODE `horizon` ahead, and takes the best expected reward. `player: "ode", opponent: "minimax"` measures the ODE evaluator itself.
 - `rnn.policy` shows what a model would play at the canvas marking, or the teacher's value for each move with `teacher`, as badges on the canvas and a bar chart.
 - Games and training use every core. Each game has its own seed, so a run gives the same result on any machine. `batch` (default 16) is how many games' gradients are computed at once per update; `batch: 1` is one update per game.
 - `auto` (on every rnn command) names transitions that fire as soon as they are enabled, before anyone chooses. On tic-tac-toe, `["x_win_", "o_win_"]` makes a line end the game when it is made.
 
-On tic-tac-toe with `sides {"x_": 1, "o_": -1}`, the teacher solves all 5,478 positions (the empty board included). Every opening draws with best play, and the centre is the tie-break. A model trained with `rnn.imitate` opens in the centre and draws every game against the teacher. With 2,000 games and 150 epochs it wins 98.8% as X against random play, without a loss. An MLP with `layers: [64, 64]` trained the same way loses no games from either side (as O: 437 wins, 63 draws).
+On tic-tac-toe with `sides {"x_": 1, "o_": -1}`, the teacher solves all 5,478 positions (the empty board included). Every opening draws with best play, and the centre is the tie-break. During imitation the teacher plays any of its best moves, so the games cover every optimal line, but the label is always its tie-broken choice.
+
+Results with 2,000 games, 150 epochs, the default `explore` of 0.3, and 1,000 games per side against minimax:
+
+| player | vs minimax as X | as O | vs random as O (500) |
+|---|---|---|---|
+| `ode` (the plain net, no tuning) | 100 draws of 100 | 35 losses of 100 | 14 losses |
+| RNN, `hidden: 64` | 1,000 draws | 8 losses | 12 losses |
+| MLP, `layers: [64, 64]` | 1,000 draws | **1,000 draws** | **0 losses** |
+
+The ODE player's weak seat is the one predicted by sim-pflow-xyz `experiments/ode-minimax` (finding 10). Defending, the forks it falls into only show up in move order, and an order-free flow integral can't see that. That experiment closes the gap by adding transitions that bias play toward wins and blocks; the plain net here has no such tuning. These are sampled tournaments, not an exhaustive referee.
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

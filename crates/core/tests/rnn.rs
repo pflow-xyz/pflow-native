@@ -225,16 +225,9 @@ fn the_teacher_solves_tic_tac_toe_and_the_model_opens_in_the_centre() {
         .unwrap()
         .weights
         .contains_key("x_play_11"));
-    // Against perfect play it never loses, from either side.
-    let e = run(
-        &mut s,
-        "rnn.evaluate",
-        with(rules(), json!({"opponent": "minimax", "games": 2})),
-    );
-    for side in e["results"].as_array().unwrap() {
-        assert_eq!(side["losses"], 0, "{e}");
-    }
-    // Against random play, X wins more than it loses.
+    // Against random play, X wins more than it loses. (This small RNN is
+    // not perfect: against a minimax that varies among its best moves it
+    // loses; the MLP test below is the no-loss one.)
     let e = run(&mut s, "rnn.evaluate", with(rules(), json!({"games": 100})));
     let x = &e["results"][0];
     assert_eq!(x["side"], "x_");
@@ -285,7 +278,7 @@ fn an_mlp_policy_learns_tic_tac_toe_from_the_teacher() {
         "rnn.imitate",
         with(
             rules(),
-            json!({"arch": "mlp", "layers": [64, 32], "games": 300, "epochs": 40}),
+            json!({"arch": "mlp", "layers": [64, 32], "games": 1000, "epochs": 40}),
         ),
     );
     let m = s.artifact(out["model"].as_str().unwrap()).unwrap();
@@ -296,13 +289,14 @@ fn an_mlp_policy_learns_tic_tac_toe_from_the_teacher() {
     assert_eq!(r["layers"], json!([64, 32]));
     assert_eq!(r["weights"]["layers"].as_array().unwrap().len(), 3);
     assert!(m.title.starts_with("MLP model"), "{}", m.title);
-    // It opens in the centre and never loses to perfect play.
+    // It opens in the centre and never loses to perfect play, which picks
+    // at random among its best moves, so the games cover many lines.
     let p = run(&mut s, "rnn.policy", json!({}));
     assert_eq!(p["moves"][0]["transition"], "x_play_11", "{p}");
     let e = run(
         &mut s,
         "rnn.evaluate",
-        with(rules(), json!({"opponent": "minimax", "games": 2})),
+        with(rules(), json!({"opponent": "minimax", "games": 100})),
     );
     for side in e["results"].as_array().unwrap() {
         assert_eq!(side["losses"], 0, "{e}");
@@ -351,4 +345,49 @@ fn arch_and_its_shape_arguments_are_checked() {
         json!({"arch": "mlp", "layers": 16, "games": 20, "epochs": 3}),
     );
     assert!(out["training"]["loss"].as_f64().unwrap().is_finite());
+}
+
+#[test]
+fn the_ode_player_is_perfect_attacking_and_beatable_defending() {
+    // sim_evaluate's play scorer on the plain net, held to the exact
+    // teacher (sim-pflow-xyz experiments/ode-minimax, finding 10): with the
+    // initiative it never loses; defending, with no policy structure, it
+    // falls into the forks a move-order-free flow cannot see.
+    let mut s = example("tic-tac-toe");
+    let e = run(
+        &mut s,
+        "rnn.evaluate",
+        with(
+            rules(),
+            json!({"player": "ode", "opponent": "minimax", "games": 40}),
+        ),
+    );
+    let (x, o) = (&e["results"][0], &e["results"][1]);
+    assert_eq!(e["model"], Value::Null);
+    assert_eq!(
+        (x["losses"].as_u64(), x["draws"].as_u64()),
+        (Some(0), Some(40)),
+        "{e}"
+    );
+    assert!(o["losses"].as_u64().unwrap() > 0, "{e}");
+    // Deterministic on both sides: every game against itself is the same draw.
+    let e = run(
+        &mut s,
+        "rnn.evaluate",
+        with(
+            rules(),
+            json!({"player": "ode", "opponent": "ode", "games": 3}),
+        ),
+    );
+    for side in e["results"].as_array().unwrap() {
+        assert_eq!(side["draws"], 3, "{e}");
+    }
+    let bad = s
+        .execute("rnn.evaluate", with(rules(), json!({"opponent": "model"})))
+        .unwrap_err()
+        .to_string();
+    assert!(
+        bad.contains("opponent must be random, minimax or ode"),
+        "{bad}"
+    );
 }

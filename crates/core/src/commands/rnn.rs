@@ -140,9 +140,12 @@ pub const SET: &[CommandSpec] = &[
     CommandSpec {
         id: "rnn.evaluate",
         label: "Evaluate RNN Policy (experimental)",
-        help: "Experimental. Play a model against an opponent from each side of `sides`: `games` games per side, the model greedy \
-               unless `stochastic`, the opponent random or the minimax teacher. Stores wins, draws and losses per side as a bar \
-               chart (shares of games) and a table.",
+        help: "Experimental. Play `player` (default the model) against `opponent` from each side of `sides`, `games` games per \
+               side, and store wins, draws and losses per side as a bar chart (shares of games) and a table. Each is one of: model \
+               (greedy unless `stochastic`), random, minimax (a random choice among the moves of best value, from the exact teacher) \
+               or ode (sim_evaluate's play scorer: fire each move, solve the mass-action ODE `horizon` ahead at the session's \
+               rates, take the best expected reward for its side; deterministic, no search). player ode against opponent minimax \
+               measures the ODE evaluator itself.",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -150,7 +153,9 @@ pub const SET: &[CommandSpec] = &[
             opt("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
             opt("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
             opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled (e.g. win claims)"),
-            opt("opponent", Str, "random (default) or minimax"),
+            opt("player", Str, "who plays each side in turn: model (default), random, minimax or ode"),
+            opt("opponent", Str, "who plays against it: random (default), minimax or ode"),
+            opt("horizon", Num, "ode: model time to solve ahead (default 3)"),
             opt("games", Int, "games per side (default 200, 1..5000)"),
             opt("stochastic", Bool, "sample the model's moves instead of taking the most likely"),
             opt("max_steps", Int, "firings per game at most (default 200, 1..10000)"),
@@ -602,16 +607,7 @@ impl<'a> Teacher<'a> {
 
     /// Fires automatic transitions until none is enabled.
     fn settle(&self, mk: &Marking) -> Result<Marking> {
-        let mut mk = mk.clone();
-        for _ in 0..10_000 {
-            match self.v.enabled(&mk).into_iter().find(|&t| self.auto[t]) {
-                Some(t) => mk = self.v.fire(&mk, t)?,
-                None => return Ok(mk),
-            }
-        }
-        Err(Error::Invalid(
-            "automatic transitions never stop firing".into(),
-        ))
+        settle(self.v, self.auto, mk)
     }
 
     fn score(&self, mk: &Marking) -> f64 {
@@ -715,6 +711,70 @@ impl<'a> Teacher<'a> {
         }
         Ok(best_move(en, vals))
     }
+}
+
+/// Fires automatic transitions until none is enabled.
+fn settle(v: &View, auto: &[bool], mk: &Marking) -> Result<Marking> {
+    let mut mk = mk.clone();
+    for _ in 0..10_000 {
+        match v.enabled(&mk).into_iter().find(|&t| auto[t]) {
+            Some(t) => mk = v.fire(&mk, t)?,
+            None => return Ok(mk),
+        }
+    }
+    Err(Error::Invalid(
+        "automatic transitions never stop firing".into(),
+    ))
+}
+
+/// sim_evaluate's play scorer as a player: fire each enabled move, solve
+/// the mass-action ODE `horizon` ahead from the position it leaves, and
+/// take the move whose expected reward is best for the side to move (the
+/// first on ties). Deterministic; the choice is remembered per position.
+struct OdePlayer<'a> {
+    v: &'a View,
+    doc: &'a crate::doc::Document,
+    rates: &'a std::collections::BTreeMap<String, f64>,
+    horizon: f64,
+    /// (state variable, weight): the reward, read from the ODE's final state.
+    reward: Vec<(String, f64)>,
+    chosen: RwLock<HashMap<Vec<i64>, usize>>,
+}
+
+impl OdePlayer<'_> {
+    fn choose(&self, auto: &[bool], sign: &[f64], mk: &Marking, en: &[usize]) -> Result<usize> {
+        let key = self.v.st.marking(mk);
+        if let Some(&t) = self.chosen.read().expect("cache").get(&key) {
+            return Ok(t);
+        }
+        let s = mover(self.v, sign, en)?;
+        let mut best = (f64::NEG_INFINITY, en[0]);
+        for &t in en {
+            let next = settle(self.v, auto, &self.v.fire(mk, t)?)?;
+            let end =
+                sim::ode(self.doc, &next, self.rates, self.horizon, "tsit5", 2)?.final_state();
+            let score = s * self
+                .reward
+                .iter()
+                .map(|(k, w)| w * end.get(k).copied().unwrap_or(0.0))
+                .sum::<f64>();
+            if score > best.0 {
+                best = (score, t);
+            }
+        }
+        self.chosen.write().expect("cache").insert(key, best.1);
+        Ok(best.1)
+    }
+}
+
+/// The moves of the highest perfect-play value (ignoring the tie-break).
+fn optimal(en: &[usize], vals: &[(f64, f64)]) -> Vec<usize> {
+    let top = vals.iter().map(|x| x.0).fold(f64::NEG_INFINITY, f64::max);
+    en.iter()
+        .zip(vals)
+        .filter(|(_, x)| x.0 == top)
+        .map(|(&t, _)| t)
+        .collect()
 }
 
 /// The move with the highest value, ties broken by the random-play value.
@@ -1260,12 +1320,15 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
     let played = each_game(games, |i| {
         let mut labels = vec![];
         let mut follow = |mk: &Marking, _: &[f64], en: &[usize], rng: &mut SimpleRng| {
-            let (_, best) = teacher.advise_solved(mk, en)?;
+            let (vals, best) = teacher.advise_solved(mk, en)?;
             labels.push(best);
+            // The label is the teacher's move; the move played is any move
+            // of the same value (or, `explore` of the time, any move), so
+            // the games reach what every optimal line leads to.
             let t = if rng.uniform() < explore {
                 uniform(en, rng)
             } else {
-                best
+                uniform(&optimal(en, &vals), rng)
             };
             Ok((t, vec![]))
         };
@@ -1334,21 +1397,41 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
 }
 
 fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
-    let (mid, m) = model(sess, a)?;
+    let player = s(a, "player").unwrap_or("model");
+    let opponent = s(a, "opponent").unwrap_or("random");
+    if !matches!(player, "model" | "random" | "minimax" | "ode") {
+        return Err(Error::BadArgs(format!(
+            "player must be model, random, minimax or ode, got {player}"
+        )));
+    }
+    if !matches!(opponent, "random" | "minimax" | "ode") {
+        return Err(Error::BadArgs(format!(
+            "opponent must be random, minimax or ode, got {opponent}"
+        )));
+    }
+    let horizon = match n(a, "horizon") {
+        None => 3.0,
+        Some(x) if x > 0.0 && x <= 10_000.0 => x,
+        Some(x) => {
+            return Err(Error::BadArgs(format!(
+                "horizon must be in (0, 10000], got {x}"
+            )))
+        }
+    };
     let v = View::new(sess)?;
-    v.check(&m)?;
-    let rnn = from_json(&m, &v)?;
+    let (mid, net) = if player == "model" {
+        let (mid, m) = model(sess, a)?;
+        v.check(&m)?;
+        let net = from_json(&m, &v)?;
+        (Some(mid), Some(net))
+    } else {
+        (None, None)
+    };
     let Rules { sign, reward, auto } = game_rules(&v, a)?;
     let games = int(a, "games", 200, 1, 5000)?;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
     let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
     let stochastic = b(a, "stochastic").unwrap_or(false);
-    let opponent = s(a, "opponent").unwrap_or("random");
-    if !matches!(opponent, "random" | "minimax") {
-        return Err(Error::BadArgs(format!(
-            "opponent must be random or minimax, got {opponent}"
-        )));
-    }
     let from = sim::initial_marking(&sess.doc);
     let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
     let prefixes: Vec<(String, f64)> = match a.get("sides") {
@@ -1365,25 +1448,51 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
             .unwrap_or_default(),
         _ => vec![],
     };
-    if opponent == "minimax" {
+    if player == "minimax" || opponent == "minimax" {
         teacher.solve(&from)?;
     }
     let teacher = &teacher;
+    let ode = OdePlayer {
+        v: &v,
+        doc: &sess.doc,
+        rates: &sess.rates,
+        horizon,
+        reward: reward
+            .iter()
+            .map(|&(i, w)| (v.st.display[i].clone(), w))
+            .collect(),
+        chosen: RwLock::default(),
+    };
+    let ode = &ode;
+    // One agent's move.
+    let act =
+        |who: &str, p: &[f64], mk: &Marking, en: &[usize], rng: &mut SimpleRng| -> Result<usize> {
+            Ok(match who {
+                "model" => pick(p, en, stochastic, rng),
+                "minimax" => {
+                    let (vals, _) = teacher.advise_solved(mk, en)?;
+                    uniform(&optimal(en, &vals), rng)
+                }
+                "ode" => ode.choose(&auto, &sign, mk, en)?,
+                _ => uniform(en, rng),
+            })
+        };
     let (mut bars, mut rows) = (vec![], vec![]);
     for (k, (side, seat)) in prefixes.iter().enumerate() {
         let rewards = each_game(games, |i| {
-            let mut h = rnn.state();
+            let mut h = net.as_ref().map(Policy::state).unwrap_or_default();
             let mut choose = |mk: &Marking, input: &[f64], en: &[usize], rng: &mut SimpleRng| {
                 // The model's hidden state follows every move, both sides'.
-                let p = rnn_probs(&rnn, &mut h, input, en);
-                if mover(&v, &sign, en)? == *seat {
-                    return Ok((pick(&p, en, stochastic, rng), vec![]));
-                }
-                let t = match opponent {
-                    "minimax" => teacher.advise_solved(mk, en)?.1,
-                    _ => uniform(en, rng),
+                let p = match &net {
+                    Some(net) => rnn_probs(net, &mut h, input, en),
+                    None => vec![],
                 };
-                Ok((t, vec![]))
+                let who = if mover(&v, &sign, en)? == *seat {
+                    player
+                } else {
+                    opponent
+                };
+                Ok((act(who, &p, mk, en, rng)?, vec![]))
             };
             let g = game(
                 &v,
@@ -1421,9 +1530,17 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
             json!(w as f64 / k),
         ]);
     }
-    let how = if stochastic { "sampled" } else { "greedy" };
+    let name = match (&net, &mid) {
+        (Some(net), Some(mid)) => format!("{} {mid}", net.name()),
+        _ => player.to_string(),
+    };
+    let how = if player == "model" && stochastic {
+        ", sampled"
+    } else {
+        ""
+    };
     let chart = sess.add_artifact(
-        format!("{} vs {opponent} ({mid}, {how}, seed {seed})", rnn.name()),
+        format!("{name} vs {opponent} ({games} games per side{how}, seed {seed})"),
         source("rnn.evaluate", a),
         ArtifactData::Bars {
             value_label: "share of games".into(),
@@ -1431,10 +1548,7 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
         },
     );
     let table = sess.add_artifact(
-        format!(
-            "{} vs {opponent} table ({mid}, {how}, seed {seed})",
-            rnn.name()
-        ),
+        format!("{name} vs {opponent} table (seed {seed})"),
         source("rnn.evaluate", a),
         ArtifactData::Table {
             columns: ["side", "wins", "draws", "losses", "win share"]
@@ -1444,7 +1558,7 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
         },
     );
     Ok(json!({
-        "model": mid, "opponent": opponent, "games_per_side": games, "artifact": chart, "artifacts": [chart, table],
+        "model": mid, "player": player, "opponent": opponent, "games_per_side": games, "artifact": chart, "artifacts": [chart, table],
         "results": rows.iter().map(|r| json!({"side": r[0], "wins": r[1], "draws": r[2], "losses": r[3]})).collect::<Vec<_>>(),
     }))
 }
