@@ -141,7 +141,8 @@ fn tools() -> Value {
                 "type": "object",
                 "properties": {
                     "command": { "type": "string", "description": "command id from list_commands" },
-                    "args": { "type": "object", "description": "arguments; see the command's schema" }
+                    "args": { "type": "object", "description": "arguments; see the command's schema" },
+                    "full": { "type": "boolean", "description": "return long arrays in full (default: arrays over 40 items are summarized; artifact.get and export.* are never summarized)" }
                 },
                 "required": ["command"],
                 "additionalProperties": false
@@ -160,7 +161,8 @@ fn tools() -> Value {
                             "properties": { "command": { "type": "string" }, "args": { "type": "object" } },
                             "required": ["command"]
                         }
-                    }
+                    },
+                    "full": { "type": "boolean", "description": "return long arrays in full (default: arrays over 40 items are summarized; artifact.get and export.* are never summarized)" }
                 },
                 "required": ["steps"],
                 "additionalProperties": false
@@ -174,7 +176,8 @@ fn tools() -> Value {
                 "properties": {
                     "command": { "type": "string", "description": "command id, e.g. rnn.self_play" },
                     "args": { "type": "object", "description": "its arguments" },
-                    "wait_s": { "type": "number", "description": "seconds to wait for it (default 50, 0..600)" }
+                    "wait_s": { "type": "number", "description": "seconds to wait for it (default 50, 0..600)" },
+                    "full": { "type": "boolean", "description": "return long arrays in full (default: arrays over 40 items are summarized; artifact.get and export.* are never summarized)" }
                 },
                 "required": ["command"],
                 "additionalProperties": false
@@ -196,9 +199,9 @@ fn tools() -> Value {
 fn call_tool(be: &mut Backend, name: &str, args: &Value) -> Result<Value, String> {
     let allowed: &[&str] = match name {
         "list_commands" => &["prefix"],
-        "execute" => &["command", "args"],
-        "batch" => &["steps"],
-        "run_job" => &["command", "args", "wait_s"],
+        "execute" => &["command", "args", "full"],
+        "batch" => &["steps", "full"],
+        "run_job" => &["command", "args", "wait_s", "full"],
         "get_state" | "screenshot" => &[],
         _ => return Err(format!("unknown tool {name:?}")),
     };
@@ -207,7 +210,8 @@ fn call_tool(be: &mut Backend, name: &str, args: &Value) -> Result<Value, String
             return Err(format!("{name}: unknown argument {k:?}; takes {allowed:?}"));
         }
     }
-    match name {
+    let full = args.get("full").and_then(Value::as_bool).unwrap_or(false);
+    let out = match name {
         "list_commands" => be.exec(
             "command.list",
             args.get("prefix")
@@ -248,6 +252,66 @@ fn call_tool(be: &mut Backend, name: &str, args: &Value) -> Result<Value, String
             "macros": be.exec("macro.list", Value::Null)?,
         })),
         _ => unreachable!(),
+    }?;
+    let exempt = name == "execute"
+        && args
+            .get("command")
+            .and_then(Value::as_str)
+            .is_some_and(|c| c == "artifact.get" || c.starts_with("export."));
+    if full || exempt || !matches!(name, "execute" | "batch" | "run_job") {
+        return Ok(out);
+    }
+    Ok(compacted(out))
+}
+
+/// Number arrays longer than this are summarized in tool results.
+const MAX_ITEMS: usize = 40;
+
+/// `v` with every array of more than [`MAX_ITEMS`] numbers (a time series,
+/// a matrix row) summarized as its length, min, max and first and last
+/// values, plus a note saying how to get it all when anything was cut.
+/// Lists of other things (places, moves, nodes) are kept whole.
+fn compacted(mut v: Value) -> Value {
+    if compact(&mut v) {
+        if let Some(o) = v.as_object_mut() {
+            o.insert(
+                "_summarized".into(),
+                json!("long number arrays were summarized; pass \"full\": true, or execute artifact.get {\"id\": …} for a stored result"),
+            );
+        }
+    }
+    v
+}
+
+fn compact(v: &mut Value) -> bool {
+    match v {
+        Value::Array(a) if a.len() > MAX_ITEMS && a.iter().all(Value::is_number) => {
+            let n = a.len();
+            let (lo, hi) = a
+                .iter()
+                .filter_map(Value::as_f64)
+                .fold((f64::INFINITY, f64::NEG_INFINITY), |(l, h), x| {
+                    (l.min(x), h.max(x))
+                });
+            *v = json!({ "len": n, "min": lo, "max": hi, "first": &a[..3], "last": &a[n - 2..] });
+            true
+        }
+        // Every element is visited (no short circuit), so all are summarized.
+        Value::Array(a) => {
+            let mut cut = false;
+            for x in a {
+                cut |= compact(x);
+            }
+            cut
+        }
+        Value::Object(o) => {
+            let mut cut = false;
+            for x in o.values_mut() {
+                cut |= compact(x);
+            }
+            cut
+        }
+        _ => false,
     }
 }
 

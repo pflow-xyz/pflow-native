@@ -86,6 +86,23 @@ fn mcp_session_builds_fires_and_simulates() {
         serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
     assert_eq!(job["state"], "done", "{job}");
     assert!(job["result"]["artifact"].is_string(), "{job}");
+    // Long number arrays are summarized unless asked for in full.
+    let text = |r: &Value| -> Value {
+        serde_json::from_str(r["result"]["content"][0]["text"].as_str().unwrap()).unwrap()
+    };
+    let short = text(&call(tool(
+        "execute",
+        json!({"command":"sim.ode","args":{"t_end":5}}),
+        62,
+    )));
+    assert!(short["_summarized"].is_string(), "{short}");
+    assert!(short["data"]["x"]["len"].as_u64().unwrap() > 40, "{short}");
+    let long = text(&call(tool(
+        "execute",
+        json!({"command":"sim.ode","args":{"t_end":5}, "full": true}),
+        63,
+    )));
+    assert!(long["data"]["x"].is_array() && long.get("_summarized").is_none());
     let r = call(tool("run_job", json!({"command":"net.add_place"}), 61));
     assert_eq!(
         r["result"]["isError"], true,

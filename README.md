@@ -160,7 +160,7 @@ pflow-native-cli mcp                                # MCP over stdio (attaches t
 
 The MCP server's tools are:
 - `list_commands` lists commands, optionally filtered by prefix.
-- `execute` runs one command.
+- `execute` runs one command. In `execute`, `batch` and `run_job` results, arrays of more than 40 numbers (time series, matrix rows) are summarized as length, min, max and first and last values; pass `"full": true`, or read the stored result with `artifact.get`, for all of it.
 - `batch` runs `[{command,args}]` as one undo step and rolls back on failure.
 - `run_job` runs a long command (simulation, optimization, analysis, data, rnn) as a background job and waits up to `wait_s` for it. The window stays responsive, and the results join the session when it finishes; `job.status` follows one that is still running.
 - `get_state` returns the whole state.
