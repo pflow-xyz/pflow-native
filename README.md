@@ -170,6 +170,17 @@ The ODE player's weak seat is the one predicted by sim-pflow-xyz `experiments/od
 
 The last row held on all 4 seeds tried, so a trained MLP is minimax-equivalent on tic-tac-toe. Training on games misses a few wins after an opponent blunders, because sampled games rarely reach those positions. Each example in `positions: "all"` is a single move, so it gets the full learning rate: 0.02 is too large.
 
+`examples/connect-3.json` is the Connect-3 net from petri-pilot: a 4×4 board with gravity, 52 places and 80 transitions. It uses the same `sides`, `reward` and `auto` as tic-tac-toe. The teacher solves it in a few seconds: every opening is a forced X win, over 23,930 decision positions. `rnn.verify` on the `ode` player at `horizon` 0.5 reproduces petri-pilot's referee table exactly: X 0 value-losing / 0 missed wins over 45 decisions, O 6 / 2 over 462. With `positions: "all"`:
+
+| MLP | epochs, `learning_rate` | seeds minimax-equivalent | O value-losing + missed wins otherwise |
+|---|---|---|---|
+| `[128, 64]` | 100, 0.01 | 0 of 1 | 8 + 0 (and 1 for X) |
+| `[256, 128]` | 100, 0.01 | 1 of 4 | 2 + 0 to 2 + 1 |
+| **`[256, 128]`** | **200, 0.005** | **4 of 4** | — |
+| **`[512, 256]`** | **100, 0.01** | **3 of 3** | — |
+
+Undertrained models only slip as O, in 2–3 of about 450 positions. Those moves give up value against perfect play but don't change a result, because O loses with best play anyway. On 14 cores a `[256, 128]` run takes 2–5 minutes.
+
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 
 ## Agents: CLI, control channel, MCP

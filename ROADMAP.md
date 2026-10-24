@@ -13,6 +13,8 @@ How it got there, in order of effect:
 
 The plain ODE player (sim_evaluate's play scorer) is exact as X and has 12 value-losing positions as O (finding 10).
 
+On Connect-3 (23,930 decision positions), the ODE player matches petri-pilot's referee exactly. The same MLP recipe, with [256, 128] layers trained for 200 epochs at lr 0.005, is minimax-equivalent on 4 of 4 seeds. At 100 epochs, seeds 2–4 leave 2–3 O positions wrong; see §6.
+
 ## What is and isn't new
 
 Nothing so far is new as learning:
@@ -76,7 +78,23 @@ Not "hide the marking from the RNN": that throws away state the net already prov
 
 ## 6. Bigger games (connect-3, connect-4)
 This is the test of the harness claim above, and where the MLP result and the ODE approach part ways: imitation needs a teacher that has solved the game, and the exact teacher is capped at 200k positions. The ODE player needs no solved game.
-- `examples/connect-3.json` (52 places, 80 transitions) is in progress. First question: does it fit under the cap? If so, repeat the tic-tac-toe table on it, including `positions: "all"`.
+- **Connect-3 (`examples/connect-3.json`, 52 places, 80 transitions) fits under the cap.** The teacher solves it in about 7.6 s: every opening is a forced X win, 23,930 decision positions.
+  - **The port is faithful.** `rnn.verify` on the ODE player reproduces petri-pilot's referee table exactly. At `horizon` 0.5 the ODE player scores X 45 decisions / 0 value-losing / 0 missed wins and O 462 / 6 / 2. The `connect_3_matches_the_petri_pilot_referee` test pins that table. (At `horizon` 3 it scores O 454 / 8 / 2 against the experiment's 462 / 8 / 2.)
+  - **The MLP on every position is minimax-equivalent once trained long enough.**
+
+    | layers | epochs | lr | seed | equivalent | X value-losing + missed wins | O value-losing + missed wins |
+    |---|---|---|---|---|---|---|
+    | [128, 64] | 100 | 0.01 | 1 | no | 1 + 0 | 8 + 0 |
+    | [256, 128] | 100 | 0.01 | 1 | **yes** | 0 + 0 | 0 + 0 |
+    | [256, 128] | 100 | 0.01 | 2 | no | 0 + 0 | 2 + 1 |
+    | [256, 128] | 100 | 0.01 | 3 | no | 0 + 0 | 2 + 0 |
+    | [256, 128] | 100 | 0.01 | 4 | no | 0 + 0 | 2 + 0 |
+    | [256, 128] | 200 | 0.005 | 1–4 | **yes, 4 of 4** (loss 0.0002) | 0 + 0 | 0 + 0 |
+    | [512, 256] | 100 | 0.01 | 2–4 | **yes, 3 of 3** (loss 0.0001) | 0 + 0 | 0 + 0 |
+
+    At 100 epochs, X is perfect on every seed and beats the ODE player every game. The misses are 2–3 O positions out of about 450. They give up value against perfect play but don't change any result against ODE, since O loses with best play.
+  - **Longer training closes the gap.** [256, 128] at 200 epochs and lr 0.005 is minimax-equivalent on seeds 1–4, about 150–410 s each while sharing the cores with another run. So does doubling the width at 100 epochs: [512, 256] is equivalent on seeds 2–4, at about 310–470 s each under the same sharing. Every equivalent model faces the same 62 X and 449 O decisions.
+  - Connect-3 stays out of the built-in gallery because `analysis.siphons` doesn't finish on it (§8).
 - Above the cap, candidate teachers: depth-limited alpha-beta with the ODE player as the leaf evaluator, the distilled ODE player itself, or self-play (§5). `rnn.verify` stops being exhaustive there, so it falls back to sampled tournaments plus spot checks against deeper search.
 - Done when: MLP imitation is measured on one game too large to solve exhaustively, against a stated referee.
 
@@ -88,6 +106,8 @@ This is the test of the harness claim above, and where the MLP result and the OD
 - Upstream to pflow-tropical: a firing callback and a step cap (FEATURES.md §D 11), and the flat-buffer layout.
 - Models are session artifacts: decide whether a trained model can be saved with the document and re-verified later.
 - Re-check wasm (`make wasm-check`) whenever a new `rnn` option is added.
+- `analysis.siphons` doesn't finish on Connect-3: it runs past 60 s against its 20M-node budget. Fix it before Connect-3 joins the built-in examples.
+- The teacher's `solve` is single-threaded, about 7.6 s on Connect-3, and every `rnn.*` command pays it again. Parallelize it, or cache the solution per document.
 
 ## Order
-2 (defaults, small) → 4 (reproduce the ODE baseline) → 6 (connect-3, already started) → 5 → 7 when batch size starts limiting speed → 3 once there is a hidden-information game to test on.
+2 (defaults, small) → 4 (reproduce the ODE baseline) → 5 → 7 when batch size starts limiting speed → 3 once there is a hidden-information game to test on.

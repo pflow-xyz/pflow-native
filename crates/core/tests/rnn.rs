@@ -458,3 +458,29 @@ fn imitating_every_position_needs_a_memoryless_policy() {
     assert_eq!(out["training"]["positions"], "all");
     assert_eq!(out["training"]["moves"], 4520);
 }
+
+#[test]
+fn connect_3_matches_the_petri_pilot_referee() {
+    // examples/connect-3.json: 4×4 Connect-3, gravity in the topology
+    // (petri-pilot experiments/ode-connect3). The game is a forced X win;
+    // the plain ODE player at horizon 0.5 is that experiment's calibrated
+    // evaluator, and its exhaustive referee table is reproduced exactly.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/connect-3.json");
+    let mut s = Session::default();
+    run(&mut s, "file.open", json!({ "path": path }));
+    let v = run(
+        &mut s,
+        "rnn.verify",
+        with(rules(), json!({"player": "ode", "horizon": 0.5})),
+    );
+    let (x, o) = (&v["sides"][0], &v["sides"][1]);
+    let counts = |s: &Value| {
+        (
+            s["decisions"].as_u64().unwrap(),
+            s["value_losing"].as_u64().unwrap(),
+            s["missed_wins"].as_u64().unwrap(),
+        )
+    };
+    assert_eq!(counts(x), (45, 0, 0), "{v}");
+    assert_eq!(counts(o), (462, 6, 2), "{v}");
+}
