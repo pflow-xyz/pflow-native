@@ -13,7 +13,7 @@ How it got there, in order of effect:
 
 The plain ODE player (sim_evaluate's play scorer) is exact as X and has 12 value-losing positions as O (finding 10).
 
-On Connect-3 (23,930 decision positions), the ODE player matches petri-pilot's referee exactly. The same MLP recipe, with [256, 128] layers trained for 200 epochs at lr 0.005, is minimax-equivalent on 4 of 4 seeds. At 100 epochs, seeds 2–4 leave 2–3 O positions wrong; see §6.
+On Connect-3 (23,930 decision positions), the ODE player matches the sim.pflow.xyz experiment's referee exactly. The same MLP recipe, with [256, 128] layers trained for 200 epochs at lr 0.005, is minimax-equivalent on 4 of 4 seeds. At 100 epochs, seeds 2–4 leave 2–3 O positions wrong; see §6.
 
 ## What is and isn't new
 
@@ -79,7 +79,7 @@ Not "hide the marking from the RNN": that throws away state the net already prov
 ## 6. Bigger games (connect-3, connect-4)
 This is the test of the harness claim above, and where the MLP result and the ODE approach part ways: imitation needs a teacher that has solved the game, and the exact teacher is capped at 200k positions. The ODE player needs no solved game.
 - **Connect-3 (`examples/connect-3.json`, 52 places, 80 transitions) fits under the cap.** The teacher solves it in about 7.6 s: every opening is a forced X win, 23,930 decision positions.
-  - **The port is faithful.** `rnn.verify` on the ODE player reproduces petri-pilot's referee table exactly. At `horizon` 0.5 the ODE player scores X 45 decisions / 0 value-losing / 0 missed wins and O 462 / 6 / 2. The `connect_3_matches_the_petri_pilot_referee` test pins that table. (At `horizon` 3 it scores O 454 / 8 / 2 against the experiment's 462 / 8 / 2.)
+  - **The port is faithful.** `rnn.verify` on the ODE player reproduces the sim.pflow.xyz experiment's referee table exactly. At `horizon` 0.5 the ODE player scores X 45 decisions / 0 value-losing / 0 missed wins and O 462 / 6 / 2. The `connect_3_matches_the_sim_referee` test pins that table. (At `horizon` 3 it scores O 454 / 8 / 2 against the experiment's 462 / 8 / 2.)
   - **The MLP on every position is minimax-equivalent once trained long enough.**
 
     | layers | epochs | lr | seed | equivalent | X value-losing + missed wins | O value-losing + missed wins |
@@ -95,8 +95,13 @@ This is the test of the harness claim above, and where the MLP result and the OD
     At 100 epochs, X is perfect on every seed and beats the ODE player every game. The misses are 2–3 O positions out of about 450. They give up value against perfect play but don't change any result against ODE, since O loses with best play.
   - **Longer training closes the gap.** [256, 128] at 200 epochs and lr 0.005 is minimax-equivalent on seeds 1–4, about 150–410 s each while sharing the cores with another run. So does doubling the width at 100 epochs: [512, 256] is equivalent on seeds 2–4, at about 310–470 s each under the same sharing. Every equivalent model faces the same 62 X and 449 O decisions.
   - Connect-3 stays out of the built-in gallery because `analysis.siphons` doesn't finish on it (§8).
-- Above the cap, candidate teachers: depth-limited alpha-beta with the ODE player as the leaf evaluator, the distilled ODE player itself, or self-play (§5). `rnn.verify` stops being exhaustive there, so it falls back to sampled tournaments plus spot checks against deeper search.
-- Done when: MLP imitation is measured on one game too large to solve exhaustively, against a stated referee.
+- **Connect-4 (`examples/connect-4.json`, 131 places, 222 transitions, about 4.5 × 10¹² positions) is past any exhaustive teacher.** The referee and the teacher are sampled there:
+  - `rnn.verify {games}` values every legal move at the distinct positions of random-play games by exact alpha-beta (`game_search.rs`, over pflow-metamodel's `IndexedModel`, added upstream in pflow-rs `70caba8` because `Model::enabled`/`fire` cost about 1 ms per position here). Its values were cross-checked move for move against the original experiment's oracle on 373 positions, which also exposed a sign error there on moves that end the game.
+  - On the default sample (250 games, seed 13, 1,819 positions): random play loses value at about 33% of decisions, the `ode` player at 1.8% (X 17/940, O 17/879).
+  - `rnn.imitate {positions: "sampled"}` with the MLP fits its training positions exactly (0 / 0 on both seats when trained on the referee's own positions) but scores 272/940 and 263/879 on held-out positions after 7,064 training positions. It memorizes, it doesn't generalize.
+  - Open: how held-out mistakes fall with more positions (the scaling curve, with `labels` caching the labels across runs). If 100k games still leaves it far from the `ode` player, the raw marking is the wrong input at this size, which answers the harness question above.
+- Cheaper teachers, for more positions than exact search can label: depth-limited alpha-beta with the ODE player as the leaf evaluator, the distilled ODE player itself, or self-play (§5).
+- Done when: MLP imitation is measured on one game too large to solve exhaustively, against a stated referee. ✅ measured (Connect-4, sampled referee); the open part is the scaling curve above.
 
 ## 7. Training stability
 - Batches of 64 or more diverge because the update sums the steps of every game in the batch. With `positions: "all"` each example is one move and gets the full rate, so 0.02 is already too large. Try averaging the steps instead (a rate that doesn't scale with batch size or game length) and/or Adam, then re-measure speed against batch size.

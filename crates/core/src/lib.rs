@@ -19,6 +19,8 @@ pub mod control_auth;
 pub mod doc;
 pub mod eventlog;
 pub mod export;
+#[cfg(feature = "rnn")]
+pub(crate) mod game_search;
 pub mod jobs;
 pub mod layout;
 pub mod learn;

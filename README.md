@@ -170,7 +170,7 @@ The ODE player's weak seat is the one predicted by sim-pflow-xyz `experiments/od
 
 The last row held on all 4 seeds tried, so a trained MLP is minimax-equivalent on tic-tac-toe. Training on games misses a few wins after an opponent blunders, because sampled games rarely reach those positions. Each example in `positions: "all"` is a single move, so it gets the full learning rate: 0.02 is too large.
 
-`examples/connect-3.json` is the Connect-3 net from petri-pilot: a 4×4 board with gravity, 52 places and 80 transitions. It uses the same `sides`, `reward` and `auto` as tic-tac-toe. The teacher solves it in a few seconds: every opening is a forced X win, over 23,930 decision positions. `rnn.verify` on the `ode` player at `horizon` 0.5 reproduces petri-pilot's referee table exactly: X 0 value-losing / 0 missed wins over 45 decisions, O 6 / 2 over 462. With `positions: "all"`:
+`examples/connect-3.json` is the Connect-3 net from the sim.pflow.xyz ODE experiments: a 4×4 board with gravity, 52 places and 80 transitions. It uses the same `sides`, `reward` and `auto` as tic-tac-toe. The teacher solves it in a few seconds: every opening is a forced X win, over 23,930 decision positions. `rnn.verify` on the `ode` player at `horizon` 0.5 reproduces that experiment's referee table exactly: X 0 value-losing / 0 missed wins over 45 decisions, O 6 / 2 over 462. With `positions: "all"`:
 
 | MLP | epochs, `learning_rate` | seeds minimax-equivalent | O value-losing + missed wins otherwise |
 |---|---|---|---|
@@ -180,6 +180,17 @@ The last row held on all 4 seeds tried, so a trained MLP is minimax-equivalent o
 | **`[512, 256]`** | **100, 0.01** | **3 of 3** | — |
 
 Undertrained models only slip as O, in 2–3 of about 450 positions. Those moves give up value against perfect play but don't change a result, because O loses with best play anyway. On 14 cores a `[256, 128]` run takes 2–5 minutes.
+
+`examples/connect-4.json` is Connect Four: 131 places, 222 transitions, about 4.5 trillion positions. That is far past the teacher's 200,000-position cap, so `rnn.verify` and `rnn.imitate` take `games` and sample instead. Positions come from random-play games, at least `min_moves` (default 14) moves in, and every legal move at each is valued by an exact alpha-beta search over the firing rule (`budget` nodes per move; positions past it are skipped and counted, never guessed). `labels` keeps those values in a JSONL file, so later runs only search new positions. On the default sample (250 games, seed 13: 1,819 positions, 123 skipped):
+
+| player | X game-losing | O game-losing |
+|---|---|---|
+| random legal move | about 33% | about 33% |
+| `ode`, `horizon` 3 | 17 / 940 | 17 / 879 |
+| MLP `[256, 128]` trained on these same positions | 0 / 940 | 0 / 879 |
+| MLP `[256, 128]` trained on 7,064 positions from other games (seed 1, 1,000 games) | 272 / 940 | 263 / 879 |
+
+The MLP learns every position it is shown, ties included, and is close to random on positions it hasn't seen. Connect-3 hid this because there it saw every position.
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

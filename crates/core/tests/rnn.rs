@@ -460,9 +460,9 @@ fn imitating_every_position_needs_a_memoryless_policy() {
 }
 
 #[test]
-fn connect_3_matches_the_petri_pilot_referee() {
+fn connect_3_matches_the_sim_referee() {
     // examples/connect-3.json: 4×4 Connect-3, gravity in the topology
-    // (petri-pilot experiments/ode-connect3). The game is a forced X win;
+    // (the sim.pflow.xyz ODE Connect-3 experiment). The game is a forced X win;
     // the plain ODE player at horizon 0.5 is that experiment's calibrated
     // evaluator, and its exhaustive referee table is reproduced exactly.
     let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/connect-3.json");
@@ -483,4 +483,27 @@ fn connect_3_matches_the_petri_pilot_referee() {
     };
     assert_eq!(counts(x), (45, 0, 0), "{v}");
     assert_eq!(counts(o), (462, 6, 2), "{v}");
+}
+
+#[test]
+fn connect_4_has_a_sampled_referee() {
+    // examples/connect-4.json is too large for the exhaustive teacher; the
+    // sampled referee values every legal move at positions from random
+    // games by exact search. Late positions keep the search short here.
+    let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/connect-4.json");
+    let mut s = Session::default();
+    run(&mut s, "file.open", json!({ "path": path }));
+    let v = run(
+        &mut s,
+        "rnn.verify",
+        with(
+            rules(),
+            json!({"player": "minimax", "games": 8, "min_moves": 18, "budget": 200000}),
+        ),
+    );
+    assert_eq!(v["mode"], "sampled", "{v}");
+    let sample = &v["sample"];
+    assert!(sample["labelled"].as_u64().unwrap() > 10, "{v}");
+    // The referee's own best move is never value-losing.
+    assert_eq!(v["no_losses_in_sample"], true, "{v}");
 }

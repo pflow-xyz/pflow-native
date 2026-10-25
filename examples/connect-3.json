@@ -6020,5 +6020,5 @@
   }
  ],
  "name": "connect-3 (4x4)",
- "description": "4x4 Connect-3 with gravity, after petri-pilot experiments/ode-connect3: one landing token per column (row 3 is the bottom), 32 drops, 48 catalytic win detectors. A full board ends the game with no winner."
+ "description": "4x4 Connect-3 with gravity, after the sim.pflow.xyz ODE Connect-3 experiment: one landing token per column (row 3 is the bottom), 32 drops, 48 catalytic win detectors. A full board ends the game with no winner."
 }

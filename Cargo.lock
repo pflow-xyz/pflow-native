@@ -3010,7 +3010,7 @@ dependencies = [
 [[package]]
 name = "pflow-compose"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-core",
  "pflow-metamodel",
@@ -3022,7 +3022,7 @@ dependencies = [
 [[package]]
 name = "pflow-core"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "serde",
  "serde_json",
@@ -3032,7 +3032,7 @@ dependencies = [
 [[package]]
 name = "pflow-eventlog"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "serde",
  "serde_json",
@@ -3042,7 +3042,7 @@ dependencies = [
 [[package]]
 name = "pflow-learn"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-core",
  "pflow-metamodel",
@@ -3052,7 +3052,7 @@ dependencies = [
 [[package]]
 name = "pflow-metamodel"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "serde",
  "serde_json",
@@ -3062,7 +3062,7 @@ dependencies = [
 [[package]]
 name = "pflow-mining"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-core",
  "pflow-eventlog",
@@ -3129,7 +3129,7 @@ dependencies = [
 [[package]]
 name = "pflow-parser"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-core",
  "pflow-metamodel",
@@ -3141,7 +3141,7 @@ dependencies = [
 [[package]]
 name = "pflow-reachability"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-metamodel",
 ]
@@ -3149,7 +3149,7 @@ dependencies = [
 [[package]]
 name = "pflow-solver"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-core",
  "pflow-metamodel",
@@ -3159,12 +3159,12 @@ dependencies = [
 [[package]]
 name = "pflow-tropical"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 
 [[package]]
 name = "pflow-validation"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-metamodel",
  "pflow-reachability",
@@ -3173,7 +3173,7 @@ dependencies = [
 [[package]]
 name = "pflow-verify"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-metamodel",
  "pflow-reachability",
@@ -3182,7 +3182,7 @@ dependencies = [
 [[package]]
 name = "pflow-zk"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "pflow-core",
  "serde",
@@ -3192,7 +3192,7 @@ dependencies = [
 [[package]]
 name = "pflow-zk-arkworks"
 version = "0.3.0"
-source = "git+https://github.com/pflow-xyz/pflow-rs?rev=fcb38acd69f6325414e32ffc58416befa6e93e64#fcb38acd69f6325414e32ffc58416befa6e93e64"
+source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"
 dependencies = [
  "ark-bn254",
  "ark-crypto-primitives",

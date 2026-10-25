@@ -19,6 +19,7 @@ use serde_json::{json, Value};
 
 use crate::analysis::Structure;
 use crate::artifact::{ArtifactData, Bar, Series, TraceStep};
+use crate::game_search;
 use crate::mlp_net::Mlp;
 use crate::registry::{always, b, n, nums, opt, s, strs, ArgType::*, CommandSpec};
 use crate::rnn_net::{softmax_into, Rnn, Seq};
@@ -125,10 +126,13 @@ pub const SET: &[CommandSpec] = &[
             opt("arch", Str, "rnn (default): an Elman RNN with `hidden` units; mlp: a feed-forward ReLU network over the marking with `layers`"),
             opt("hidden", Int, "rnn hidden units (default 32, 1..256)"),
             opt("layers", NumList, "mlp hidden layer widths, input side first (default [64, 64]; 1..4 layers of 1..512)"),
-            opt("games", Int, "teacher games to learn from (default 300, 1..5000)"),
+            opt("games", Int, "teacher games to learn from, or random-play games to sample (default 300, 1..100,000)"),
             opt("epochs", Int, "passes over the games (default 40, 1..1000)"),
             opt("explore", Num, "share of moves played at random (default 0.3, 0..1)"),
-            opt("positions", Str, "games (default): learn from `games` teacher games; all: from every reachable position once, labelled with the teacher's move (arch mlp only: an RNN's move depends on the path to a position)"),
+            opt("positions", Str, "games (default): learn from `games` teacher games; all: from every reachable position once, labelled with the teacher's move; sampled: for games too large to solve whole, from the distinct positions of `games` random-play games (from `min_moves` in), each labelled by an exact alpha-beta search with every best move as the target (all and sampled: arch mlp only, since an RNN's move depends on the path to a position)"),
+            opt("min_moves", Int, "sampled: only positions at least this many moves in (default 14)"),
+            opt("budget", Int, "sampled: search nodes per move valued (default 800,000); positions past it are skipped and counted"),
+            opt("labels", Str, "sampled: a JSONL file of exact labels, read before searching and appended to as positions are labelled, so a later run (more games, another seed, imitate or verify) searches only positions it has not seen; it records the net, rules and budget it was made with and refuses others"),
             opt("learning_rate", Num, "step size (default 0.01)"),
             opt("batch", Int, "games per weight update (default 16, 1..5000): their gradients are worked out on every core at once and their steps summed, so a large batch takes a large step and can diverge (the loss climbs): lower learning_rate with it; 1 is one update per game"),
             opt("max_steps", Int, "firings per game at most (default 200, 1..10000)"),
@@ -176,7 +180,10 @@ pub const SET: &[CommandSpec] = &[
                positions, and paths: an RNN's move depends on the path), both counts and the first failures (marking, the move, \
                the values, the best moves). Zero of both on every side is minimax equivalence over the whole game, not a sample. \
                player: model (greedy; default), ode or minimax (a check of the referee). Small games only (the teacher's \
-               200,000 positions, `max_nodes` paths).",
+               200,000 positions, `max_nodes` paths). With `games`, a sampled referee for larger games (the sim.pflow.xyz \
+               ODE Connect-4 experiment): distinct positions from random-play games, `min_moves` in; every legal move is \
+               valued by an exact alpha-beta search over the firing rule, and positions it cannot finish within `budget` \
+               nodes are skipped and counted. Exact per position, a sample of the game.",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -187,6 +194,11 @@ pub const SET: &[CommandSpec] = &[
             opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled (e.g. win claims)"),
             opt("horizon", Num, "ode: model time to solve ahead (default 3)"),
             opt("max_nodes", Int, "positions visited along all paths, at most (default 1,000,000, ..10,000,000)"),
+            opt("games", Int, "sampled referee instead (for games too large to walk): positions from this many random-play games (e.g. 250)"),
+            opt("min_moves", Int, "sampled: only positions at least this many moves in (default 14)"),
+            opt("budget", Int, "sampled: search nodes per move valued (default 800,000); positions past it are skipped and counted"),
+            opt("seed", Int, "sampled: the random games' seed (default 13)"),
+            opt("labels", Str, "sampled: a JSONL file of exact labels, read before searching and appended to as positions are labelled, so a later run (more games, another seed, imitate or verify) searches only positions it has not seen; it records the net, rules and budget it was made with and refuses others"),
         ],
         enabled: always,
         run: verify,
@@ -1333,8 +1345,70 @@ fn game_rules(v: &View, a: &Value) -> Result<Rules> {
     })
 }
 
+/// What [`imitate`] trains on, and what it reports about it.
+type Imitation = (
+    Vec<Seq>,
+    usize,
+    Option<Vec<Value>>,
+    Option<String>,
+    usize,
+    Value,
+);
+
+/// [`imitate`] with `positions: "sampled"`, for games too large for the
+/// teacher's full solve: positions from `games` random-play games, each
+/// labelled by the exact search ([`sample_labelled`]). A position's
+/// example asks for every move of the best value at once (an even share
+/// each), so equally good moves don't compete.
+fn imitate_sampled(
+    v: &View,
+    a: &Value,
+    rules: &Rules,
+    from: &Marking,
+    games: usize,
+    seed: u64,
+) -> Result<Imitation> {
+    let min_moves = int(a, "min_moves", 14, 0, 10_000)?;
+    let budget = int(a, "budget", 800_000, 1, 1_000_000_000)?;
+    let d = Dense::new(v, rules)?;
+    let (labelled, found, skipped, cached) = sample_labelled(
+        v,
+        &d,
+        from,
+        None,
+        games,
+        min_moves,
+        budget,
+        seed,
+        s(a, "labels"),
+    )?;
+    let mut seqs: Vec<Seq> = labelled
+        .iter()
+        .map(|p| {
+            let best = p.vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            let targets: Vec<usize> = p
+                .moves
+                .iter()
+                .zip(&p.vals)
+                .filter(|(_, &x)| x == best)
+                .map(|(&t, _)| d.to_view[t])
+                .collect();
+            let input = d.input(&p.mk);
+            Seq::plain(vec![input; targets.len()], targets)
+        })
+        .collect();
+    let mut rng = SimpleRng::new(seed);
+    for i in (1..seqs.len()).rev() {
+        seqs.swap(i, (rng.next_u64() % (i as u64 + 1)) as usize);
+    }
+    let n = seqs.len();
+    let sample = json!({"games": games, "min_moves": min_moves, "budget": budget,
+                        "positions": found, "labelled": n, "skipped": skipped, "cached": cached});
+    Ok((seqs, n, None, None, n, sample))
+}
+
 fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
-    let games = int(a, "games", 300, 1, 5000)?;
+    let games = int(a, "games", 300, 1, 100_000)?;
     let epochs = int(a, "epochs", 40, 1, 1000)?;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
     let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
@@ -1348,107 +1422,120 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
     let v = View::new(sess)?;
     let mut rnn = Policy::new(&v, a, seed)?;
     let (name, shape) = (rnn.name(), rnn.shape());
-    let Rules { sign, reward, auto } = game_rules(&v, a)?;
+    let rules = game_rules(&v, a)?;
     let from = sim::initial_marking(&sess.doc);
-    let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
-    teacher.solve(&from)?;
-    let teacher = &teacher;
-    let all = match s(a, "positions").unwrap_or("games") {
-        "games" => false,
-        "all" if matches!(rnn, Policy::Mlp(_)) => true,
-        "all" => {
-            return Err(Error::BadArgs(
-                "positions all needs arch mlp: an RNN's move depends on the path to a position"
-                    .into(),
-            ))
+    let mode = s(a, "positions").unwrap_or("games");
+    match mode {
+        "games" => {}
+        "all" | "sampled" if matches!(rnn, Policy::Mlp(_)) => {}
+        "all" | "sampled" => {
+            return Err(Error::BadArgs(format!(
+                "positions {mode} needs arch mlp: an RNN's move depends on the path to a position"
+            )))
         }
         other => {
             return Err(Error::BadArgs(format!(
-                "positions must be games or all, got {other}"
+                "positions must be games, all or sampled, got {other}"
             )))
         }
-    };
-
-    let played = each_game(if all { 0 } else { games }, |i| {
-        let mut labels = vec![];
-        let mut follow = |mk: &Marking, _: &[f64], en: &[usize], rng: &mut SimpleRng| {
-            let (vals, best) = teacher.advise_solved(mk, en)?;
-            labels.push(best);
-            // The label is the teacher's move; the move played is any move
-            // of the same value (or, `explore` of the time, any move), so
-            // the games reach what every optimal line leads to.
-            let t = if rng.uniform() < explore {
-                uniform(en, rng)
-            } else {
-                uniform(&optimal(en, &vals), rng)
+    }
+    let all = mode == "all";
+    let (seqs, moves, opening, best_opening, positions, sample) = if mode == "sampled" {
+        imitate_sampled(&v, a, &rules, &from, games, seed)?
+    } else {
+        let Rules { sign, reward, auto } = &rules;
+        let mut teacher = Teacher::new(&v, auto, sign, reward);
+        teacher.solve(&from)?;
+        let teacher = &teacher;
+        let auto = auto.clone();
+        let played = each_game(if all { 0 } else { games }, |i| {
+            let mut labels = vec![];
+            let mut follow = |mk: &Marking, _: &[f64], en: &[usize], rng: &mut SimpleRng| {
+                let (vals, best) = teacher.advise_solved(mk, en)?;
+                labels.push(best);
+                // The label is the teacher's move; the move played is any move
+                // of the same value (or, `explore` of the time, any move), so
+                // the games reach what every optimal line leads to.
+                let t = if rng.uniform() < explore {
+                    uniform(en, rng)
+                } else {
+                    uniform(&optimal(en, &vals), rng)
+                };
+                Ok((t, vec![]))
             };
-            Ok((t, vec![]))
-        };
-        let g = game(
-            &v,
-            &from,
-            max_steps,
-            &auto,
-            &mut game_rng(seed, 0, i),
-            &mut follow,
-        )?;
-        Ok((g, labels))
-    })?;
-    let mut seqs = vec![];
-    let mut moves = 0usize;
-    for (g, labels) in played {
-        if !g.inputs.is_empty() {
-            moves += labels.len();
-            seqs.push(Seq::plain(g.inputs, labels));
-        }
-    }
-    if all {
-        // Every reachable decision position once, in a seeded order.
-        let mut seen = std::collections::HashSet::new();
-        let mut stack = vec![settle(&v, &auto, &from)?];
-        while let Some(mk) = stack.pop() {
-            if !seen.insert(v.st.marking(&mk)) {
-                continue;
-            }
-            let en = v.enabled(&mk);
-            if en.is_empty() {
-                continue;
-            }
-            let (_, best) = teacher.advise_solved(&mk, &en)?;
-            seqs.push(Seq::plain(vec![v.input(&mk)], vec![best]));
-            for &t in &en {
-                stack.push(settle(&v, &auto, &v.fire(&mk, t)?)?);
+            let g = game(
+                &v,
+                &from,
+                max_steps,
+                &auto,
+                &mut game_rng(seed, 0, i),
+                &mut follow,
+            )?;
+            Ok((g, labels))
+        })?;
+        let mut seqs = vec![];
+        let mut moves = 0usize;
+        for (g, labels) in played {
+            if !g.inputs.is_empty() {
+                moves += labels.len();
+                seqs.push(Seq::plain(g.inputs, labels));
             }
         }
-        let mut rng = SimpleRng::new(seed);
-        for i in (1..seqs.len()).rev() {
-            seqs.swap(i, (rng.next_u64() % (i as u64 + 1)) as usize);
+        if all {
+            // Every reachable decision position once, in a seeded order.
+            let mut seen = std::collections::HashSet::new();
+            let mut stack = vec![settle(&v, &auto, &from)?];
+            while let Some(mk) = stack.pop() {
+                if !seen.insert(v.st.marking(&mk)) {
+                    continue;
+                }
+                let en = v.enabled(&mk);
+                if en.is_empty() {
+                    continue;
+                }
+                let (_, best) = teacher.advise_solved(&mk, &en)?;
+                seqs.push(Seq::plain(vec![v.input(&mk)], vec![best]));
+                for &t in &en {
+                    stack.push(settle(&v, &auto, &v.fire(&mk, t)?)?);
+                }
+            }
+            let mut rng = SimpleRng::new(seed);
+            for i in (1..seqs.len()).rev() {
+                seqs.swap(i, (rng.next_u64() % (i as u64 + 1)) as usize);
+            }
+            moves = seqs.len();
         }
-        moves = seqs.len();
-    }
-    if seqs.is_empty() {
-        return Err(Error::Invalid(
-            "nothing to choose at the start marking".into(),
-        ));
-    }
-    // What the teacher thinks of the opening.
-    let start = teacher.settle(&from)?;
-    let en = v.enabled(&start);
-    let (vals, best) = teacher.advise_solved(&start, &en)?;
-    let opening: Vec<Value> = en
-        .iter()
-        .zip(&vals)
-        .map(|(&t, &(value, random))| json!({ "transition": v.st.transitions[t], "value": value, "vs_random": random }))
-        .collect();
-    let positions = teacher.value.len();
-
+        if seqs.is_empty() {
+            return Err(Error::Invalid(
+                "nothing to choose at the start marking".into(),
+            ));
+        }
+        // What the teacher thinks of the opening.
+        let start = teacher.settle(&from)?;
+        let en = v.enabled(&start);
+        let (vals, best) = teacher.advise_solved(&start, &en)?;
+        let opening: Vec<Value> = en
+            .iter()
+            .zip(&vals)
+            .map(|(&t, &(value, random))| json!({ "transition": v.st.transitions[t], "value": value, "vs_random": random }))
+            .collect();
+        let positions = teacher.value.len();
+        (
+            seqs,
+            moves,
+            Some(opening),
+            Some(v.st.transitions[best].clone()),
+            positions,
+            Value::Null,
+        )
+    };
     let mut losses = Vec::with_capacity(epochs);
     for _ in 0..epochs {
         losses.push(rnn.train(&seqs, lr, 1, batch));
     }
     let training = json!({
-        "teacher": "minimax", "positions": if all { "all" } else { "games" },
-        "games": if all { 0 } else { seqs.len() }, "moves": moves, "epochs": epochs, "explore": explore,
+        "teacher": "minimax", "positions": mode,
+        "games": if mode == "games" { seqs.len() } else { 0 }, "moves": moves, "sample": sample, "epochs": epochs, "explore": explore,
         "learning_rate": lr, "batch": batch, "max_steps": max_steps, "seed": seed, "loss": losses.last(),
         "sides": a.get("sides"), "reward": a.get("reward"), "auto": a.get("auto"),
         "positions_solved": positions,
@@ -1469,7 +1556,7 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
     );
     Ok(json!({
         "model": m, "artifact": curve, "artifacts": [curve, m], "training": training,
-        "teacher_opening": { "best": v.st.transitions[best], "moves": opening },
+        "teacher_opening": opening.map(|o| json!({ "best": best_opening, "moves": o })),
     }))
 }
 
@@ -1767,10 +1854,10 @@ fn verify(sess: &mut Session, a: &Value) -> Result<Value> {
     } else {
         (None, None)
     };
-    let Rules { sign, reward, auto } = game_rules(&v, a)?;
+    let rules = game_rules(&v, a)?;
+    let Rules { sign, reward, auto } = &rules;
+    let (sign, reward, auto) = (sign.clone(), reward.clone(), auto.clone());
     let from = sim::initial_marking(&sess.doc);
-    let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
-    teacher.solve(&from)?;
     let ode = OdePlayer {
         v: &v,
         doc: &sess.doc,
@@ -1796,6 +1883,12 @@ fn verify(sess: &mut Session, a: &Value) -> Result<Value> {
                 .collect();
         }
     }
+    if a.get("games").is_some() {
+        let out = verify_sampled(&v, a, &rules, &from, player, net.as_ref(), &ode, &seats)?;
+        return finish_verify(sess, a, out, net.as_ref(), mid);
+    }
+    let mut teacher = Teacher::new(&v, &auto, &sign, &reward);
+    teacher.solve(&from)?;
     let state = net.as_ref().map(Policy::state).unwrap_or_default();
     let (mut rows, mut sides_out) = (vec![], vec![]);
     let mut clean = true;
@@ -1850,6 +1943,493 @@ fn verify(sess: &mut Session, a: &Value) -> Result<Value> {
         ArtifactData::Report(out.clone()),
     );
     let mut out = out;
+    out["report"] = json!(report);
+    out["artifacts"] = json!([table, report]);
+    Ok(out)
+}
+
+/// The session's view of a net and the dense, index-resolved form
+/// [`game_search`] searches, side by side.
+struct Dense {
+    rules: game_search::Rules,
+    /// Per [`View`] place: its index in a dense marking.
+    place: Vec<usize>,
+    /// Per [`View`] transition: its index in `rules.ix`; and back.
+    to_ix: Vec<usize>,
+    to_view: Vec<usize>,
+}
+
+impl Dense {
+    fn new(v: &View, r: &Rules) -> Result<Self> {
+        let ix = v.st.net.model.indexed();
+        let missing = || {
+            Error::Invalid(
+                "the exact search needs every token place and transition of the net (a coloured net with unused \
+                 colour copies is not supported)"
+                    .into(),
+            )
+        };
+        if ix.places.len() != v.st.places.len() {
+            return Err(missing());
+        }
+        let place =
+            v.st.places
+                .iter()
+                .map(|p| ix.places.iter().position(|q| q == p).ok_or_else(missing))
+                .collect::<Result<Vec<_>>>()?;
+        let to_ix =
+            v.st.transitions
+                .iter()
+                .map(|t| {
+                    ix.transitions
+                        .iter()
+                        .position(|u| u == t)
+                        .ok_or_else(missing)
+                })
+                .collect::<Result<Vec<_>>>()?;
+        let mut to_view = vec![usize::MAX; ix.transitions.len()];
+        for (i, &j) in to_ix.iter().enumerate() {
+            to_view[j] = i;
+        }
+        if to_view.contains(&usize::MAX) {
+            return Err(missing());
+        }
+        let (mut auto, mut sign) = (
+            vec![false; ix.transitions.len()],
+            vec![0.0; ix.transitions.len()],
+        );
+        for (i, &j) in to_ix.iter().enumerate() {
+            auto[j] = r.auto[i];
+            sign[j] = r.sign[i];
+        }
+        let reward: Vec<(usize, f64)> = r.reward.iter().map(|&(p, w)| (place[p], w)).collect();
+        let bounds = (
+            reward.iter().map(|x| x.1.min(0.0)).sum(),
+            reward.iter().map(|x| x.1.max(0.0)).sum(),
+        );
+        Ok(Self {
+            rules: game_search::Rules {
+                ix,
+                auto,
+                sign,
+                reward,
+                bounds,
+            },
+            place,
+            to_ix,
+            to_view,
+        })
+    }
+
+    fn dense(&self, v: &View, mk: &Marking) -> Vec<i64> {
+        let x = v.st.marking(mk);
+        let mut d = vec![0; self.rules.ix.places.len()];
+        for (i, &p) in self.place.iter().enumerate() {
+            d[p] = x[i];
+        }
+        d
+    }
+
+    /// A dense marking as the policy's input (the [`View`]'s place order).
+    fn input(&self, d: &[i64]) -> Vec<f64> {
+        self.place.iter().map(|&p| d[p] as f64).collect()
+    }
+
+    /// A dense marking as a session marking, shaped like `template`.
+    fn marking(&self, v: &View, template: &Marking, d: &[i64]) -> Marking {
+        let mut mk = template.clone();
+        for (i, &p) in self.place.iter().enumerate() {
+            let (base, c) = v.st.net.base(&v.st.places[i]);
+            if let Some(slot) = mk.get_mut(&base).and_then(|x| x.get_mut(c)) {
+                *slot = d[p];
+            }
+        }
+        mk
+    }
+}
+
+/// A sampled decision position, labelled by the exact search.
+struct Labelled {
+    mk: Vec<i64>,
+    /// The model's state on arriving here along its game.
+    h: Vec<f64>,
+    side: f64,
+    /// Moves (`rules.ix` order) and each one's value from the mover's view.
+    moves: Vec<usize>,
+    vals: Vec<f64>,
+}
+
+/// [`verify`] with `games`: the sampled referee of the
+/// sim.pflow.xyz ODE Connect-4 experiment, for games too large to walk. Random-play
+/// games give the positions (distinct, from `min_moves` moves in); the
+/// exact search values every legal move at each, and positions it cannot
+/// finish within `budget` nodes are skipped and counted, never guessed.
+#[allow(clippy::too_many_arguments)]
+fn verify_sampled(
+    v: &View,
+    a: &Value,
+    rules: &Rules,
+    from: &Marking,
+    player: &str,
+    net: Option<&Policy>,
+    ode: &OdePlayer,
+    seats: &[(String, f64)],
+) -> Result<Value> {
+    let games = int(a, "games", 250, 1, 100_000)?;
+    let min_moves = int(a, "min_moves", 14, 0, 10_000)?;
+    let budget = int(a, "budget", 800_000, 1, 1_000_000_000)?;
+    let seed = int(a, "seed", 13, 0, u32::MAX as usize)? as u64;
+    let d = Dense::new(v, rules)?;
+    let r = &d.rules;
+    let (labelled, found, skipped, cached) = sample_labelled(
+        v,
+        &d,
+        from,
+        net,
+        games,
+        min_moves,
+        budget,
+        seed,
+        s(a, "labels"),
+    )?;
+    let (mut rows, mut sides_out) = (vec![], vec![]);
+    let mut clean = true;
+    for (side, seat) in seats {
+        let mine: Vec<&Labelled> = labelled.iter().filter(|p| p.side == *seat).collect();
+        let checks = crate::par::map(mine.clone(), |p| -> Result<(usize, f64, f64)> {
+            let best = p.vals.iter().copied().fold(f64::NEG_INFINITY, f64::max);
+            let t = match player {
+                "model" => {
+                    let net = net.expect("a model");
+                    let en_view: Vec<usize> = p.moves.iter().map(|&t| d.to_view[t]).collect();
+                    let probs = rnn_probs(net, &mut p.h.clone(), &d.input(&p.mk), &en_view);
+                    d.to_ix[pick(&probs, &en_view, false, &mut SimpleRng::new(0))]
+                }
+                "ode" => {
+                    let en_view: Vec<usize> = p.moves.iter().map(|&t| d.to_view[t]).collect();
+                    let mk = d.marking(v, from, &p.mk);
+                    d.to_ix[ode.choose(&rules.auto, &rules.sign, &mk, &en_view)?]
+                }
+                _ => p.moves[p.vals.iter().position(|&x| x == best).expect("a best move")],
+            };
+            let k = p.moves.iter().position(|&m| m == t).expect("a legal move");
+            Ok((t, best, p.vals[k]))
+        })
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?;
+        let (mut losing, mut missed, mut failures) = (0, 0, vec![]);
+        for (p, &(t, best, after)) in mine.iter().zip(&checks) {
+            let lost = after < best && after < 0.0;
+            let miss = after < best && best > 0.0 && after >= 0.0;
+            losing += lost as usize;
+            missed += miss as usize;
+            if (lost || miss) && failures.len() < 5 {
+                let marking: serde_json::Map<String, Value> =
+                    v.st.display
+                        .iter()
+                        .zip(d.input(&p.mk))
+                        .filter(|(_, n)| *n != 0.0)
+                        .map(|(k, n)| (k.clone(), json!(n)))
+                        .collect();
+                let bests: Vec<&str> = p
+                    .moves
+                    .iter()
+                    .zip(&p.vals)
+                    .filter(|(_, &x)| x == best)
+                    .map(|(&m, _)| r.ix.transitions[m].as_str())
+                    .collect();
+                failures.push(json!({
+                    "kind": if lost { "value-losing" } else { "missed win" },
+                    "marking": marking, "move": r.ix.transitions[t], "value_before": best, "value_after": after,
+                    "best": bests,
+                }));
+            }
+        }
+        let must_play = mine
+            .iter()
+            .filter(|p| {
+                p.vals
+                    .iter()
+                    .any(|&x| x < p.vals.iter().copied().fold(f64::NEG_INFINITY, f64::max))
+            })
+            .count();
+        clean &= losing == 0 && missed == 0;
+        rows.push(vec![
+            json!(side),
+            json!(mine.len()),
+            json!(must_play),
+            json!(losing),
+            json!(missed),
+        ]);
+        sides_out.push(json!({
+            "side": side, "decisions": mine.len(), "must_play": must_play,
+            "value_losing": losing, "missed_wins": missed, "failures": failures,
+        }));
+    }
+    Ok(json!({
+        "player": player, "mode": "sampled", "no_losses_in_sample": clean, "sides": sides_out,
+        "sample": {"games": games, "min_moves": min_moves, "seed": seed, "budget": budget,
+                   "positions": found, "labelled": labelled.len(), "skipped": skipped, "cached": cached},
+        "rows": rows,
+        "note": "a sampled referee, not an exhaustive one: every legal move at every sampled position is checked against \
+                 the exact value, which is exact per position, but the positions are a sample of the game; skipped \
+                 positions ran past the search budget and are not scored",
+    }))
+}
+
+/// Distinct decision positions from `games` random-play games (from
+/// `min_moves` moves in), each with every legal move valued by the exact
+/// search: (the labelled positions, how many were found, how many ran past
+/// `budget` and were skipped). `net`'s state is carried along each game.
+#[allow(clippy::too_many_arguments)]
+fn sample_labelled(
+    v: &View,
+    d: &Dense,
+    from: &Marking,
+    net: Option<&Policy>,
+    games: usize,
+    min_moves: usize,
+    budget: usize,
+    seed: u64,
+    labels: Option<&str>,
+) -> Result<(Vec<Labelled>, usize, usize, usize)> {
+    let r = &d.rules;
+    let mut start = d.dense(v, from);
+    r.settle(&mut start)?;
+    let state = net.map(Policy::state).unwrap_or_default();
+    let sampled = each_game(games, |i| {
+        let mut rng = game_rng(seed, 9, i);
+        let (mut mk, mut h, mut out) = (start.clone(), state.clone(), vec![]);
+        for ply in 0..10_000 {
+            let en = r.moves(&mk);
+            if en.is_empty() {
+                break;
+            }
+            if ply >= min_moves {
+                out.push((mk.clone(), h.clone()));
+            }
+            if let Some(net) = net {
+                // The model's state follows every move, as in rnn.evaluate.
+                let en_view: Vec<usize> = en.iter().map(|&t| d.to_view[t]).collect();
+                rnn_probs(net, &mut h, &d.input(&mk), &en_view);
+            }
+            mk = r.play(&mk, uniform(&en, &mut rng))?;
+        }
+        Ok(out)
+    })?;
+    let mut seen = std::collections::HashSet::new();
+    let positions: Vec<(Vec<i64>, Vec<f64>)> = sampled
+        .into_iter()
+        .flatten()
+        .filter(|(mk, _)| seen.insert(mk.clone()))
+        .collect();
+    let found = positions.len();
+    let mut cache = match labels {
+        Some(path) => LabelCache::open(path, d, budget)?,
+        None => LabelCache::default(),
+    };
+    let cached = positions
+        .iter()
+        .filter(|(mk, _)| cache.known.contains_key(mk))
+        .count();
+    let todo: Vec<Vec<i64>> = positions
+        .iter()
+        .filter(|(mk, _)| !cache.known.contains_key(mk))
+        .map(|(mk, _)| mk.clone())
+        .collect();
+    // Label in batches, appending each to the cache, so a long run that
+    // stops keeps what it has done.
+    for batch in todo.chunks(LabelCache::BATCH) {
+        let chunks: Vec<Vec<Vec<i64>>> = batch
+            .chunks(batch.len().div_ceil(64).max(1))
+            .map(<[_]>::to_vec)
+            .collect();
+        // One solver (and transposition table) per chunk, on every core.
+        let done: Vec<(Vec<i64>, Option<Vec<f64>>)> = crate::par::map(chunks, |chunk| {
+            let mut solver = game_search::Solver::new(r, budget);
+            chunk
+                .into_iter()
+                .map(|mk| -> Result<(Vec<i64>, Option<Vec<f64>>)> {
+                    let moves = r.moves(&mk);
+                    let side = r.mover(&moves)?;
+                    let mut vals = Vec::with_capacity(moves.len());
+                    for &t in &moves {
+                        match solver.value(&r.play(&mk, t)?)? {
+                            Some(x) => vals.push(side * x + 0.0),
+                            None => return Ok((mk, None)),
+                        }
+                    }
+                    Ok((mk, Some(vals)))
+                })
+                .collect::<Result<Vec<_>>>()
+        })
+        .into_iter()
+        .collect::<Result<Vec<_>>>()?
+        .into_iter()
+        .flatten()
+        .collect();
+        cache.add(done)?;
+    }
+    let mut skipped = 0;
+    let mut labelled = vec![];
+    for (mk, h) in positions {
+        match &cache.known[&mk] {
+            None => skipped += 1,
+            Some(vals) => {
+                let moves = r.moves(&mk);
+                let side = r.mover(&moves)?;
+                labelled.push(Labelled {
+                    vals: vals.clone(),
+                    mk,
+                    h,
+                    side,
+                    moves,
+                });
+            }
+        }
+    }
+    Ok((labelled, found, skipped, cached))
+}
+
+/// Exact labels by position: the values of each move (`rules.ix` order,
+/// mover's view), or `None` where the search ran past its budget. With a
+/// file, it is read when opened and every [`LabelCache::add`] appends to
+/// it, one JSON object per line after a header naming what the labels
+/// depend on.
+#[derive(Default)]
+struct LabelCache {
+    known: HashMap<Vec<i64>, Option<Vec<f64>>>,
+    file: Option<std::fs::File>,
+    path: String,
+}
+
+impl LabelCache {
+    const BATCH: usize = 20_000;
+
+    /// What a label depends on: the net, the rules and the budget.
+    fn header(d: &Dense, budget: usize) -> Value {
+        let r = &d.rules;
+        json!({
+            "labels": 1,
+            "places": r.ix.places,
+            "transitions": r.ix.transitions,
+            "auto": r.auto,
+            "sign": r.sign,
+            "reward": r.reward,
+            "budget": budget,
+        })
+    }
+
+    fn open(path: &str, d: &Dense, budget: usize) -> Result<Self> {
+        use std::io::{BufRead, Write};
+        let io = |e: std::io::Error| Error::Io(format!("{path}: {e}"));
+        let want = Self::header(d, budget);
+        let mut known = HashMap::new();
+        let fresh = match std::fs::File::open(path) {
+            Ok(f) => {
+                let mut lines = std::io::BufReader::new(f).lines();
+                let head: Value = match lines.next() {
+                    Some(line) => serde_json::from_str(&line.map_err(io)?)
+                        .map_err(|e| Error::Invalid(format!("{path}: header: {e}")))?,
+                    None => Value::Null,
+                };
+                if !head.is_null() && head != want {
+                    return Err(Error::Invalid(format!(
+                        "{path} holds labels for another net, other rules or another budget (budget {})",
+                        head["budget"]
+                    )));
+                }
+                for (n, line) in lines.enumerate() {
+                    let line = line.map_err(io)?;
+                    // A run stopped mid-write leaves at most a partial last line.
+                    let Ok(x) = serde_json::from_str::<Value>(&line) else {
+                        continue;
+                    };
+                    let mk: Vec<i64> = serde_json::from_value(x["mk"].clone())
+                        .map_err(|e| Error::Invalid(format!("{path}: line {}: {e}", n + 2)))?;
+                    let vals: Option<Vec<f64>> = serde_json::from_value(x["vals"].clone())
+                        .map_err(|e| Error::Invalid(format!("{path}: line {}: {e}", n + 2)))?;
+                    known.insert(mk, vals);
+                }
+                head.is_null()
+            }
+            Err(e) if e.kind() == std::io::ErrorKind::NotFound => true,
+            Err(e) => return Err(io(e)),
+        };
+        let mut file = std::fs::OpenOptions::new()
+            .create(true)
+            .append(true)
+            .open(path)
+            .map_err(io)?;
+        if fresh {
+            writeln!(file, "{want}").map_err(io)?;
+        }
+        Ok(Self {
+            known,
+            file: Some(file),
+            path: path.to_string(),
+        })
+    }
+
+    fn add(&mut self, done: Vec<(Vec<i64>, Option<Vec<f64>>)>) -> Result<()> {
+        if let Some(f) = &mut self.file {
+            use std::io::Write;
+            let mut buf = String::new();
+            for (mk, vals) in &done {
+                buf.push_str(&json!({"mk": mk, "vals": vals}).to_string());
+                buf.push('\n');
+            }
+            f.write_all(buf.as_bytes())
+                .and_then(|()| f.flush())
+                .map_err(|e| Error::Io(format!("{}: {e}", self.path)))?;
+        }
+        self.known.extend(done);
+        Ok(())
+    }
+}
+
+/// Stores a sampled referee's table and report.
+fn finish_verify(
+    sess: &mut Session,
+    a: &Value,
+    mut out: Value,
+    net: Option<&Policy>,
+    mid: Option<String>,
+) -> Result<Value> {
+    let name = match (net, &mid) {
+        (Some(net), Some(mid)) => format!("{} {mid}", net.name()),
+        _ => out["player"].as_str().unwrap_or("player").to_string(),
+    };
+    let rows: Vec<Vec<Value>> = serde_json::from_value(out["rows"].take()).unwrap_or_default();
+    out.as_object_mut().expect("an object").remove("rows");
+    out["model"] = json!(mid);
+    let n = &out["sample"];
+    let title = format!(
+        "{name}: sampled referee ({} positions from {} games, {} skipped)",
+        n["labelled"], n["games"], n["skipped"]
+    );
+    let table = sess.add_artifact(
+        title.clone(),
+        source("rnn.verify", a),
+        ArtifactData::Table {
+            columns: [
+                "side",
+                "decisions",
+                "must-play",
+                "value-losing",
+                "missed wins",
+            ]
+            .map(String::from)
+            .to_vec(),
+            rows,
+        },
+    );
+    out["artifact"] = json!(table);
+    let report = sess.add_artifact(
+        format!("{title} report"),
+        source("rnn.verify", a),
+        ArtifactData::Report(out.clone()),
+    );
     out["report"] = json!(report);
     out["artifacts"] = json!([table, report]);
     Ok(out)
@@ -1943,4 +2523,85 @@ fn _shared_across_threads() {
     fn sync<T: Sync + Send>() {}
     sync::<View>();
     sync::<Policy>();
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The alpha-beta search (game_search) against the exhaustive teacher:
+    /// the same value at every `step`-th position the teacher solved.
+    fn search_agrees_with_teacher(open: (&str, Value), step: usize) {
+        let mut sess = Session::default();
+        sess.execute(open.0, open.1).expect("open");
+        let v = View::new(&sess).expect("view");
+        let a = json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1, "win_o": -1}, "auto": ["x_win_", "o_win_"]});
+        let rules = game_rules(&v, &a).expect("rules");
+        let mut teacher = Teacher::new(&v, &rules.auto, &rules.sign, &rules.reward);
+        teacher
+            .solve(&sim::initial_marking(&sess.doc))
+            .expect("solve");
+        let d = Dense::new(&v, &rules).expect("dense");
+        let mut solver = game_search::Solver::new(&d.rules, usize::MAX);
+        let mut checked = 0;
+        for (key, &want) in teacher.value.iter().step_by(step) {
+            let mut mk = vec![0; d.rules.ix.places.len()];
+            for (i, &p) in d.place.iter().enumerate() {
+                mk[p] = key[i];
+            }
+            let got = solver.value(&mk).expect("search").expect("no budget");
+            assert_eq!(got, want, "at {key:?}");
+            checked += 1;
+        }
+        assert!(checked > 1000, "{checked} positions");
+    }
+
+    #[test]
+    fn search_agrees_with_the_teacher_on_tic_tac_toe() {
+        search_agrees_with_teacher(("file.open_example", json!({"name": "tic-tac-toe"})), 1);
+    }
+
+    #[test]
+    fn cached_labels_match_fresh_ones() {
+        let mut sess = Session::default();
+        sess.execute("file.open_example", json!({"name": "tic-tac-toe"}))
+            .expect("open");
+        let v = View::new(&sess).expect("view");
+        let a = json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1, "win_o": -1}, "auto": ["x_win_", "o_win_"]});
+        let rules = game_rules(&v, &a).expect("rules");
+        let d = Dense::new(&v, &rules).expect("dense");
+        let from = sim::initial_marking(&sess.doc);
+        let path = std::env::temp_dir().join(format!("pflow-labels-{}.jsonl", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let file = path.to_str().expect("a path");
+        let run = |games, labels| {
+            sample_labelled(&v, &d, &from, None, games, 2, 1_000_000, 5, labels).expect("sample")
+        };
+        let (fresh, found, _, _) = run(40, None);
+        // A first run with a file labels everything; a smaller run then
+        // finds all of it cached, and a larger one only the new part.
+        assert_eq!(run(20, Some(file)).3, 0);
+        let (small, small_found, _, small_cached) = run(10, Some(file));
+        assert_eq!(small_cached, small_found);
+        let (again, _, _, cached) = run(40, Some(file));
+        assert!(
+            cached >= small.len() && cached < found,
+            "{cached} of {found}"
+        );
+        let key = |l: &[Labelled]| {
+            l.iter()
+                .map(|p| (p.mk.clone(), p.moves.clone(), p.vals.clone()))
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(key(&again), key(&fresh));
+        // Labels made with another budget are refused.
+        assert!(sample_labelled(&v, &d, &from, None, 10, 2, 5, 5, Some(file)).is_err());
+        let _ = std::fs::remove_file(&path);
+    }
+
+    #[test]
+    fn search_agrees_with_the_teacher_on_connect_3() {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../../examples/connect-3.json");
+        search_agrees_with_teacher(("file.open", json!({ "path": path })), 7);
+    }
 }
