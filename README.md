@@ -188,9 +188,10 @@ Undertrained models only slip as O, in 2–3 of about 450 positions. Those moves
 | random legal move | about 33% | about 33% |
 | `ode`, `horizon` 3 | 17 / 940 | 17 / 879 |
 | MLP `[256, 128]` trained on these same positions | 0 / 940 | 0 / 879 |
-| MLP `[256, 128]` trained on 7,064 positions from other games (seed 1, 1,000 games) | 272 / 940 | 263 / 879 |
+| MLP `[256, 128]`, 7,064 positions from other games (seed 1, 1,000 games) | 241 / 940 | 256 / 879 |
+| MLP `[256, 128]`, 36,227 positions (5,000 games) | 166 / 940 | 161 / 879 |
 
-The MLP learns every position it is shown, ties included, and is close to random on positions it hasn't seen. Connect-3 hid this because there it saw every position.
+None of the referee's positions appear in either training set. The MLP learns every position it is shown, ties included, and generalizes slowly: five times the data takes about a third off its held-out mistakes, still ten times the `ode` player's. Connect-3 hid this because there it saw every position. (100 epochs, `learning_rate` 0.005. For `positions: "sampled"` the softmax ranges over each position's legal moves; over all 222 outputs the illegal moves' logits are pushed down without end, and runs on 5,000 games diverged after 30–50 epochs at every rate and batch size tried.)
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

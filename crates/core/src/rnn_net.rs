@@ -36,6 +36,11 @@ pub(crate) struct Seq {
     pub inputs: Vec<Vec<f64>>,
     pub targets: Vec<usize>,
     pub weights: Vec<f64>,
+    /// Per move, the legal moves its softmax ranges over; empty for the
+    /// whole output layer. Only the MLP reads it (`positions: "sampled"`):
+    /// over every output, the illegal moves' logits are pushed down without
+    /// end, and long runs diverge.
+    pub legal: Vec<Vec<usize>>,
 }
 
 impl Seq {
@@ -46,6 +51,7 @@ impl Seq {
             inputs,
             targets,
             weights,
+            legal: vec![],
         }
     }
 }
@@ -476,6 +482,7 @@ mod tests {
                     inputs: x.clone(),
                     targets: t.clone(),
                     weights: vec![*r; t.len()],
+                    legal: vec![],
                 })
                 .collect();
             assert_eq!(
@@ -490,6 +497,7 @@ mod tests {
                     inputs: x.clone(),
                     targets: t.clone(),
                     weights: w.clone(),
+                    legal: vec![],
                 })
                 .collect();
             assert_eq!(

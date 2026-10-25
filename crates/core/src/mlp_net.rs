@@ -118,7 +118,26 @@ impl Mlp {
             nonzero(x, &mut w.idx);
             self.forward(x, &w.idx, &mut w.acts);
             let out = &mut w.d[depth];
-            softmax_into(&w.acts[depth], out);
+            match s.legal.get(t).filter(|l| !l.is_empty()) {
+                None => softmax_into(&w.acts[depth], out),
+                Some(legal) => {
+                    // Over the legal moves only; the rest get no gradient.
+                    let z = &w.acts[depth];
+                    let top = legal
+                        .iter()
+                        .map(|&i| z[i])
+                        .fold(f64::NEG_INFINITY, f64::max);
+                    out.fill(0.0);
+                    let mut sum = 0.0;
+                    for &i in legal {
+                        out[i] = (z[i] - top).exp();
+                        sum += out[i];
+                    }
+                    for &i in legal {
+                        out[i] /= sum;
+                    }
+                }
+            }
             let (target, r) = (s.targets[t], s.weights[t]);
             *loss -= r * out[target].max(1e-10).ln();
             out.iter_mut().for_each(|p| *p *= r);
@@ -222,17 +241,36 @@ mod tests {
         let mut loss = 0.0;
         for (t, x) in s.inputs.iter().enumerate() {
             let y = m.logits(x);
-            let mut p = vec![0.0; y.len()];
-            softmax_into(&y, &mut p);
-            loss -= s.weights[t] * p[s.targets[t]].max(1e-10).ln();
+            let p = match s.legal.get(t).filter(|l| !l.is_empty()) {
+                None => {
+                    let mut p = vec![0.0; y.len()];
+                    softmax_into(&y, &mut p);
+                    p[s.targets[t]]
+                }
+                Some(legal) => {
+                    let sum: f64 = legal.iter().map(|&i| y[i].exp()).sum();
+                    y[s.targets[t]].exp() / sum
+                }
+            };
+            loss -= s.weights[t] * p.max(1e-10).ln();
         }
         loss
     }
 
     #[test]
     fn gradients_match_finite_differences() {
+        gradients_check(vec![]);
+    }
+
+    #[test]
+    fn gradients_over_legal_moves_match_finite_differences() {
+        gradients_check(vec![vec![1, 2], vec![0, 1, 3], vec![3]]);
+    }
+
+    fn gradients_check(legal: Vec<Vec<usize>>) {
         let m = Mlp::new(vec![5, 7, 6, 4], 11);
         let s = Seq {
+            legal,
             inputs: vec![
                 vec![1.0, 0.0, 2.0, 0.0, 1.0],
                 vec![0.0, 1.0, 1.0, 0.0, 0.0],

@@ -1268,6 +1268,7 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
                         inputs: g.inputs,
                         targets: g.moves,
                         weights,
+                        legal: vec![],
                     });
                 }
                 // REINFORCE skips games with no reward (and does not count them).
@@ -1276,6 +1277,7 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
                     weights: vec![r; g.moves.len()],
                     inputs: g.inputs,
                     targets: g.moves,
+                    legal: vec![],
                 }),
             }
         }
@@ -1394,7 +1396,10 @@ fn imitate_sampled(
                 .map(|(&t, _)| d.to_view[t])
                 .collect();
             let input = d.input(&p.mk);
-            Seq::plain(vec![input; targets.len()], targets)
+            let legal: Vec<usize> = p.moves.iter().map(|&t| d.to_view[t]).collect();
+            let mut seq = Seq::plain(vec![input; targets.len()], targets);
+            seq.legal = vec![legal; seq.targets.len()];
+            seq
         })
         .collect();
     let mut rng = SimpleRng::new(seed);
