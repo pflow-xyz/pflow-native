@@ -1,0 +1,17 @@
+[package]
+name = "pflow-native-wasm"
+description = "The pflow-native-core registry for the browser: list_commands, execute, batch and load over JSON, through wasm-bindgen"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+# No features: the browser build leaves out `services`, `http`, `zk`, `rnn`
+# and `png` (pflow.xyz ROADMAP, "WASM: what moves to Rust, and how").
+pflow-native-core = { path = "../core" }
+serde_json.workspace = true
+wasm-bindgen = "0.2.129"

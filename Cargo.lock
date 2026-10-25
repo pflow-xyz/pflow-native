@@ -3127,6 +3127,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "pflow-native-wasm"
+version = "0.8.0"
+dependencies = [
+ "pflow-native-core",
+ "serde_json",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "pflow-parser"
 version = "0.3.0"
 source = "git+https://github.com/pflow-xyz/pflow-rs?rev=70caba8c4df701ebb866164601d211be60965bfe#70caba8c4df701ebb866164601d211be60965bfe"

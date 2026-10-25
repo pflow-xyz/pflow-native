@@ -23,7 +23,8 @@ Native (egui/eframe; wasm later) Petri-net editor and simulator on pflow-rs.
 ```bash
 make test        # cargo test --workspace (core unit + command tests, CLI MCP stdio test)
 make lint        # fmt --check + clippy -D warnings
-make wasm-check  # core + app for wasm32-unknown-unknown
+make wasm-check  # core + app + wasm shim for wasm32-unknown-unknown
+make wasm-shim   # crates/wasm → target/wasm-shim/ (.wasm + JS glue; needs wasm-bindgen-cli 0.2.129)
 make test-offline  # the build without the `services` feature (no pflow.xyz / sim / GitHub)
 make screenshot  # regenerate docs/screenshot-sir.png
 ```

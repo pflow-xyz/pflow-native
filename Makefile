@@ -1,4 +1,4 @@
-.PHONY: build build-zk build-rnn build-offline run test test-zk test-rnn test-offline lint wasm-check web web-build screenshot mcp
+.PHONY: build build-zk build-rnn build-offline run test test-zk test-rnn test-offline lint wasm-check wasm-shim web web-build screenshot mcp
 
 build:
 	cargo build --release
@@ -41,7 +41,15 @@ test-rnn:
 
 # Core + app must keep compiling for the browser.
 wasm-check:
-	cargo check -p pflow-native-core -p pflow-native --target wasm32-unknown-unknown
+	cargo check -p pflow-native-core -p pflow-native -p pflow-native-wasm --target wasm32-unknown-unknown
+
+# The registry for pflow.xyz's browser (crates/wasm): a .wasm plus JS glue in
+# target/wasm-shim/. Needs `cargo install wasm-bindgen-cli --version 0.2.129`.
+wasm-shim:
+	cargo build --release -p pflow-native-wasm --target wasm32-unknown-unknown
+	wasm-bindgen --target web --out-dir target/wasm-shim \
+	  target/wasm32-unknown-unknown/release/pflow_native_wasm.wasm
+	@ls -l target/wasm-shim/*.wasm && gzip -9 -c target/wasm-shim/pflow_native_wasm_bg.wasm | wc -c | xargs echo gzip bytes:
 
 # Needs `cargo install trunk`; serves on :8080.
 web:

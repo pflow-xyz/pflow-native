@@ -25,7 +25,9 @@ pflow-rs crates (pinned git rev; sibling-path [patch] for development)
        │                                 `rnn` (experimental RNN and MLP policies).
        ├─ pflow-native       (crates/app)  eframe UI: views render artifacts, every action -> registry;
        │                                   control port for agents
-       └─ pflow-native-cli   (crates/cli)  list / exec / batch / control (JSON lines) / mcp (stdio)
+       ├─ pflow-native-cli   (crates/cli)  list / exec / batch / control (JSON lines) / mcp (stdio)
+       └─ pflow-native-wasm  (crates/wasm) the registry for pflow.xyz's browser: listCommands /
+                                           execute / batch / load over JSON (wasm-bindgen)
 ```
 
 Areas once planned as separate crates (analysis, remote) live as modules of
