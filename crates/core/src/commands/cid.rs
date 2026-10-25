@@ -42,7 +42,7 @@ fn stored_id(sess: &Session) -> Option<&str> {
 }
 
 fn cid(sess: &mut Session, a: &Value) -> Result<Value> {
-    let doc = sess.doc.to_value();
+    let doc = sess.export_doc().to_value();
     let cid = crate::cid::seal(&doc)?;
     let mut out = json!({ "cid": cid, "sealed": stored_id(sess) == Some(cid.as_str()) });
     if b(a, "nquads").unwrap_or(false) {
@@ -52,7 +52,7 @@ fn cid(sess: &mut Session, a: &Value) -> Result<Value> {
 }
 
 fn seal(sess: &mut Session, _: &Value) -> Result<Value> {
-    let cid = crate::cid::seal(&sess.doc.to_value())?;
+    let cid = crate::cid::seal(&sess.export_doc().to_value())?;
     if stored_id(sess) == Some(cid.as_str()) {
         return Ok(json!({ "cid": cid, "changed": false }));
     }

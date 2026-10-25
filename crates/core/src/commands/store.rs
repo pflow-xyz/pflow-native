@@ -393,7 +393,13 @@ fn label(snap: &Snapshot, id: &str) -> String {
 }
 
 fn put(sess: &mut Session, a: &Value) -> Result<Value> {
-    let doc = super::models::resolve(sess, s(a, "model").unwrap_or("current"))?;
+    let name = s(a, "model").unwrap_or("current");
+    // The open net is stored as a save would write it, rates included.
+    let doc = if matches!(name, "" | "current") {
+        sess.export_doc()
+    } else {
+        super::models::resolve(sess, name)?
+    };
     store::open().put_model(&doc, s(a, "title"), strs(a, "parents"))
 }
 

@@ -4769,5 +4769,311 @@
   },
   "cid": null,
   "note": "refused here by design; Go gives z4EBG9jFSPEoQEG6y1jbAc2eCC2bzRAaHfFSvYp3sESvLN5QAfH"
+ },
+ {
+  "name": "rated pair: rates + goal + view",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "name": "rated pair",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "idle": {
+     "@type": "Place",
+     "initial": [
+      2
+     ],
+     "capacity": [
+      0
+     ],
+     "offset": 0,
+     "x": 100,
+     "y": 100,
+     "label": "idle"
+    },
+    "busy": {
+     "@type": "Place",
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "offset": 0,
+     "x": 300,
+     "y": 100,
+     "label": "busy"
+    }
+   },
+   "transitions": {
+    "start": {
+     "@type": "Transition",
+     "x": 200,
+     "y": 60,
+     "label": "start",
+     "rate": 1.5
+    },
+    "finish": {
+     "@type": "Transition",
+     "x": 200,
+     "y": 140,
+     "label": "finish",
+     "rate": 0.5
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "idle",
+     "target": "start",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "start",
+     "target": "busy",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "busy",
+     "target": "finish",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "finish",
+     "target": "idle",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ],
+   "goals": [
+    {
+     "label": "all busy",
+     "to": {
+      "busy": 2
+     }
+    }
+   ],
+   "views": [
+    {
+     "id": "main",
+     "role": "board",
+     "title": "Main",
+     "places": [
+      "idle",
+      "busy"
+     ],
+     "transitions": [
+      "start",
+      "finish"
+     ]
+    }
+   ]
+  },
+  "cid": "z4EBG9j4qaBhmwTJNFRij6QVZHUhw7w1EzGYsgDXKcb3wmLLQQB"
+ },
+ {
+  "name": "rated pair: rates only (goals and views removed)",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "name": "rated pair",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "idle": {
+     "@type": "Place",
+     "initial": [
+      2
+     ],
+     "capacity": [
+      0
+     ],
+     "offset": 0,
+     "x": 100,
+     "y": 100,
+     "label": "idle"
+    },
+    "busy": {
+     "@type": "Place",
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "offset": 0,
+     "x": 300,
+     "y": 100,
+     "label": "busy"
+    }
+   },
+   "transitions": {
+    "start": {
+     "@type": "Transition",
+     "x": 200,
+     "y": 60,
+     "label": "start",
+     "rate": 1.5
+    },
+    "finish": {
+     "@type": "Transition",
+     "x": 200,
+     "y": 140,
+     "label": "finish",
+     "rate": 0.5
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "idle",
+     "target": "start",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "start",
+     "target": "busy",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "busy",
+     "target": "finish",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "finish",
+     "target": "idle",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9izWpMXYhQBe4xmBYeuhsxZ9D9QWH67cBwAVUZfJNZrNVi"
+ },
+ {
+  "name": "rated pair: no rates, goals or views",
+  "doc": {
+   "@context": "https://pflow.xyz/schema",
+   "@type": "PetriNet",
+   "@version": "1.1",
+   "name": "rated pair",
+   "token": [
+    "https://pflow.xyz/tokens/black"
+   ],
+   "places": {
+    "idle": {
+     "@type": "Place",
+     "initial": [
+      2
+     ],
+     "capacity": [
+      0
+     ],
+     "offset": 0,
+     "x": 100,
+     "y": 100,
+     "label": "idle"
+    },
+    "busy": {
+     "@type": "Place",
+     "initial": [
+      0
+     ],
+     "capacity": [
+      0
+     ],
+     "offset": 0,
+     "x": 300,
+     "y": 100,
+     "label": "busy"
+    }
+   },
+   "transitions": {
+    "start": {
+     "@type": "Transition",
+     "x": 200,
+     "y": 60,
+     "label": "start"
+    },
+    "finish": {
+     "@type": "Transition",
+     "x": 200,
+     "y": 140,
+     "label": "finish"
+    }
+   },
+   "arcs": [
+    {
+     "@type": "Arrow",
+     "source": "idle",
+     "target": "start",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "start",
+     "target": "busy",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "busy",
+     "target": "finish",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    },
+    {
+     "@type": "Arrow",
+     "source": "finish",
+     "target": "idle",
+     "weight": [
+      1
+     ],
+     "inhibitTransition": false
+    }
+   ]
+  },
+  "cid": "z4EBG9j3KGpgrbZqNivfM5QBusR93Vx3tA5xAogxXUefMD4pa35"
  }
 ]

@@ -157,7 +157,7 @@ fn receipt(sess: &mut Session, a: &Value) -> Result<Value> {
     };
     let certified = pv::certify_scenario(&sess.doc, &sess.marking, &sess.rates, &scenario)?;
     let run = pv::run_certified(&sess.doc, &certified)?;
-    let model = pv::model_cid(&sess.doc)?;
+    let model = pv::model_cid(&sess.export_doc())?;
     let key = pv::receipt_key()?;
     let receipt = pv::issue(
         &key,
@@ -292,7 +292,10 @@ fn verify_receipt(sess: &mut Session, a: &Value) -> Result<Value> {
 
 /// The open net or a library model whose CID is `cid`.
 fn find_model(sess: &Session, cid: &str) -> Result<Option<(String, crate::Document)>> {
-    if pv::model_cid(&sess.doc)? == cid {
+    // A receipt replays with the rates it certified, not the session's, so
+    // the open net also matches without them: rates changed since issue, or
+    // a receipt from before model CIDs covered rates.
+    if pv::model_cid(&sess.export_doc())? == cid || pv::model_cid(&sess.doc)? == cid {
         return Ok(Some(("current".into(), sess.doc.clone())));
     }
     for (name, doc) in &sess.models {
@@ -512,7 +515,7 @@ fn zk_prove_fire(sess: &mut Session, a: &Value) -> Result<Value> {
     if sess.doc.transition(t).is_none() {
         return Err(Error::NotFound(format!("no transition {t:?}")));
     }
-    let mut out = zk::prove_fire(&sess.doc, &sess.marking, t)?;
+    let mut out = zk::prove_fire(&sess.export_doc(), &sess.marking, t)?;
     let id = sess.add_artifact(
         format!("ZK proof: fire {t}"),
         source("zk.prove_fire", a),
@@ -544,7 +547,7 @@ fn zk_prove_trace(sess: &mut Session, a: &Value) -> Result<Value> {
         }
         None => return Err(Error::NotFound(format!("no artifact {id:?}"))),
     };
-    let mut out = zk::prove_trace(&sess.doc, &steps, max)?;
+    let mut out = zk::prove_trace(&sess.export_doc(), &steps, max)?;
     let rid = sess.add_artifact(
         format!(
             "ZK proof: trace {id} ({} firings)",
