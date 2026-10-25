@@ -453,6 +453,31 @@ fn store_and_provenance_cids_agree_with_file_cid() {
     }
 }
 
+#[test]
+fn a_rated_net_keeps_its_rates_and_cid_through_the_library() {
+    let mut s = loaded(&load("with-rates.jsonld"));
+    let rates = s.rates.clone();
+    assert!(!rates.is_empty());
+    let want = cid_of(&mut s);
+    s.execute("model.save", json!({ "name": "r" })).unwrap();
+    s.execute("file.new", json!({})).unwrap();
+    assert!(s.rates.is_empty());
+    s.execute("model.open", json!({ "name": "r" })).unwrap();
+    assert_eq!(s.rates, rates, "model.open restores the rates");
+    assert_eq!(cid_of(&mut s), want, "file.cid after the round trip");
+}
+
+#[test]
+fn store_put_of_a_saved_rated_net_is_its_file_cid() {
+    use pflow_native_core::store::{self, Store};
+    store::set_thread_store(Some(std::sync::Arc::new(Store::memory())));
+    let mut s = loaded(&load("with-rates.jsonld"));
+    let want = cid_of(&mut s);
+    s.execute("model.save", json!({ "name": "r" })).unwrap();
+    let put = s.execute("store.put", json!({ "model": "r" })).unwrap();
+    assert_eq!(put["cid"], json!(want), "store.put of the library entry");
+}
+
 #[cfg(feature = "services")]
 #[test]
 fn outbound_cids_agree_with_file_cid() {

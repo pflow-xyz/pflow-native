@@ -200,6 +200,33 @@ fn tampered_receipts_fail() {
 }
 
 #[test]
+fn a_rated_net_saved_to_the_library_verifies() {
+    let path =
+        PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("tests/fixtures/cid/with-rates.jsonld");
+    let mut s = Session::default();
+    run(&mut s, "file.open", json!({ "path": path }));
+    assert!(!s.rates.is_empty());
+    let out = run(
+        &mut s,
+        "sim.receipt",
+        json!({"scenario": {"hours": 1, "realizations": 2, "seed": 5, "summary": true}}),
+    );
+    assert_eq!(
+        out["receipt"]["model"],
+        run(&mut s, "file.cid", json!({}))["cid"]
+    );
+    run(&mut s, "model.save", json!({"name": "rated"}));
+    run(&mut s, "file.new", json!({}));
+    let v = run(
+        &mut s,
+        "provenance.verify_receipt",
+        json!({"receipt": out["receipt"]}),
+    );
+    assert_eq!(v["modelFrom"], "rated", "{v}");
+    assert_eq!(v["verdict"], "valid", "{v}");
+}
+
+#[test]
 fn ode_receipts_replay() {
     let mut s = example("sir");
     run(
