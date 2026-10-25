@@ -123,7 +123,9 @@ fn summary(name: &str, d: &Document) -> Value {
 fn save(sess: &mut Session, a: &Value) -> Result<Value> {
     let name = s(a, "name").unwrap();
     check_name(sess, name, b(a, "overwrite").unwrap_or(false))?;
-    sess.models.insert(name.to_string(), sess.doc.clone());
+    // Kept as file.save writes it, rates included: model.open lifts them
+    // back out, and the library entry seals to the open net's file.cid.
+    sess.models.insert(name.to_string(), sess.export_doc());
     Ok(summary(name, &sess.doc))
 }
 
