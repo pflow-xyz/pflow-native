@@ -374,7 +374,7 @@ pub fn share_links(server: &str, cid: &str) -> Value {
 
 fn pflow_save(sess: &mut Session, a: &Value) -> Result<Value> {
     let server = server(a);
-    let doc = sess.doc.to_value();
+    let doc = sess.export_doc().to_value();
     let expected = crate::cid::seal(&doc)?;
     let url = format!("{server}/api/save");
     let tok = pflow_token(&url)?;
@@ -493,7 +493,7 @@ fn pflow_share(sess: &mut Session, a: &Value) -> Result<Value> {
     let server = server(a);
     let (cid, of_open) = match s(a, "cid") {
         Some(c) => (c.to_string(), false),
-        None => (crate::cid::seal(&sess.doc.to_value())?, true),
+        None => (crate::cid::seal(&sess.export_doc().to_value())?, true),
     };
     check_cid(&cid)?;
     let mut out = share_links(&server, &cid);
@@ -531,7 +531,7 @@ pub fn gist_body(
 fn gist(sess: &mut Session, a: &Value) -> Result<Value> {
     let server = server(a);
     let endpoint = s(a, "endpoint").unwrap_or(GIST_ENDPOINT).to_string();
-    let doc = sess.doc.to_value();
+    let doc = sess.export_doc().to_value();
     let cid = crate::cid::seal(&doc)?;
     let body = gist_body(
         &server,

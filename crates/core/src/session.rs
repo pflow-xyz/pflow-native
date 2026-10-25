@@ -428,6 +428,14 @@ impl Session {
         }
     }
 
+    /// The open document as `file.save` writes it: the session rates merged
+    /// back onto their transitions' `rate` fields. Every model CID is sealed
+    /// over this, never over `doc` alone, so a CID names what a save of the
+    /// same session would contain (and what pflow.xyz hashes).
+    pub fn export_doc(&self) -> Document {
+        crate::commands::file::with_rates(&self.doc, &self.rates)
+    }
+
     /// A snapshot that also restores the session rates.
     pub(crate) fn snapshot_with_rates(&self, label: &str) -> Snapshot {
         Snapshot {

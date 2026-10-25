@@ -188,7 +188,7 @@ fn permalink(sess: &mut Session, a: &Value) -> Result<Value> {
     let server = s(a, "server")
         .unwrap_or(DEFAULT_SERVER)
         .trim_end_matches('/');
-    let body = serde_json::to_string(&sess.doc.to_value()).expect("serializable");
+    let body = serde_json::to_string(&sess.export_doc().to_value()).expect("serializable");
     Ok(json!(format!("{server}/?data={}", percent_encode(&body))))
 }
 
