@@ -42,9 +42,11 @@ pub fn handle(app: &mut App, ctx: &egui::Context) {
     let mut fire = vec![];
     ctx.input_mut(|i| {
         // Longest modifier sets first, so Cmd+Shift+Z is not taken as Cmd+Z.
+        // Cmd+C/X/V come as clipboard events, not keys (clipboard.rs).
         let mut specs: Vec<_> = reg
             .commands()
             .iter()
+            .filter(|c| !matches!(c.id, "edit.copy" | "edit.cut" | "edit.paste"))
             .filter_map(|c| c.shortcut.and_then(parse).map(|k| (k, c.id)))
             .collect();
         specs.sort_by_key(|(k, _)| {

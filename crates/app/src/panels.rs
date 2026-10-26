@@ -22,20 +22,21 @@ impl ConsoleState {
         if matches!(id, "view.pan" | "view.zoom" | "view.resize") {
             return;
         }
+        // Long args or results (a pasted clip, a copied one) are cut short.
+        let short = |s: String| {
+            if s.len() > 300 {
+                format!("{}…", &s[..s.floor_char_boundary(300)])
+            } else {
+                s
+            }
+        };
         let call = if args.is_null() {
             id.to_string()
         } else {
-            format!("{id} {args}")
+            short(format!("{id} {args}"))
         };
         let out = match r {
-            Ok(v) => {
-                let s = v.to_string();
-                Ok(if s.len() > 300 {
-                    format!("{}…", &s[..s.floor_char_boundary(300)])
-                } else {
-                    s
-                })
-            }
+            Ok(v) => Ok(short(v.to_string())),
             Err(e) => Err(e.to_string()),
         };
         self.log.push((call, out));

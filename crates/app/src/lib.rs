@@ -4,6 +4,7 @@
 //! session; the queue is drained at the end of each frame.
 
 mod canvas;
+mod clipboard;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod control;
 mod dialogs;
@@ -79,7 +80,10 @@ pub struct App {
     /// Color index the token tool adds/removes.
     pub(crate) token_color: usize,
     applied_theme: Option<Theme>,
-    clipboard_out: Option<String>,
+    /// Text for the system clipboard, and the status line that says so.
+    clipboard_out: Option<(String, String)>,
+    /// Paste requests waiting on the system clipboard (clipboard.rs).
+    clip: clipboard::ClipState,
     #[cfg(not(target_arch = "wasm32"))]
     control: Option<control::Control>,
     #[cfg_attr(target_arch = "wasm32", allow(dead_code))]
@@ -121,6 +125,7 @@ impl App {
             token_color: 0,
             applied_theme: None,
             clipboard_out: None,
+            clip: Default::default(),
             #[cfg(not(target_arch = "wasm32"))]
             control: None,
             control_addr: opts.control.clone(),
@@ -179,7 +184,16 @@ impl App {
         self.console.record(id, &args, &r);
         let quiet = id.starts_with("view.") || id == "tool.set" || id.starts_with("edit.select");
         if let (Ok(Value::String(link)), "file.permalink") = (&r, id) {
-            self.clipboard_out = Some(link.clone());
+            self.clipboard_out = Some((link.clone(), "Permalink copied to the clipboard.".into()));
+        }
+        // Copy and Cut also go to the system clipboard, in the format
+        // shared with pflow.xyz (docs/clipboard-format.md).
+        if let (Ok(v), "edit.copy" | "edit.cut") = (&r, id) {
+            if let Some(clip) = v["clip"].as_str() {
+                let verb = if id == "edit.cut" { "Cut" } else { "Copied" };
+                let note = format!("{verb} {} to the clipboard.", clipboard::counts(v));
+                self.clipboard_out = Some((clip.to_string(), note));
+            }
         }
         // A remote write that was only previewed: ask before sending.
         if let Ok(v) = &r {
@@ -265,6 +279,11 @@ impl App {
     /// Runs `id` the way a menu or the palette does: path arguments come
     /// from a file dialog, other required arguments from a form.
     pub(crate) fn invoke(&mut self, id: &'static str) {
+        if id == "edit.paste" {
+            // The system clipboard's text first (natively; see clipboard.rs).
+            self.clip.paste_command(clipboard::NATIVE);
+            return;
+        }
         let picker = matches!(
             id,
             "file.open" | "file.save" | "export.svg" | "view.screenshot"
@@ -771,6 +790,51 @@ impl App {
                 .is_some_and(|c| c.args.iter().any(|a| a.name == "send"))
     }
 
+    /// This pass's Copy / Cut / Paste events, before any widget sees them:
+    /// the net's unless a text field (or selected label text) has them.
+    fn clipboard_events(&mut self, ctx: &egui::Context) {
+        use egui::Event;
+        let events: Vec<Event> = ctx.input(|i| {
+            i.events
+                .iter()
+                .filter(|e| {
+                    matches!(
+                        e,
+                        Event::Copy | Event::Cut | Event::Paste(_) | Event::PasteImage(_)
+                    )
+                })
+                .cloned()
+                .collect()
+        });
+        let label_selection = ctx
+            .with_plugin(|l: &mut egui::text_selection::LabelSelectionState| l.has_selection())
+            .unwrap_or(false);
+        let acts = self.clip.on_pass(clipboard::Pass {
+            events: &events,
+            frame: ctx.cumulative_frame_nr(),
+            text_focus: ctx.text_edit_focused(),
+            label_selection,
+            has_selection: !self.sess.selection.is_empty(),
+            native: clipboard::NATIVE,
+        });
+        for act in acts {
+            match act {
+                clipboard::Act::Copy => self.queue("edit.copy", Value::Null),
+                clipboard::Act::Cut => self.queue("edit.cut", Value::Null),
+                clipboard::Act::Paste(args) => {
+                    // Taken for the net: no text field inserts it too.
+                    ctx.input_mut(|i| i.events.retain(|e| !matches!(e, Event::Paste(_))));
+                    self.queue("edit.paste", args);
+                }
+                clipboard::Act::Refuse(why) => {
+                    ctx.input_mut(|i| i.events.retain(|e| !matches!(e, Event::Paste(_))));
+                    self.status = Err(format!("Paste refused: {why}"));
+                }
+                clipboard::Act::Repaint => ctx.request_repaint(),
+            }
+        }
+    }
+
     fn apply_theme(&mut self, ctx: &egui::Context) {
         let want = self.sess.view.settings.theme;
         if self.applied_theme != Some(want) {
@@ -785,6 +849,14 @@ impl App {
 }
 
 impl eframe::App for App {
+    /// Clipboard keys become clipboard events before egui sees them
+    /// (clipboard.rs).
+    fn raw_input_hook(&mut self, _ctx: &egui::Context, raw: &mut egui::RawInput) {
+        if clipboard::route_keys(&mut raw.events, clipboard::NATIVE) {
+            self.clip.paste_key(clipboard::NATIVE);
+        }
+    }
+
     fn save(&mut self, storage: &mut dyn eframe::Storage) {
         // With session rates, so fitted / calibrated rates survive a restart
         // (file.load_json reads them back).
@@ -837,6 +909,7 @@ impl eframe::App for App {
         let ctx = ui.ctx().clone();
         self.frame += 1;
         self.apply_theme(&ctx);
+        self.clipboard_events(&ctx);
         shortcuts::handle(self, &ctx);
         let settings = self.sess.view.settings;
 
@@ -868,9 +941,13 @@ impl eframe::App for App {
 
         self.drain();
         self.handle_ui_requests(&ctx);
-        if let Some(text) = self.clipboard_out.take() {
+        if let Some((text, note)) = self.clipboard_out.take() {
             ctx.copy_text(text);
-            self.status = Ok("Permalink copied to the clipboard.".into());
+            self.status = Ok(note);
+        }
+        if self.clip.take_read_os() {
+            ctx.send_viewport_cmd(egui::ViewportCommand::RequestPaste);
+            ctx.request_repaint();
         }
 
         // --screenshot: let layout and fonts settle, capture, then quit.
@@ -949,5 +1026,98 @@ mod control_policy_tests {
             assert_eq!(r["ok"], true, "pure commands are unaffected: {r}");
         }
         assert!(a.dialogs.confirm_send.is_none());
+    }
+}
+
+#[cfg(all(test, not(target_arch = "wasm32")))]
+mod clipboard_tests {
+    use super::*;
+    use eframe::App as _;
+    use egui::{Event, Key, Modifiers};
+
+    const FIXTURE: &str = include_str!("../../core/tests/fixtures/clip-v1.json");
+
+    fn app() -> App {
+        let mut a = App::new(
+            Options {
+                fresh: true,
+                ..Options::default()
+            },
+            None,
+            None,
+        );
+        a.run("edit.select", json!({ "ids": ["S", "infect"] }));
+        a
+    }
+
+    fn press(key: Key) -> Event {
+        Event::Key {
+            key,
+            physical_key: None,
+            pressed: true,
+            repeat: false,
+            modifiers: Modifiers::COMMAND,
+        }
+    }
+
+    /// One frame: the raw-input hook, then the clipboard step and the
+    /// command queue, as `ui` runs them.
+    fn frame(a: &mut App, ctx: &egui::Context, events: Vec<Event>) {
+        let mut raw = egui::RawInput {
+            events,
+            ..Default::default()
+        };
+        a.raw_input_hook(ctx, &mut raw);
+        ctx.run_ui(raw, |ui| {
+            a.clipboard_events(ui.ctx());
+            a.drain();
+        })
+        .drop_without_applying_deltas();
+    }
+
+    #[test]
+    fn cmd_c_puts_the_clip_on_the_system_clipboard() {
+        let (mut a, ctx) = (app(), egui::Context::default());
+        frame(&mut a, &ctx, vec![press(Key::C)]);
+        let (text, note) = a
+            .clipboard_out
+            .take()
+            .expect("clip for the system clipboard");
+        let clip = pflow_native_core::commands::clipboard::parse_clip(&text).unwrap();
+        assert_eq!((clip.places.len(), clip.transitions.len()), (1, 1));
+        assert_eq!(
+            note,
+            "Copied 1 place, 1 transition and 1 arc to the clipboard."
+        );
+    }
+
+    #[test]
+    fn cmd_v_pastes_the_system_clipboards_clip_or_the_session_one() {
+        let (mut a, ctx) = (app(), egui::Context::default());
+        let places = a.sess.doc.places.len();
+        frame(&mut a, &ctx, vec![press(Key::V)]);
+        assert!(a.clip.take_read_os(), "asks eframe for the clipboard text");
+        frame(&mut a, &ctx, vec![]);
+        frame(&mut a, &ctx, vec![Event::Paste(FIXTURE.into())]);
+        assert_eq!(a.sess.doc.places.len(), places + 2, "{:?}", a.status);
+        assert_eq!(a.sess.rates.get("t0"), Some(&2.5));
+
+        // Nothing on the system clipboard: the session clip, a few frames on.
+        a.run("edit.select", json!({ "ids": ["S"] }));
+        a.run("edit.copy", Value::Null);
+        let places = a.sess.doc.places.len();
+        frame(&mut a, &ctx, vec![press(Key::V)]);
+        for _ in 0..3 {
+            frame(&mut a, &ctx, vec![]);
+        }
+        assert_eq!(a.sess.doc.places.len(), places + 1, "{:?}", a.status);
+    }
+
+    #[test]
+    fn agents_copy_without_touching_the_system_clipboard() {
+        let mut a = app();
+        let r = a.handle_control(&json!({"id": 1, "command": "edit.copy"}));
+        assert!(r["result"]["clip"].is_string(), "{r}");
+        assert!(a.clipboard_out.is_none());
     }
 }

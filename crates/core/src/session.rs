@@ -254,7 +254,8 @@ pub struct Session {
     pub systems: crate::systems::SystemsState,
     /// What the canvas emphasizes (`view.highlight`).
     pub highlight: Option<Highlight>,
-    /// Nodes (and the arcs between them) from `edit.copy` / `edit.cut`.
+    /// Nodes (and the arcs between them) from `edit.copy` / `edit.cut`,
+    /// their session rates in the transitions' `rate` fields.
     pub clipboard: Option<Document>,
     /// Set by a front end that can fulfil [`UiRequest`]s (the app).
     pub has_ui: bool,
