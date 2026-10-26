@@ -37,7 +37,7 @@ make test && make lint && make wasm-check
 | drag empty space, middle-drag, space+drag, wheel | pan |
 | pinch, ⌘+wheel | zoom |
 | ⌘Z / ⌘⇧Z · Delete · Esc · F · R · ⌘R | undo/redo · delete · cancel · fit · reset marking · run ODE |
-| ⌘C ⌘X ⌘V ⌘D | copy · cut · paste · duplicate |
+| ⌘C ⌘X ⌘V ⌘D | copy · cut · paste · duplicate; copy, cut and paste go through the system clipboard in the format shared with pflow.xyz ([format](docs/clipboard-format.md)), duplicate does not |
 | ⌘K · ⌘J · ⌘I · ⌘B | command palette · JSON pane · inspector · bottom panel |
 
 The canvas snaps nodes to the 10-unit grid used by pflow.xyz (View → Snap to Grid). Menus are generated from the registry. Any command that takes arguments opens a form built from its argument spec, and **⌘K** searches every command. The app autosaves the document and settings, and restores them on the next start (`--fresh` skips that). The panels are:

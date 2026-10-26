@@ -51,7 +51,7 @@ Every row backed by `remote` (pflow.xyz, sim.pflow.xyz, GitHub), along with the 
 | Parallel arcs as curves | pv:4356 | canvas | app | 2 | ✅ (duplicate same-direction arcs are refused; opposite pairs curve) |
 | Edit details (name, description) | pv:6945 | `net.set_details`; Net → Edit Details | core | 2 | ✅ |
 | Rename node id | — | `net.rename`; inspector Id field | core | 2 | ✅ |
-| Copy/paste/duplicate (not in pflow.xyz) | — | `edit.copy/cut/paste/duplicate` | core | 2 | ✅ |
+| Copy/cut/paste/duplicate, through the system clipboard | pflow-xyz #109 (`petri-clipboard.js`) | `edit.copy/cut/paste/duplicate`: copy and cut return the clip as text (`clip`), `edit.paste {clip}` takes one back; the app writes and reads the system clipboard in the format shared with pflow.xyz (`docs/clipboard-format.md`, fixture `crates/core/tests/fixtures/clip-v1.json`) | core + app | 2 | ✅ rates travel with the clip; text that is not a clip pastes the session clip, a later format version is refused, a malformed clip (place→place arc, duplicate id, negative values) is refused, and an arc with an end outside the clip is skipped, as pflow.xyz's paste skips it (`skippedArcs`). On the web, Edit → Paste (not ⌘V) pastes the session clip only. pflow.xyz's own system-clipboard side is a separate change |
 
 ### A2. Views & panels
 

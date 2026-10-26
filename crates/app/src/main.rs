@@ -97,6 +97,10 @@ fn main() -> eframe::Result {
         viewport: eframe::egui::ViewportBuilder::default()
             .with_inner_size(size)
             .with_title("pflow-native"),
+        // Cmd+C/X/V arrive as keys, so Cmd+V is seen even when the system
+        // clipboard holds no text; the app makes the clipboard events
+        // itself (crates/app/src/clipboard.rs).
+        clipboard_shortcuts: false,
         ..Default::default()
     };
     eframe::run_native(

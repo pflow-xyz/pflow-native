@@ -155,6 +155,12 @@ screenshot (`--screenshot`).
   - Commands that take arguments open a form generated from their `ArgSpec`s,
     and the ⌘K palette lists every command, so new commands need no UI code to
     become usable.
+  - Copy and Cut put the `clip` that `edit.copy` / `edit.cut` return on the
+    system clipboard, and Paste hands its text to `edit.paste {clip}`, in the
+    format shared with pflow.xyz (`docs/clipboard-format.md`). `clipboard.rs`
+    turns each platform's clipboard input into one shape: natively eframe runs
+    with `clipboard_shortcuts: false` and the app asks for the clipboard text
+    itself, so ⌘V with no text on the clipboard still pastes the session clip.
 - **CLI** (`crates/cli`, binary `pflow-native-cli`):
   - `list` and `exec` run commands one-shot against a file.
   - `batch` runs a JSON step list as one undo step.
