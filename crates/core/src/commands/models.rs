@@ -98,8 +98,14 @@ pub fn resolve(sess: &Session, name: &str) -> Result<Document> {
     }
 }
 
+/// A name the library can hold: not empty, not "current" (the open net),
+/// no control characters.
+pub(crate) fn valid_name(name: &str) -> bool {
+    !(name.is_empty() || name == "current" || name.chars().any(char::is_control))
+}
+
 fn check_name(sess: &Session, name: &str, overwrite: bool) -> Result<()> {
-    if name.is_empty() || name == "current" || name.chars().any(char::is_control) {
+    if !valid_name(name) {
         return Err(Error::BadArgs(format!("invalid model name {name:?}")));
     }
     if !overwrite && sess.models.contains_key(name) {

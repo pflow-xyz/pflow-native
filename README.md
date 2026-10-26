@@ -247,14 +247,18 @@ pflow-rs is pinned to a git revision. To build against a sibling checkout instea
 - `make web-build` writes `crates/app/dist/`.
 - `make web` serves it.
 
-`crates/wasm` is a second, UI-free browser build for pflow.xyz: the registry behind a small wasm-bindgen API (`listCommands`, `execute`, `batch`, `load`), without the `services`, `zk` and `rnn` features. `make wasm-shim` writes the `.wasm` and its JS glue to `target/wasm-shim/` (needs `cargo install wasm-bindgen-cli --version 0.2.129`):
+`crates/wasm` is a second, UI-free browser build for pflow.xyz: the registry behind a small wasm-bindgen API (`listCommands`, `execute`, `batch`, `load`, `dumpState`, `restoreState`), without the `services`, `zk` and `rnn` features. `make wasm-shim` writes the `.wasm` and its JS glue to `target/wasm-shim/` (needs `cargo install wasm-bindgen-cli --version 0.2.129`). The library, systems, macros, notes, results and store live in the engine, so the page keeps them across reloads itself: it calls `restoreState` once at startup and saves `dumpState()` after each command that changes them.
 
 ```js
 import init, { Engine } from "./pflow_native_wasm.js";
 await init();
 const e = new Engine();
+const saved = localStorage.getItem("pflow-native-state");
+if (saved) e.restoreState(saved);
 e.load(jsonld);
 const invariants = JSON.parse(e.execute("analysis.invariants", ""));
+e.execute("model.save", JSON.stringify({ name: "mine" }));
+localStorage.setItem("pflow-native-state", e.dumpState());
 ```
 
 On the web the autosave goes to browser storage, and `?data=` permalinks open. File dialogs, URL fetches and screenshots are native-only for now.

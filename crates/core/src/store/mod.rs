@@ -28,7 +28,8 @@
 //! # Layout
 //!
 //! Through a [`StoreBackend`] (files under `<data_dir>/store/` natively,
-//! memory on the web):
+//! memory on the web, which the page saves and restores whole through
+//! `session.dump_state` / `session.restore_state`):
 //!
 //! | Key | What |
 //! |---|---|
@@ -37,6 +38,11 @@
 //! | `edges.json` | `{"relations": {id: {Subject, Predicate, Object, At}}}` (sim's Relation JSON) |
 //! | `collections.json` | `{"collections": {id: {Name}}}` |
 //! | `maps/<id>.json` | `{"Data": {...}}`, the canonical bytes the id is computed over |
+//!
+//! [`LAYOUT_PREFIXES`] lists the directories of this table and
+//! [`LayoutFile::of`] its keys. A new key goes in both, or
+//! [`Store::dump_blobs`] leaves it out of a saved state and
+//! [`Store::replace_all`] refuses it.
 //!
 //! # Why a module-level handle
 //!
@@ -178,6 +184,44 @@ const INDEX: &str = "index.json";
 const EDGES: &str = "edges.json";
 const COLLECTIONS: &str = "collections.json";
 
+/// Where the layout's keys live: the root files, then each directory.
+/// Backends list one directory level (the file system's `list` is not
+/// recursive), so a whole-store dump lists each of these.
+pub const LAYOUT_PREFIXES: &[&str] = &["", "models/", "maps/"];
+
+/// A file of the layout (the table in the module doc), by its key.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum LayoutFile<'a> {
+    Index,
+    Edges,
+    Collections,
+    /// `models/<cid>.jsonld`.
+    Model(&'a str),
+    /// `maps/<id>.json`.
+    Map(&'a str),
+}
+
+impl<'a> LayoutFile<'a> {
+    /// The layout file `key` names, if any. Anything else in the store's
+    /// directory (a file someone put there) is not part of the store.
+    fn of(key: &'a str) -> Option<Self> {
+        let named = |dir: &str, ext: &str| key.strip_prefix(dir)?.strip_suffix(ext);
+        match key {
+            INDEX => Some(Self::Index),
+            EDGES => Some(Self::Edges),
+            COLLECTIONS => Some(Self::Collections),
+            _ => named("models/", ".jsonld")
+                .filter(|c| canon::is_model_cid(c))
+                .map(Self::Model)
+                .or_else(|| {
+                    named("maps/", ".json")
+                        .filter(|i| canon::is_sha24(i))
+                        .map(Self::Map)
+                }),
+        }
+    }
+}
+
 #[derive(Default, Serialize, Deserialize)]
 struct IndexFile {
     #[serde(default)]
@@ -207,6 +251,16 @@ fn map_key(id: &str) -> String {
 /// A refusal: the request was understood and the answer is no.
 fn refuse(msg: impl Into<String>) -> Error {
     Error::Invalid(msg.into())
+}
+
+/// A content-addressed entry of file `key` must sit under its own id.
+fn check_content_id(key: &str, what: &str, id: &str, content: &str) -> Result<()> {
+    if id == content {
+        return Ok(());
+    }
+    Err(refuse(format!(
+        "store {key}: {what} {id} holds the content of {content}; an entry's id is its content's"
+    )))
 }
 
 const ID_REMEDY: &str = "pass a model's CID (store.list, file.cid) or the 24-hex id a store.* command returned for a collection, map or relation";
@@ -1215,6 +1269,147 @@ impl Store {
                     .map(str::to_string)
             })
             .collect())
+    }
+
+    // ---- the whole store, as text ----
+
+    /// Whether the store outlives the process (files on disk).
+    pub fn persistent(&self) -> bool {
+        self.backend.persistent()
+    }
+
+    /// Every file of the layout, by key, as text: what `session.dump_state`
+    /// saves for a page that has no other place to keep the store. Taken
+    /// under the write lock, so it is one state of this process's writes.
+    pub fn dump_blobs(&self) -> Result<BTreeMap<String, String>> {
+        let _g = self.lock();
+        let mut out = BTreeMap::new();
+        for prefix in LAYOUT_PREFIXES {
+            for key in self.backend.list(prefix)? {
+                // A memory backend lists every key under "".
+                if LayoutFile::of(&key).is_none() || out.contains_key(&key) {
+                    continue;
+                }
+                let Some(bytes) = self.backend.get(&key)? else {
+                    continue; // deleted by another process since the listing
+                };
+                let text = String::from_utf8(bytes).map_err(|_| {
+                    refuse(format!(
+                        "store file {key} (in {}) is not UTF-8 text, and a saved state carries the store as text; remove or re-create it",
+                        self.location()
+                    ))
+                })?;
+                out.insert(key, text);
+            }
+        }
+        Ok(out)
+    }
+
+    /// What [`Store::replace_all`] checks before it changes anything: this
+    /// store is a memory one, every key is a file of the layout, and every
+    /// file holds what its key says, as the store writes it. A model file
+    /// is a document whose CID ([`crate::cid::seal`]) is the one in its
+    /// key, a map's content id is its key's, the index, edges and
+    /// collections parse as their own shape with each entry under its
+    /// content id, and every model the index lists has its file. So a
+    /// damaged or edited state is refused rather than serving one net under
+    /// another's CID. Edges and lineage may name entities that are gone:
+    /// `delete_model {force}` leaves them so.
+    fn check_blobs(&self, blobs: &BTreeMap<String, String>) -> Result<()> {
+        if self.persistent() {
+            return Err(refuse(format!(
+                "the store at {} is on disk; a saved state replaces only a memory store (the browser's), so it never overwrites a store on disk",
+                self.location()
+            )));
+        }
+        let mut model_files = BTreeSet::new();
+        let mut index = IndexFile::default();
+        for (key, text) in blobs {
+            backend::check_key(key)?;
+            let file = LayoutFile::of(key).ok_or_else(|| {
+                Error::BadArgs(format!(
+                    "store key {key:?} is not a file of the store's layout ({INDEX}, {EDGES}, {COLLECTIONS}, models/<cid>.jsonld, maps/<id>.json)"
+                ))
+            })?;
+            let damaged = |e: &dyn std::fmt::Display| Error::Parse(format!("store {key}: {e}"));
+            let json = || serde_json::from_str::<Value>(text).map_err(|e| damaged(&e));
+            match file {
+                LayoutFile::Index => {
+                    index = serde_json::from_str(text).map_err(|e| damaged(&e))?;
+                }
+                LayoutFile::Edges => {
+                    let f: EdgesFile = serde_json::from_str(text).map_err(|e| damaged(&e))?;
+                    for (id, r) in &f.relations {
+                        check_content_id(key, "relation", id, &r.id())?;
+                    }
+                }
+                LayoutFile::Collections => {
+                    let f: CollectionsFile = serde_json::from_str(text).map_err(|e| damaged(&e))?;
+                    for (id, c) in &f.collections {
+                        check_content_id(key, "collection", id, &c.id())?;
+                    }
+                }
+                LayoutFile::Model(cid) => {
+                    let v = json()?;
+                    let named = |e: Error| match e {
+                        Error::Parse(m) => damaged(&m),
+                        e => damaged(&e),
+                    };
+                    Document::from_value(&v).map_err(named)?;
+                    let sealed = crate::cid::seal(&v).map_err(named)?;
+                    if sealed != cid {
+                        return Err(refuse(format!(
+                            "store {key}: the document there has CID {sealed}, not the {cid} its key names"
+                        )));
+                    }
+                    model_files.insert(cid);
+                }
+                LayoutFile::Map(id) => {
+                    let v = json()?;
+                    if !v.get("Data").is_some_and(Value::is_object) {
+                        return Err(refuse(format!(
+                            "store {key}: a map file is {{\"Data\": {{key: value}}}}"
+                        )));
+                    }
+                    check_content_id(key, "map", id, &canon::content_id(&v))?;
+                }
+            }
+        }
+        if let Some(cid) = index
+            .models
+            .keys()
+            .find(|c| !model_files.contains(c.as_str()))
+        {
+            return Err(refuse(format!(
+                "store {INDEX} lists model {cid}, but {} is not in the state",
+                model_key(cid)
+            )));
+        }
+        Ok(())
+    }
+
+    /// Replaces the whole content with `blobs`, as [`Store::dump_blobs`]
+    /// returns them: keys not in `blobs` are deleted. Checked first
+    /// ([`Store::check_blobs`]), so a refusal leaves the store as it was.
+    pub fn replace_all(&self, blobs: &BTreeMap<String, String>) -> Result<usize> {
+        self.check_blobs(blobs)?;
+        let _g = self.lock();
+        let mut stale = BTreeSet::new();
+        for prefix in LAYOUT_PREFIXES {
+            stale.extend(
+                self.backend
+                    .list(prefix)?
+                    .into_iter()
+                    .filter(|k| !blobs.contains_key(k)),
+            );
+        }
+        for (key, text) in blobs {
+            self.backend.put(key, text.as_bytes())?;
+        }
+        for key in stale {
+            self.backend.delete(&key)?;
+        }
+        Ok(blobs.len())
     }
 }
 

@@ -27,11 +27,18 @@ pub trait StoreBackend: Send + Sync {
     fn list(&self, prefix: &str) -> Result<Vec<String>>;
     /// A human-readable location ("memory", or the root directory).
     fn location(&self) -> String;
+    /// Whether the bytes outlive the process (files on disk).
+    /// [`super::Store::replace_all`] refuses a persistent backend, so
+    /// restoring a saved browser state never overwrites a store on disk;
+    /// a backend is taken to be one unless it says otherwise.
+    fn persistent(&self) -> bool {
+        true
+    }
 }
 
 /// Keys are relative paths with no `..`, absolute or empty component, so a
 /// key can never name a file outside the store root.
-fn check_key(key: &str) -> Result<()> {
+pub(crate) fn check_key(key: &str) -> Result<()> {
     if key.is_empty()
         || key.starts_with('/')
         || key
@@ -88,6 +95,10 @@ impl StoreBackend for MemoryBackend {
 
     fn location(&self) -> String {
         "memory".into()
+    }
+
+    fn persistent(&self) -> bool {
+        false
     }
 }
 
@@ -221,6 +232,8 @@ mod tests {
     #[test]
     fn memory_backend() {
         exercise(&MemoryBackend::new());
+        assert!(!MemoryBackend::new().persistent());
+        assert!(FsBackend::new("unused").persistent());
     }
 
     #[test]

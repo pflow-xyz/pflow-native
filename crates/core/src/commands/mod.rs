@@ -35,6 +35,7 @@ pub mod provenance;
 pub mod remote;
 #[cfg(feature = "rnn")]
 pub mod rnn;
+pub mod session;
 pub mod settings;
 pub mod sim;
 pub mod statespace;
@@ -82,5 +83,6 @@ pub const ALL: &[&[CommandSpec]] = &[
     provenance::SET,
     macros::SET,
     job::SET,
+    session::SET,
     command::SET,
 ];
