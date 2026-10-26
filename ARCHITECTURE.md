@@ -27,7 +27,8 @@ pflow-rs crates (pinned git rev; sibling-path [patch] for development)
        │                                   control port for agents
        ├─ pflow-native-cli   (crates/cli)  list / exec / batch / control (JSON lines) / mcp (stdio)
        └─ pflow-native-wasm  (crates/wasm) the registry for pflow.xyz's browser: listCommands /
-                                           execute / batch / load over JSON (wasm-bindgen)
+                                           execute / batch / load over JSON (wasm-bindgen), and
+                                           dumpState / restoreState for the page's storage
 ```
 
 Areas once planned as separate crates (analysis, remote) live as modules of
@@ -54,6 +55,17 @@ It knows nothing about selection, views or simulation state.
 | `journal` | every top-level journaled command, i.e. what macros are cut from |
 | `macros` | named step lists (`macro.*`) |
 | `artifacts` | typed results of analysis commands (see below) |
+| `models`, `systems`, `notes` | the model library, port bindings and systems, notes for the person at the window |
+
+What outlives one document (the library, systems, macros and a recording in
+progress, notes, results, and the store, which is a process-wide handle rather
+than a field) is saved and restored whole by `session.dump_state` /
+`session.restore_state`, for a front end with no data directory to keep it in.
+A restore checks every part before it changes any (the store's files against
+their content ids), and refuses to overwrite a store on disk. Results are the one
+part it does not hold to that: a result it cannot read back (JSON has no NaN, so a
+diverging run saves null) is dropped and named, as its command recomputes it. The
+document, marking, selection and history are not part of it.
 
 ## One command registry
 
@@ -99,6 +111,7 @@ CommandSpec {
 | `export.*` | json/svg/csv (1), png (app), artifact export in every format (3+) |
 | `macro.*` | record/stop/play/list/get/delete (1) |
 | `command.*` | batch, list (1) |
+| `session.*` | dump_state/restore_state: what outlives one document, for the browser's storage |
 
 ## Artifacts → views
 
@@ -184,3 +197,18 @@ screenshot (`--screenshot`).
   - `mcp` attaches to that port when it is up, falling back to headless. The
     `Backend` enum in `crates/cli/src/mcp.rs` holds both cases.
   - Attached, the `screenshot` tool returns the live window as a PNG.
+- **Browser engine** (`crates/wasm`, `pflow-native-wasm`): the registry in
+  pflow.xyz's page, one `Engine` per page, over JSON strings.
+  - `load(jsonld)` is how the page syncs its editor's document before each
+    call. It runs `file.load_json` through `Session::execute_unjournaled`, so
+    a macro recorded in the browser never replays it; the library, store,
+    macros, notes and systems stay, and only the results go.
+  - Each engine owns a memory store and makes it the thread's
+    (`store::set_thread_store`) for every call, so engines never share one.
+  - `dumpState()` / `restoreState(json)` are `session.dump_state` /
+    `session.restore_state`: the page saves the dump in browser storage after
+    each command that changes state, and restores it once at startup. One
+    synchronous snapshot, rather than a store backend calling into JS:
+    `StoreBackend` is `Send + Sync` and synchronous, a JS callback is neither
+    and IndexedDB is asynchronous, and the store holds only part of the state
+    anyway (the library, macros, notes, systems and results are `Session`'s).

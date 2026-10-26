@@ -217,6 +217,8 @@ pub(crate) struct Snapshot {
 
 const HISTORY_LIMIT: usize = 200;
 const JOURNAL_LIMIT: usize = 10_000;
+/// Most results kept at once; the oldest goes first.
+pub const MAX_ARTIFACTS: usize = 64;
 
 pub struct Session {
     pub registry: &'static Registry,
@@ -347,6 +349,19 @@ impl Session {
 
     /// The one entry point: run command `id` with JSON `args`.
     pub fn execute(&mut self, id: &str, args: Value) -> Result<Value> {
+        self.execute_as(id, args, true)
+    }
+
+    /// [`Session::execute`] without the journal entry, for a front end that
+    /// syncs the session to state it keeps elsewhere (pflow.xyz's page
+    /// loads its editor's document before every call): that is not an
+    /// action of the user's, so a macro must not replay it. Checks, undo
+    /// and results are those of `execute`.
+    pub fn execute_unjournaled(&mut self, id: &str, args: Value) -> Result<Value> {
+        self.execute_as(id, args, false)
+    }
+
+    fn execute_as(&mut self, id: &str, args: Value, journal: bool) -> Result<Value> {
         let spec = self
             .registry()
             .find(id)
@@ -358,7 +373,7 @@ impl Session {
         self.depth += 1;
         let out = (spec.run)(self, &args);
         self.depth -= 1;
-        if out.is_ok() && spec.journal && self.depth == 0 {
+        if out.is_ok() && journal && spec.journal && self.depth == 0 {
             self.journal.push(Step {
                 command: id.to_string(),
                 args: args.clone(),
@@ -584,7 +599,7 @@ impl Session {
             source,
             data,
         });
-        if self.artifacts.len() > 64 {
+        if self.artifacts.len() > MAX_ARTIFACTS {
             self.artifacts.remove(0);
         }
         id
@@ -593,6 +608,26 @@ impl Session {
     pub(crate) fn next_note_id(&mut self) -> String {
         self.next_note += 1;
         format!("n{}", self.next_note)
+    }
+
+    /// The numbers behind the last artifact and note ids handed out
+    /// (`session.dump_state`): the next ids follow them.
+    pub(crate) fn id_counters(&self) -> (u64, u64) {
+        (self.next_artifact, self.next_note)
+    }
+
+    /// Replaces the results and their id counter (`session.restore_state`,
+    /// which checks that `next` is past every `a<n>` id in `items`).
+    pub(crate) fn replace_artifacts(&mut self, items: Vec<Artifact>, next: u64) {
+        self.artifacts = items;
+        self.next_artifact = next;
+    }
+
+    /// Replaces the notes and their id counter, as
+    /// [`Session::replace_artifacts`].
+    pub(crate) fn replace_notes(&mut self, items: Vec<Note>, next: u64) {
+        self.notes = items;
+        self.next_note = next;
     }
 
     pub fn artifact(&self, id: &str) -> Option<&Artifact> {
