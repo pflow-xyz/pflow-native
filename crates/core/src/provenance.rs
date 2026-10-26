@@ -2,13 +2,23 @@
 //!
 //! **Receipts** mirror sim.pflow.xyz's `pkg/receipt`: a seeded scenario run
 //! is certified by an Ed25519 signature over the canonical JSON of
-//! (model CID, scenario as run, result hash, engine, revision, issue time,
-//! key id, public key). Anyone holding a receipt can check two independent
-//! things: the signature (this key reported this result), and the replay
-//! (running the certified scenario on the model reproduces the result
-//! hash). The canonical encoding is Go's `encoding/json` over a sorted-key
-//! round trip, as `receipt.canonical` produces it, so the bytes signed here
-//! are the bytes sim would sign for the same receipt.
+//! (model CID, the rates sealed into it, scenario as run, result hash,
+//! engine, revision, issue time, key id, public key). Anyone holding a
+//! receipt can check two independent things: the signature (this key
+//! reported this result), and the replay (running the certified scenario on
+//! the model reproduces the result hash). The canonical encoding is Go's
+//! `encoding/json` over a sorted-key round trip, as `receipt.canonical`
+//! produces it, so the bytes signed here are the bytes sim would sign for
+//! the same receipt.
+//!
+//! The model CID is sealed over the document as `file.save` writes it,
+//! session rates included, so it moves whenever a rate does. The receipt
+//! records those rates (`modelRates`), and a verifier rebuilds the model
+//! from the bare net under them. For one issued with session rates before
+//! the field, they are rebuilt from the rates its certified scenario ran
+//! with, unless the scenario overrode one; then it is found only where
+//! those rates are again. The replay itself
+//! reads no document rate: the certified scenario carries every one.
 //!
 //! The signing key lives at `<data_dir>/keys/receipt-ed25519.json` (created
 //! on first use, mode 0600). Without a data directory (the web build) the
@@ -423,12 +433,21 @@ pub fn local_key_id() -> Option<String> {
 // ================================================================= receipts
 
 /// A run receipt. Everything except `signature` is covered by it. The
-/// fields are sim's `receipt.Receipt`, plus `versions` and `keyEphemeral`.
+/// fields are sim's `receipt.Receipt` as it was before receipts recorded
+/// inputs, plus `modelRates`, `versions` and `keyEphemeral`.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct Receipt {
-    /// The CID of the document the scenario ran against (`file.cid`).
+    /// The CID of the document the scenario ran against, as `file.save`
+    /// writes it (`file.cid`): session rates included.
     pub model: String,
+    /// The session rates sealed into `model` (transition id → rate, as
+    /// `file::with_rates` writes them), stored canonical: the bare net under
+    /// these rates is `model` again after the session rates move. Absent
+    /// when there were none, so such a receipt keeps the shape (and signing
+    /// bytes) it had before this field.
+    #[serde(rename = "modelRates", default, skip_serializing_if = "Map::is_empty")]
+    pub model_rates: Map<String, Value>,
     /// The scenario as run, every default filled in, the full start marking
     /// and every rate written out: replaying it needs nothing else.
     pub scenario: Value,
@@ -501,12 +520,25 @@ impl Receipt {
             })?;
         Ok(key_id(&pub_bytes))
     }
+
+    /// `modelRates` as `file::with_rates` takes them, or None if one is not
+    /// a number. As f64, so `with_rates` writes the numbers it wrote at
+    /// issue (a canonical `3` is the session's 3.0).
+    pub fn rates_at_issue(&self) -> Option<BTreeMap<String, f64>> {
+        self.model_rates
+            .iter()
+            .map(|(t, r)| Some((t.clone(), r.as_f64()?)))
+            .collect()
+    }
 }
 
-/// Signs a receipt for a run (sim's `Signer.Issue`).
+/// Signs a receipt for a run (sim's `Signer.Issue`). `model_rates` are the
+/// session rates sealed into `model`, recorded as `modelRates`.
+#[allow(clippy::too_many_arguments)]
 pub fn issue(
     key: &ReceiptKey,
     model: &str,
+    model_rates: &BTreeMap<String, f64>,
     scenario: Value,
     result_hash: String,
     engine: &str,
@@ -515,10 +547,14 @@ pub fn issue(
 ) -> Receipt {
     // Stored canonical, as sim stores it (sorted keys, numbers as Go
     // writes them).
-    let scenario = serde_json::from_str(&canonical(&scenario)).unwrap_or(scenario);
+    let stored = |v: Value| serde_json::from_str(&canonical(&v)).unwrap_or(v);
     let mut r = Receipt {
         model: model.to_string(),
-        scenario,
+        model_rates: model_rates
+            .iter()
+            .map(|(t, r)| (t.clone(), stored(json!(r))))
+            .collect(),
+        scenario: stored(scenario),
         result_hash,
         engine: engine.to_string(),
         revision: revision(),
@@ -1500,6 +1536,7 @@ mod tests {
         let r = issue(
             &key,
             "zTest",
+            &BTreeMap::new(),
             json!({"seed": 1}),
             "sha256:00".into(),
             "ssa",
@@ -1510,5 +1547,50 @@ mod tests {
         let mut bad = r.clone();
         bad.result_hash = "sha256:01".into();
         assert!(bad.verify_signature().is_err());
+        // No rates, no field: the shape and signing bytes of before.
+        assert!(serde_json::to_value(&r)
+            .unwrap()
+            .get("modelRates")
+            .is_none());
+        assert!(!String::from_utf8(r.signing_bytes())
+            .unwrap()
+            .contains("modelRates"));
+    }
+
+    #[test]
+    fn model_rates_are_canonical_and_signed() {
+        let key = ReceiptKey::from_seed([7u8; 32], None);
+        let rates = BTreeMap::from([("a".to_string(), 3.0), ("b".to_string(), 0.002)]);
+        let r = issue(
+            &key,
+            "zTest",
+            &rates,
+            json!({}),
+            "sha256:00".into(),
+            "ssa",
+            versions(DIGEST_EXACT),
+            0,
+        );
+        // Stored as Go writes them; read back as the f64s the session held.
+        assert_eq!(canonical(&json!(r.model_rates)), "{\"a\":3,\"b\":0.002}");
+        assert_eq!(
+            serde_json::to_value(&r).unwrap()["modelRates"],
+            json!({"a": 3, "b": 0.002})
+        );
+        assert_eq!(r.rates_at_issue(), Some(rates));
+        let text = serde_json::to_string(&r).unwrap();
+        let back: Receipt = serde_json::from_str(&text).unwrap();
+        assert_eq!(back, r);
+        assert_eq!(back.verify_signature().unwrap(), key.key_id());
+
+        let mut bad = r.clone();
+        bad.model_rates.insert("a".into(), json!(4));
+        assert!(bad.verify_signature().is_err());
+        let mut bad = r.clone();
+        bad.model_rates.clear();
+        assert!(bad.verify_signature().is_err());
+        let mut odd = r.clone();
+        odd.model_rates.insert("a".into(), json!("fast"));
+        assert_eq!(odd.rates_at_issue(), None);
     }
 }

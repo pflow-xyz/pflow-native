@@ -1,0 +1,14 @@
+{
+  "model": "b1866a60bba35cfa8df5cb24",
+  "scenario": {
+    "hours": 4,
+    "seed": 42
+  },
+  "resultHash": "sha256:2a73ba34ab7fcdab6c75575d803836ddd8da7754adcf55342f84ba14b9e46502",
+  "engine": "ssa",
+  "revision": "rev-pre-inputs",
+  "issuedAt": "2025-10-20T00:00:00Z",
+  "keyId": "139e3940e64b5491",
+  "publicKey": "O2onvM62pC1io6jQKm8Nc2UyFXcd4kOmOsBIoYtZ2ik=",
+  "signature": "YXOEOo33fpBRrL/2a4vFRUI8aJbOeRy+C7DKpSoomMAZ4nlcA8DYrTThHmdcODM1yMCqND/1gbv2YDCJ6LEFBg=="
+}

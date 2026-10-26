@@ -1,0 +1,32 @@
+{
+  "model": "z4EBG9j4kq5LPXFLouzFik7KiCk1N52q9DeMY9AUyahhwLcHf3b",
+  "scenario": {
+    "engine": "ssa",
+    "hours": 2,
+    "marking": {
+      "I": 1,
+      "R": 0,
+      "S": 999
+    },
+    "rates": {
+      "infect": 0.002,
+      "recover": 5
+    },
+    "realizations": 3,
+    "samples": 60,
+    "seed": 7,
+    "summary": true
+  },
+  "resultHash": "sha256:382ea57c03ac8c4310dc295aa110220d827908c6fc66f17e2401d3b107cd66b1",
+  "engine": "ssa",
+  "revision": "pflow-native/0.8.0 pflow-rs/70caba8c4df7",
+  "issuedAt": "2026-10-26T07:17:30Z",
+  "versions": {
+    "pflow-native": "0.8.0",
+    "pflow-rs": "70caba8c4df701ebb866164601d211be60965bfe",
+    "resultDigest": "sha256 over the canonical JSON of the result"
+  },
+  "keyId": "2b417194b135197b",
+  "publicKey": "gbfzkl1nMSZ8InfbI4/2uiKDPiXi/kQLvtmR1OynuQQ=",
+  "signature": "j4c5b6yJFsv6GblD85si0BWXyePRS0o77s+AsfPBRHb0PO3yQjUXH+Dj7yoTUb5lRT5NptrZ5oqkR3ZoesAdCw=="
+}
