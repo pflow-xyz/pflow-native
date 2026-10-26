@@ -4,8 +4,11 @@
 //! (`zk.*`, cargo feature `zk`). The machinery is in [`crate::provenance`]
 //! and [`crate::zk`]; this file reads arguments and stores artifacts.
 
+use std::collections::BTreeMap;
+
 use serde_json::{json, Value};
 
+use super::file::{take_rates, with_rates};
 use crate::artifact::{ArtifactData, Series, TraceStep};
 use crate::provenance::{self as pv, Mapping, Verdict};
 use crate::registry::{always, arg, b, n, opt, req, ArgType::*, CommandSpec};
@@ -21,8 +24,10 @@ pub const SET: &[CommandSpec] = &[
         id: "sim.receipt",
         label: "Run Scenario with Receipt",
         help: "sim_receipt: run a seeded sim.scenario and sign a run receipt, an Ed25519 certificate over the canonical JSON of \
-               (model CID, the scenario as run, sha256 of the result, engine, versions, issue time, key id, public key), in sim.pflow.xyz's \
-               receipt format. The certified scenario has every default filled in and the full start marking and every rate written out, so \
+               (model CID, the session rates sealed into it, the scenario as run, sha256 of the result, engine, versions, issue time, key \
+               id, public key), in sim.pflow.xyz's receipt format. The model CID is file.cid, the net as file.save writes it; modelRates \
+               (absent when there are none) are the rates in it, so the model is found again after the rates change. The certified \
+               scenario has every default filled in and the full start marking and every rate written out, so \
                provenance.verify_receipt can replay it with nothing else. Signed with the key in <data_dir>/keys/receipt-ed25519.json \
                (created on first use), or an ephemeral key on the web (the receipt says so). Stores the time series (unless summary) and a \
                report holding {result, receipt}.",
@@ -38,7 +43,10 @@ pub const SET: &[CommandSpec] = &[
         label: "Verify Receipt",
         help: "Check a run receipt two ways, as sim's /api/receipts/verify: the Ed25519 signature against the key it embeds \
                (trustedKey says whether that is this machine's key), and a replay of its certified scenario on the model it names \
-               (the open net, or a library model with that CID), which must reproduce resultHash.",
+               (the open net, or a library model with that CID; also once their rates have changed, rebuilt under the receipt's \
+               modelRates), which must reproduce resultHash. A receipt without modelRates that was issued with session rates names \
+               the net under those rates; they are rebuilt from the rates its scenario ran with, unless the scenario overrode one, \
+               and then it is found only where they are again (set them back, or a library copy saved under them).",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -158,10 +166,20 @@ fn receipt(sess: &mut Session, a: &Value) -> Result<Value> {
     let certified = pv::certify_scenario(&sess.doc, &sess.marking, &sess.rates, &scenario)?;
     let run = pv::run_certified(&sess.doc, &certified)?;
     let model = pv::model_cid(&sess.export_doc())?;
+    // The rates export_doc wrote into that document (those of its
+    // transitions): with the bare net they rebuild `model` once the session
+    // rates move on.
+    let model_rates: BTreeMap<String, f64> = sess
+        .rates
+        .iter()
+        .filter(|(t, _)| sess.doc.transition(t).is_some())
+        .map(|(t, r)| (t.clone(), *r))
+        .collect();
     let key = pv::receipt_key()?;
     let receipt = pv::issue(
         &key,
         &model,
+        &model_rates,
         certified,
         run.result_hash.clone(),
         run.scenario.engine.name(),
@@ -249,7 +267,7 @@ fn verify_receipt(sess: &mut Session, a: &Value) -> Result<Value> {
                 "not replayed: the signature does not verify, so there is no signed claim to check"
             );
         } else {
-            match find_model(sess, &r.model)? {
+            match find_model(sess, &r)? {
                 None => {
                     out["replayError"] = json!(format!(
                         "model {} not found: open it, or add it to the library (model.save or model.import), then verify again",
@@ -290,11 +308,17 @@ fn verify_receipt(sess: &mut Session, a: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// The open net or a library model whose CID is `cid`.
-fn find_model(sess: &Session, cid: &str) -> Result<Option<(String, crate::Document)>> {
-    // A receipt replays with the rates it certified, not the session's, so
-    // the open net also matches without them: rates changed since issue, or
-    // a receipt from before model CIDs covered rates.
+/// The open net or a library model whose CID is the receipt's model, and
+/// where it was found. Every candidate is matched by CID alone, so nothing
+/// but the net the receipt names can match; a receipt replays with the
+/// rates it certified, so one rebuilt under other rates replays the same.
+/// The nets as they stand come first (the open one, then the library), as
+/// before `modelRates`, so a receipt is found where it was and under the
+/// same name; the rebuilds under `modelRates` only after.
+fn find_model(sess: &Session, r: &pv::Receipt) -> Result<Option<(String, crate::Document)>> {
+    let cid = r.model.as_str();
+    // The open net as saved now, or without rates (a receipt from before
+    // model CIDs covered rates).
     if pv::model_cid(&sess.export_doc())? == cid || pv::model_cid(&sess.doc)? == cid {
         return Ok(Some(("current".into(), sess.doc.clone())));
     }
@@ -303,7 +327,58 @@ fn find_model(sess: &Session, cid: &str) -> Result<Option<(String, crate::Docume
             return Ok(Some((name.clone(), doc.clone())));
         }
     }
+    // The rates sealed into the model at issue: rebuild the net under them,
+    // as the session rates may have moved since.
+    let Some(at_issue) = r.rates_at_issue() else {
+        return Ok(None);
+    };
+    for rates in rebuild_rates(r, at_issue) {
+        if !rates.is_empty() && pv::model_cid(&with_rates(&sess.doc, &rates))? == cid {
+            return Ok(Some(("current".into(), sess.doc.clone())));
+        }
+        // A library entry keeps the rates it was saved with: strip them first.
+        for (name, doc) in &sess.models {
+            let mut bare = doc.clone();
+            take_rates(&mut bare);
+            let rebuilt = with_rates(&bare, &rates);
+            if pv::model_cid(&rebuilt).ok().as_deref() == Some(cid) {
+                return Ok(Some((name.clone(), rebuilt)));
+            }
+        }
+    }
     Ok(None)
+}
+
+/// The rate sets the receipt's model may be sealed under, `modelRates`
+/// first. A receipt from before that field names the net under the session
+/// rates of its issue without recording them apart, but its certified
+/// scenario wrote them out among every rate it ran with (the scenario's
+/// own, or 1 where none was set). So after no rates, try every rate it ran
+/// with, then those without the 1s. That misses a session rate the scenario
+/// overrode, and a wrong guess cannot match: the CID decides.
+fn rebuild_rates(r: &pv::Receipt, at_issue: BTreeMap<String, f64>) -> Vec<BTreeMap<String, f64>> {
+    let mut sets = vec![at_issue];
+    if !r.model_rates.is_empty() {
+        return sets;
+    }
+    let ran: Option<BTreeMap<String, f64>> = r.scenario["rates"].as_object().and_then(|m| {
+        m.iter()
+            .map(|(t, v)| Some((t.clone(), v.as_f64()?)))
+            .collect()
+    });
+    if let Some(ran) = ran {
+        let set: BTreeMap<String, f64> = ran
+            .iter()
+            .filter(|(_, r)| **r != 1.0)
+            .map(|(t, r)| (t.clone(), *r))
+            .collect();
+        for s in [ran, set] {
+            if !sets.contains(&s) {
+                sets.push(s);
+            }
+        }
+    }
+    sets
 }
 
 fn key(_: &mut Session, _: &Value) -> Result<Value> {

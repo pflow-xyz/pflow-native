@@ -1,0 +1,36 @@
+{
+  "model": "z4EBG9jA7f4q9yx4QjzH3RDPQXiqjnNTz3ALdpjHD3CRTbNrcCD",
+  "scenario": {
+    "engine": "ssa",
+    "hours": 1,
+    "marking": {
+      "CoffeeBeans.brown": 5,
+      "EmptyCups.blue": 5,
+      "ServedCoffee.red": 0,
+      "WaitingCustomers.red": 2
+    },
+    "rates": {
+      "BrewCoffee": 0.25,
+      "CustomerArrives": 2,
+      "CustomerLeaves": 0.001,
+      "RestockBeans": 720,
+      "RestockCups": 0
+    },
+    "realizations": 2,
+    "samples": 60,
+    "seed": 5,
+    "summary": true
+  },
+  "resultHash": "sha256:b28efb8b7c3a7f70163e4b6f2679291d3c5ff4149f87a62d128380c0eff233cb",
+  "engine": "ssa",
+  "revision": "pflow-native/0.8.0 pflow-rs/70caba8c4df7",
+  "issuedAt": "2026-10-26T06:21:17Z",
+  "versions": {
+    "pflow-native": "0.8.0",
+    "pflow-rs": "70caba8c4df701ebb866164601d211be60965bfe",
+    "resultDigest": "sha256 over the canonical JSON of the result"
+  },
+  "keyId": "2b417194b135197b",
+  "publicKey": "gbfzkl1nMSZ8InfbI4/2uiKDPiXi/kQLvtmR1OynuQQ=",
+  "signature": "RuQx1TM37OLwoiw0Y9ZXIbYfmeUmRkuB093cdXrvFok372TsYW9YUOBK000xpMCWRti8SNRONCB8yDHRWXjJCw=="
+}
