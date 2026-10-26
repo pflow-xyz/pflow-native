@@ -188,11 +188,14 @@ Undertrained models only slip as O, in 2–3 of about 450 positions. Those moves
 | random legal move | about 33% | about 33% |
 | `ode`, `horizon` 3 | 17 / 940 | 17 / 879 |
 | MLP `[256, 128]` trained on these same positions | 0 / 940 | 0 / 879 |
-| MLP `[256, 128]`, 7,064 positions from other games (seed 1, 1,000 games) | 241 / 940 | 256 / 879 |
-| MLP `[256, 128]`, 36,227 positions (5,000 games) | 166 / 940 | 161 / 879 |
-| MLP `[256, 128]`, 182,820 positions (25,000 games) | 81 / 940 | 88 / 879 |
+| MLP `[256, 128]`, 7,064 positions from other games (seed 1, 1,000 games) | 245 / 940 | 235 / 879 |
+| MLP `[256, 128]`, 36,227 positions (5,000 games) | 137 / 940 | 139 / 879 |
+| MLP `[256, 128]`, 182,820 positions (25,000 games) | 67 / 940 | 74 / 879 |
+| **MLP `[256, 128]`, 734,548 positions (100,000 games)** | **19 / 940** | **26 / 879** |
 
-None of the referee's positions appear in any training set. The MLP learns every position it is shown, ties included, and generalizes slowly: five times the data takes a third off its held-out mistakes from 1,000 to 5,000 games and half from 5,000 to 25,000, which still leaves about five times the `ode` player's. Connect-3 hid this because there it saw every position. (100 epochs, `learning_rate` 0.005. For `positions: "sampled"` the softmax ranges over each position's legal moves; over all 222 outputs the illegal moves' logits are pushed down without end, and runs on 5,000 games diverged after 30–50 epochs at every rate and batch size tried.)
+None of the referee's positions appear in any training set. The MLP learns every position it is shown, ties included, and generalizes slowly: each fivefold step in data takes a third to a half off its held-out mistakes (a quarter from 25,000 to 100,000 games), which at 100,000 games brings it level with the `ode` player. Connect-3 hid this because there it saw every position. (100 epochs, `learning_rate` 0.005. For `positions: "sampled"` the softmax ranges over each position's legal moves; over all 222 outputs the illegal moves' logits are pushed down without end, and runs on 5,000 games diverged. Each position's gradient is also clipped by its length rather than entry by entry: with entry-wise clipping, 100,000 games silenced all but a handful of the second layer's units within 10–20 epochs at every learning rate tried, and the model fell back to 265 / 940 and 250 / 879. The training loss is no guide here: it rewards spreading probability over tied best moves, so the run that plays best has the highest loss.)
+
+Every label above was checked against Pascal Pons' Connect-4 solver (github.com/PascalPons/connect4): all 4,635,258 move values of the 734,548 training positions and the referee's 11,672 agree. The positions skipped for budget are not a random sample: 72% of them are wins for the side to move, against about a third of those labelled.
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

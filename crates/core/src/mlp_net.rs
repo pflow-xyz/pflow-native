@@ -6,14 +6,17 @@
 //!
 //! It trains like [`crate::rnn_net::Rnn`]: each game's moves give a
 //! cross-entropy term weighted 1 (imitation) or by reward (REINFORCE),
-//! gradients are summed over the game, clipped to ±5 and applied with
+//! gradients are summed over the game, clipped to ±5 (to length 5 for
+//! sequences with legal-move masks, `positions: "sampled"`) and applied with
 //! `learning_rate / moves`, and `batch` games' steps are worked out on every
 //! core and applied in game order. So `learning_rate`, `batch` and the loss
 //! mean the same for both architectures.
 
 use pflow_tropical::rnn::SimpleRng;
 
-use crate::rnn_net::{axpy, axpy_s, clip, descend, nonzero, rows_dot, softmax_into, Seq};
+use crate::rnn_net::{
+    axpy, axpy_s, clip, clip_norm, descend, nonzero, rows_dot, softmax_into, Seq,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub(crate) struct Mlp {
@@ -172,7 +175,11 @@ impl Mlp {
                 }
             }
         }
-        clip(&mut w.g);
+        if s.legal.is_empty() {
+            clip(&mut w.g);
+        } else {
+            clip_norm(&mut w.g);
+        }
     }
 
     /// Trains for `epochs` passes; returns the last pass's loss, summed over
