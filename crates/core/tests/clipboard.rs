@@ -567,3 +567,29 @@ fn pasting_into_more_colors_pads_the_vectors() {
     assert_eq!(s.marking["p0"], vec![2, 0]);
     assert!(s.doc.arcs.iter().all(|a| a.weight == [1.0, 0.0]));
 }
+
+/// The spec's color rule the other way: a clip with more colors than the net
+/// loses its extra ones, tokens included, and the net's token list stays.
+#[test]
+fn pasting_into_fewer_colors_cuts_the_vectors() {
+    let mut clip = fixture();
+    clip["token"] = json!(["black", "red"]);
+    clip["places"]["Queue"]["initial"] = json!([2, 5]);
+    clip["places"]["Queue"]["capacity"] = json!([0, 9]);
+    clip["arcs"][0]["weight"] = json!([1, 3]);
+    clip["arcs"][1].as_object_mut().unwrap().remove("weight");
+    let mut s = Session::default();
+    let token = s.doc.token.clone();
+    run(&mut s, "edit.paste", json!({ "clip": clip.to_string() }));
+    let p0 = s.doc.place("p0").unwrap();
+    assert_eq!(
+        (p0.initial.clone(), p0.capacity.clone()),
+        (vec![2.0], vec![0.0])
+    );
+    assert_eq!(s.marking["p0"], vec![2]);
+    assert!(
+        s.doc.arcs.iter().all(|a| a.weight == [1.0]),
+        "cut, and a missing weight is [1]"
+    );
+    assert_eq!(s.doc.token, token);
+}
