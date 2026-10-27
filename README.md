@@ -268,6 +268,12 @@ On the web the autosave goes to browser storage, and `?data=` permalinks open. F
 
 ![Web build](docs/screenshot-web.png)
 
+## Contributing
+
+We don't merge outside code, so pull requests won't be merged as-is.
+Feature requests and bug reports are welcome: please open an
+[issue](https://github.com/pflow-xyz/pflow-native/issues).
+
 ## License
 
 MIT
