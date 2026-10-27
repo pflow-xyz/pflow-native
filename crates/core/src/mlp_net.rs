@@ -284,14 +284,16 @@ mod tests {
                 vec![2.0, 0.0, 0.0, 1.0, 1.0],
             ],
             targets: vec![2, 0, 3],
-            weights: vec![1.0, -0.5, 0.75],
+            // Small enough that the gradient is shorter than CLIP, so
+            // neither clip touches it.
+            weights: vec![0.25, -0.125, 0.1875],
         };
         let mut w = Work::new(&m);
         let mut loss = 0.0;
         m.grads(&s, &mut w, &mut loss);
         assert!((loss - loss_of(&m, &s)).abs() < 1e-12);
         assert!(
-            w.g.iter().all(|g| g.abs() < 5.0),
+            w.g.iter().map(|g| g * g).sum::<f64>().sqrt() < 5.0,
             "no clipping in this check"
         );
         let eps = 1e-6;
