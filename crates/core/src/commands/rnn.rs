@@ -2013,13 +2013,7 @@ impl Dense {
             reward.iter().map(|x| x.1.max(0.0)).sum(),
         );
         Ok(Self {
-            rules: game_search::Rules {
-                ix,
-                auto,
-                sign,
-                reward,
-                bounds,
-            },
+            rules: game_search::Rules::new(ix, auto, sign, reward, bounds),
             place,
             to_ix,
             to_view,

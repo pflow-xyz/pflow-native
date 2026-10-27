@@ -53,7 +53,7 @@ use crate::{Error, Result};
 
 /// The pflow-rs revision this build is pinned to (root `Cargo.toml`; a
 /// test keeps the two equal).
-pub const PFLOW_RS_REV: &str = "70caba8c4df701ebb866164601d211be60965bfe";
+pub const PFLOW_RS_REV: &str = "fa7b40748f2386ac714a50fe7f9213a47f8f435a";
 
 /// Where the receipt key lives, under the data directory.
 pub const KEY_FILE: &str = "keys/receipt-ed25519.json";
