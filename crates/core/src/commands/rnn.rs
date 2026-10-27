@@ -19,13 +19,13 @@ use serde_json::{json, Value};
 
 use crate::analysis::Structure;
 use crate::artifact::{ArtifactData, Bar, Series, TraceStep};
-use crate::game_search;
 use crate::mlp_net::Mlp;
 use crate::registry::{always, b, n, nums, opt, s, strs, ArgType::*, CommandSpec};
 use crate::rnn_net::{softmax_into, Rnn, Seq};
 use crate::session::{Session, Step};
 use crate::sim::{self, Compiled, Marking};
 use crate::{Error, Result};
+use pflow_metamodel::game::{self, Solver};
 
 const MENU: &str = "Learn";
 const KIND: &str = "rnn-model";
@@ -1954,9 +1954,9 @@ fn verify(sess: &mut Session, a: &Value) -> Result<Value> {
 }
 
 /// The session's view of a net and the dense, index-resolved form
-/// [`game_search`] searches, side by side.
+/// [`pflow_metamodel::game`] searches, side by side.
 struct Dense {
-    rules: game_search::Rules,
+    rules: game::Game,
     /// Per [`View`] place: its index in a dense marking.
     place: Vec<usize>,
     /// Per [`View`] transition: its index in `rules.ix`; and back.
@@ -2008,12 +2008,8 @@ impl Dense {
             sign[j] = r.sign[i];
         }
         let reward: Vec<(usize, f64)> = r.reward.iter().map(|&(p, w)| (place[p], w)).collect();
-        let bounds = (
-            reward.iter().map(|x| x.1.min(0.0)).sum(),
-            reward.iter().map(|x| x.1.max(0.0)).sum(),
-        );
         Ok(Self {
-            rules: game_search::Rules::new(ix, auto, sign, reward, bounds),
+            rules: game::Game::new(ix, auto, sign, reward),
             place,
             to_ix,
             to_view,
@@ -2245,7 +2241,7 @@ fn sample_labelled(
             .collect();
         // One solver (and transposition table) per chunk, on every core.
         let done: Vec<(Vec<i64>, Option<Vec<f64>>)> = crate::par::map(chunks, |chunk| {
-            let mut solver = game_search::Solver::new(r, budget);
+            let mut solver = Solver::new(r, budget);
             chunk
                 .into_iter()
                 .map(|mk| -> Result<(Vec<i64>, Option<Vec<f64>>)> {
@@ -2528,7 +2524,7 @@ fn _shared_across_threads() {
 mod tests {
     use super::*;
 
-    /// The alpha-beta search (game_search) against the exhaustive teacher:
+    /// The alpha-beta search (pflow_metamodel::game) against the exhaustive teacher:
     /// the same value at every `step`-th position the teacher solved.
     fn search_agrees_with_teacher(open: (&str, Value), step: usize) {
         let mut sess = Session::default();
@@ -2541,7 +2537,7 @@ mod tests {
             .solve(&sim::initial_marking(&sess.doc))
             .expect("solve");
         let d = Dense::new(&v, &rules).expect("dense");
-        let mut solver = game_search::Solver::new(&d.rules, usize::MAX);
+        let mut solver = Solver::new(&d.rules, usize::MAX);
         let mut checked = 0;
         for (key, &want) in teacher.value.iter().step_by(step) {
             let mut mk = vec![0; d.rules.ix.places.len()];

@@ -19,8 +19,6 @@ pub mod control_auth;
 pub mod doc;
 pub mod eventlog;
 pub mod export;
-#[cfg(feature = "rnn")]
-pub(crate) mod game_search;
 pub mod jobs;
 pub mod layout;
 pub mod learn;
@@ -72,3 +70,11 @@ pub enum Error {
 }
 
 pub type Result<T> = std::result::Result<T, Error>;
+
+/// A refusal from pflow-metamodel (a net that breaks a game's rules, a
+/// transition that cannot fire) is the command's input at fault.
+impl From<pflow_metamodel::Error> for Error {
+    fn from(e: pflow_metamodel::Error) -> Self {
+        Error::Invalid(e.to_string())
+    }
+}
