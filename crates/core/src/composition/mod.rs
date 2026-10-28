@@ -1341,6 +1341,9 @@ pub struct Run {
     pub stopped_at: i64,
     pub stopped_step: Option<String>,
     pub final_marking: BTreeMap<String, i64>,
+    /// The marking before the first step, then after each step that fired
+    /// (the Process view reads token counts off them).
+    pub markings: Vec<BTreeMap<String, i64>>,
     pub expect: Vec<ExpectResult>,
 }
 
@@ -1350,6 +1353,8 @@ pub struct Run {
 /// `expect` on the marking reached.
 pub fn run(flat: &Flat, id: &str, title: &str, script: &[String], expect: &[Expect]) -> Run {
     let mut mk = flat.model.initial_marking();
+    let mut markings: Vec<BTreeMap<String, i64>> =
+        vec![mk.iter().map(|(k, v)| (k.clone(), *v)).collect()];
     let mut steps = vec![];
     let mut stopped_at = -1;
     for (i, member) in script.iter().enumerate() {
@@ -1373,6 +1378,7 @@ pub fn run(flat: &Flat, id: &str, title: &str, script: &[String], expect: &[Expe
             break;
         }
         mk = flat.model.fire(t.as_deref().expect("resolved"), &mk);
+        markings.push(mk.iter().map(|(k, v)| (k.clone(), *v)).collect());
     }
     let expect = expect
         .iter()
@@ -1398,6 +1404,7 @@ pub fn run(flat: &Flat, id: &str, title: &str, script: &[String], expect: &[Expe
         stopped_at,
         steps,
         final_marking: mk.into_iter().collect(),
+        markings,
         expect,
     }
 }

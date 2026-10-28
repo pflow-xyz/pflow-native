@@ -35,6 +35,7 @@ mod boundaries_view;
 mod c_draw;
 mod c_lens_orders;
 mod c_lens_plan;
+mod c_process;
 mod cospan_view;
 mod d_bnd_layout;
 mod d_draw;
@@ -914,7 +915,7 @@ pub fn draw(
             ("lens", false) => lens_c4(&mut c, body),
             ("incidence", true) => incidence_orders(&mut c, body),
             ("incidence", false) => incidence_c4(&mut c, body),
-            ("process", true) => process_orders(&mut c, body),
+            ("process", true) => process_orders(&mut c, body, cv.scenario.as_deref()),
             ("process", false) => process_c4(&mut c, body),
             ("laws", _) => laws(&mut c, body, orders, rewrite),
             _ => {}
