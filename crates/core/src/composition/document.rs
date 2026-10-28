@@ -763,7 +763,14 @@ pub fn load(doc: &Value, resolve: PartResolver) -> Result<Loaded> {
 /// content when it is not the library's (the library's is a name).
 pub fn dump_part(c: &Composition) -> Result<Value> {
     let exp = c.export(None)?;
-    let mut v = json!({"form": exp.form.name(), "document": exp.document});
+    // `instances` and `links` are the shape this part had when it saved
+    // catalog ids only; a reader of that shape still reads them.
+    let mut v = json!({
+        "instances": c.specs.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+        "links": c.bundle.links.iter().map(super::link_json).collect::<Vec<_>>(),
+        "form": exp.form.name(),
+        "document": exp.document,
+    });
     match (&c.doc.content_source, &c.doc.content) {
         (ContentSource::Library(id), _) => v["library"] = json!(id),
         (ContentSource::Loaded, Some(k)) => v["content"] = k.to_document(),
@@ -775,7 +782,7 @@ pub fn dump_part(c: &Composition) -> Result<Value> {
 /// Reads [`dump_part`]'s shape back (and the older `{instances, links}` of
 /// catalog ids). Content that no longer resolves is attached dormant.
 pub fn restore_part(v: &Value, resolve: PartResolver) -> Result<Composition> {
-    if v.get("instances").is_some() {
+    if v.get("document").is_none() && v.get("instances").is_some() {
         let ids: Vec<String> = serde_json::from_value(v["instances"].clone())
             .map_err(|e| Error::BadArgs(format!("composition instances: {e}")))?;
         let links = v["links"]
