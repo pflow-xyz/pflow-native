@@ -1770,26 +1770,441 @@ pub(super) fn flat_orders(c: &mut Ctx, area: Rect) {
     c.note("honesty", "The flat IDs, arcs, weights, initial markings and constraints are Flatten's (pflow-compose). The positions and the clusters are this page's layout: RenderFlatDOT draws no clusters, and in the flat net an element belongs to a subnet only through its ID. A read arc (a guard link, lowered) is dashed and undirected, as RenderFlatDOT draws it; the small dot that marks its transition end is this page's. Constraints are evaluated at the current marking only: holding at one marking proves no invariant, and an invariant that holds is not liveness.");
 }
 
+fn c4_cites(is_place: bool) -> Vec<String> {
+    let mut v = vec![
+        rs(
+            "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+            20457,
+            20457,
+            "the fixture's description (byte-identical to examples/connect-4.json)",
+        ),
+        rs(
+            "crates/pflow-metamodel/tests/common/mod.rs",
+            28,
+            35,
+            "auto = name contains \"win\"; sign +1 for x_, -1 otherwise; reward win_x +1, win_o -1",
+        ),
+    ];
+    if !is_place {
+        v.push(rs(
+            "crates/pflow-metamodel/src/game.rs",
+            4,
+            11,
+            "auto transitions fire as soon as enabled; every other transition is a move",
+        ));
+        v.push(rs(
+            "crates/pflow-metamodel/src/game.rs",
+            277,
+            288,
+            "settle: fire automatic transitions, lowest index first, until none is enabled",
+        ));
+        v.push(rs("crates/pflow-parser/src/lib.rs", 129, 131, "model_from_json sorts the transition IDs, so a transition's index is its place in ID order"));
+    }
+    v.push(c_why_not());
+    v
+}
+
+fn c4_is_auto(id: &str) -> bool {
+    id.contains("win")
+}
+
 pub(super) fn flat_c4(c: &mut Ctx, area: Rect) {
     let (pl, tr, ar) = net_counts(c);
-    let r = Rect::from_min_size(
-        area.left_top(),
-        Vec2::new(area.width(), area.height() - 30.0),
-    );
-    draw_c4_net(c, r);
-    c.hover(
-        r,
-        info("connect-4")
-            .fact("places", pl.to_string())
-            .fact("transitions", tr.to_string())
-            .fact("arcs", ar.to_string()),
-    );
     c.scene.emit(
         "net",
         "connect-4",
         json!({"places": pl, "transitions": tr, "arcs": ar}),
     );
-    c.note("na", "A search plan is not a net, so Flatten has nothing to flatten and no plan slot is drawn here. The net the plan searches (pflow-rs's fixture connect-4.json) is drawn at its own coordinates.");
+    let desc =
+        c.d.c4
+            .as_ref()
+            .and_then(|d| d.extra.get("description"))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+    c.note("honesty", format!("The net it searches is the pflow-rs fixture connect-4.json: \"{desc}\" pflow-rs reads it as a game only through tests/common/mod.rs, which declares the *win* transitions automatic, x_ moves for the side with sign +1, and rewards win_x +1, win_o -1. Nothing else (no goal, no strategy) is claimed here. Automatic transitions settle as Game::settle does, lowest index first, and pflow-rs's index order is the sorted transition IDs (pflow-parser model_from_json)."));
+    c.note("na", "A search plan is not a net, so Flatten has nothing to flatten and no plan slot is drawn here (pieces are composed in the plan views; adding or removing one does not change this net). Drawn instead: the net the plan searches, at the fixture's own coordinates, playable.");
+    let Some(doc) = c.d.c4.as_ref() else { return };
+    let game = c.d.c4game.clone().unwrap_or(Value::Null);
+
+    // controls
+    let mut x = area.left();
+    let r = c.text(
+        Pos2::new(x, area.top() + 11.0),
+        Align2::LEFT_CENTER,
+        "Play the net:",
+        12.0,
+        MUTED,
+    );
+    x = r.right() + 8.0;
+    let rr = chip(c, &mut x, area.top(), "↺ New game", false, true);
+    if c.click_in(rr) {
+        c.command("plan.new_game", json!({}));
+    }
+    c.hover(
+        rr,
+        info("New game")
+            .fact("command", "plan.new_game")
+            .note("Back to the settled initial marking of the Connect-4 net."),
+    );
+    c.text(
+        Pos2::new(x + 4.0, area.top() + 11.0),
+        Align2::LEFT_CENTER,
+        "click a green drop transition; automatic ones then settle (pflow-rs Game::settle).",
+        11.0,
+        MUTED,
+    );
+    let moves: BTreeSet<&str> = arr(&game["moves"]).iter().map(s).collect();
+    let mut st = if game["final"] == true {
+        format!(
+            "final · no move · reward win_x·(+1) + win_o·(−1) = {}",
+            game["score"]
+                .as_f64()
+                .map_or("?".to_string(), |v| v.to_string())
+        )
+    } else {
+        format!("{} moves, all {}", moves.len(), s(&game["side"]))
+    };
+    st.push_str(&format!(" · ply {}", game["ply"].as_i64().unwrap_or(0)));
+    let last = strs(&game["last"]);
+    if !last.is_empty() {
+        st.push_str(&format!(" · settled: {}", last.join(", ")));
+    }
+    c.text(
+        Pos2::new(area.right(), area.top() + 11.0),
+        Align2::RIGHT_CENTER,
+        &st,
+        11.5,
+        MUTED,
+    );
+
+    // fit the fixture's coordinates
+    let xs = doc
+        .places
+        .iter()
+        .map(|p| p.x)
+        .chain(doc.transitions.iter().map(|t| t.x));
+    let ys = doc
+        .places
+        .iter()
+        .map(|p| p.y)
+        .chain(doc.transitions.iter().map(|t| t.y));
+    let (x0, x1) = xs.fold((f64::MAX, f64::MIN), |(a, b), v| (a.min(v), b.max(v)));
+    let (y0, y1) = ys.fold((f64::MAX, f64::MIN), |(a, b), v| (a.min(v), b.max(v)));
+    const W: f32 = 1150.0;
+    const M: f32 = 34.0;
+    const TOP: f32 = 34.0;
+    let kk = (W - 2.0 * M) / (x1 - x0) as f32;
+    let h = (TOP + (y1 - y0) as f32 * kk + 40.0).ceil();
+    let net_area = Rect::from_min_max(area.left_top() + Vec2::new(0.0, 28.0), area.right_bottom());
+    let mut xf = Xf::fit(net_area, W, h, 1.6);
+    xf.origin.x += ((net_area.width() - W * xf.k) / 2.0).max(0.0);
+    let dx = |v: f64| M + (v - x0) as f32 * kk;
+    let dy = |v: f64| TOP + (v - y0) as f32 * kk;
+    let mut pos: BTreeMap<&str, (Pos2, bool)> = BTreeMap::new();
+    for p in &doc.places {
+        pos.insert(&p.id, (xf.pt(dx(p.x), dy(p.y)), true));
+    }
+    for t in &doc.transitions {
+        pos.insert(&t.id, (xf.pt(dx(t.x), dy(t.y)), false));
+    }
+    const RP: f32 = 7.2;
+    const TS: f32 = 8.6;
+    let ctrl = ["x_turn", "o_turn", "game_active", "win_x", "win_o"];
+    let tokens = |id: &str| game["marking"][id].as_i64().unwrap_or(0);
+
+    // group boxes with captions (by name only: the fixture has none)
+    let place_groups: [(&str, &str, &str); 3] = [
+        ("open_", "open_<c>_<r>", "places · row 0 is the bottom"),
+        ("x_", "x_<c>_<r>", "places"),
+        ("o_", "o_<c>_<r>", "places"),
+    ];
+    let is_cell = |id: &str, pre: &str| {
+        id.strip_prefix(pre).is_some_and(|r| {
+            let mut it = r.split('_');
+            matches!((it.next(), it.next(), it.next()), (Some(a), Some(b), None) if a.chars().all(|c| c.is_ascii_digit()) && b.chars().all(|c| c.is_ascii_digit()) && !a.is_empty() && !b.is_empty())
+        })
+    };
+    for (pre, name, what) in place_groups {
+        let ids: Vec<&str> = doc
+            .places
+            .iter()
+            .map(|p| p.id.as_str())
+            .filter(|id| is_cell(id, pre))
+            .collect();
+        if ids.is_empty() {
+            continue;
+        }
+        let pts: Vec<Pos2> = ids.iter().map(|id| pos[id].0).collect();
+        let (gx0, gx1) = (
+            pts.iter().map(|p| p.x).fold(f32::MAX, f32::min) - xf.len(14.0),
+            pts.iter().map(|p| p.x).fold(f32::MIN, f32::max) + xf.len(14.0),
+        );
+        let (gy0, gy1) = (
+            pts.iter().map(|p| p.y).fold(f32::MAX, f32::min) - xf.len(14.0),
+            pts.iter().map(|p| p.y).fold(f32::MIN, f32::max) + xf.len(14.0),
+        );
+        let r = Rect::from_min_max(Pos2::new(gx0, gy0), Pos2::new(gx1, gy1));
+        c.p.rect(
+            r,
+            xf.len(10.0),
+            hex("#eef1f5").gamma_multiply(0.6),
+            Stroke::new(1.0, hex("#dde1e6")),
+            StrokeKind::Middle,
+        );
+        let cap = c.mono(
+            r.left_top() + Vec2::new(2.0, -6.0 * xf.k),
+            Align2::LEFT_BOTTOM,
+            name,
+            11.0 * xf.k,
+            INK,
+        );
+        c.text(
+            Pos2::new(cap.right() + 6.0 * xf.k, cap.center().y),
+            Align2::LEFT_CENTER,
+            &format!("{} {what}", ids.len()),
+            11.0 * xf.k,
+            MUTED,
+        );
+        let n_tok: i64 = ids.iter().map(|id| tokens(id)).sum();
+        c.hover(
+            r,
+            info(format!("{name}: {} places of the fixture", ids.len()))
+                .fact("tokens now", n_tok.to_string())
+                .note("A group by name only. The fixture's description says each column is an open-slot chain with row 0 at the bottom; the page draws the places where the fixture puts them. The grouping is the page's; the library reads no names (tests/common/mod.rs:6-8).")
+                .cite(c4_cites(true)[0].clone())
+                .cite(rs("crates/pflow-metamodel/tests/common/mod.rs", 6, 8, "the fixtures name their parts by convention; this file declares sides, auto and rewards")),
+        );
+    }
+    let t_groups: [(&str, &str, &str); 4] = [
+        ("x_play_", "x_play_<c>_<r>", "moves, sign +1"),
+        ("o_play_", "o_play_<c>_<r>", "moves, sign −1"),
+        (
+            "x_win_",
+            "x_win_*",
+            "automatic (name contains \"win\") → win_x",
+        ),
+        ("o_win_", "o_win_*", "automatic → win_o"),
+    ];
+    for (pre, name, what) in t_groups {
+        let ids: Vec<&str> = doc
+            .transitions
+            .iter()
+            .map(|t| t.id.as_str())
+            .filter(|id| id.starts_with(pre))
+            .collect();
+        if ids.is_empty() {
+            continue;
+        }
+        let minx = ids.iter().map(|id| pos[id].0.x).fold(f32::MAX, f32::min);
+        let y = pos[ids[0]].0.y;
+        let cap = c.mono(
+            Pos2::new(minx - 6.0 * xf.k, y - 10.0 * xf.k),
+            Align2::LEFT_BOTTOM,
+            name,
+            10.5 * xf.k,
+            INK,
+        );
+        c.text(
+            Pos2::new(cap.right() + 6.0 * xf.k, cap.center().y),
+            Align2::LEFT_CENTER,
+            &format!("{} {what}", ids.len()),
+            10.5 * xf.k,
+            MUTED,
+        );
+    }
+
+    // arcs: one faint pass; a hovered node's preset and postset drawn on top
+    let faint = Color32::from_rgba_unmultiplied(0x8c, 0x93, 0x9d, 34);
+    let mut adj: BTreeMap<&str, Vec<usize>> = BTreeMap::new();
+    for (i, a) in doc.arcs.iter().enumerate() {
+        if let (Some(p), Some(q)) = (pos.get(a.source.as_str()), pos.get(a.target.as_str())) {
+            c.p.line_segment([p.0, q.0], Stroke::new((0.6 * xf.k).max(0.5), faint));
+        }
+        adj.entry(a.source.as_str()).or_default().push(i);
+        adj.entry(a.target.as_str()).or_default().push(i);
+    }
+    let hot: Option<&str> = c.pointer_pos().and_then(|p| {
+        pos.iter()
+            .filter(|(_, (q, _))| q.distance(p) <= xf.len(RP + 3.0))
+            .min_by(|a, b| a.1 .0.distance(p).total_cmp(&b.1 .0.distance(p)))
+            .map(|(id, _)| *id)
+    });
+    if let Some(h) = hot {
+        for &i in adj.get(h).map(Vec::as_slice).unwrap_or(&[]) {
+            let a = &doc.arcs[i];
+            let (Some(p), Some(q)) = (pos.get(a.source.as_str()), pos.get(a.target.as_str()))
+            else {
+                continue;
+            };
+            let pre = a.target == h;
+            let col = if pre { PRE } else { POST };
+            let d = (q.0 - p.0).normalized();
+            let p0 = p.0 + d * xf.len(if p.1 { RP } else { TS / 2.0 });
+            let p1 = q.0 - d * xf.len(if q.1 { RP + 1.5 } else { TS / 2.0 + 2.5 });
+            c.arrow(
+                p0,
+                p1,
+                col.gamma_multiply(0.9),
+                (1.5 * xf.k).max(1.0),
+                (6.0 * xf.k).max(4.0),
+            );
+        }
+    }
+    // nodes
+    for p in &doc.places {
+        let at = pos[p.id.as_str()].0;
+        let big = ctrl.contains(&p.id.as_str());
+        let r = xf.len(if big { RP + 4.0 } else { RP });
+        c.p.circle(
+            at,
+            r,
+            Color32::WHITE,
+            Stroke::new((if big { 1.4 } else { 1.0 }) * xf.k.max(0.8), INK),
+        );
+        c.tokens(at, tokens(&p.id), r);
+        if big {
+            c.halo(
+                at + Vec2::new(0.0, r + 8.0 * xf.k),
+                Align2::CENTER_TOP,
+                &p.id,
+                10.5 * xf.k,
+                INK,
+                true,
+            );
+        }
+        if hot == Some(p.id.as_str()) {
+            let pre: Vec<&str> = doc
+                .arcs
+                .iter()
+                .filter(|a| a.target == p.id)
+                .map(|a| a.source.as_str())
+                .collect();
+            let post: Vec<&str> = doc
+                .arcs
+                .iter()
+                .filter(|a| a.source == p.id)
+                .map(|a| a.target.as_str())
+                .collect();
+            let mut i = info(format!("place {}", p.id))
+                .fact("concept", "ns:Place")
+                .fact("fixture x, y", format!("{}, {}", p.x, p.y))
+                .fact(
+                    "initial",
+                    p.initial.first().copied().unwrap_or(0.0).to_string(),
+                )
+                .fact("tokens now", tokens(&p.id).to_string())
+                .fact("arcs in / out", format!("{} / {}", pre.len(), post.len()));
+            if p.id == "win_x" || p.id == "win_o" {
+                i = i.note(format!(
+                    "A reward place: tests/common/mod.rs:35 weighs it {}.",
+                    if p.id == "win_x" { "+1" } else { "−1" }
+                ));
+            }
+            let mut cs = c4_cites(true);
+            if p.id.starts_with("win_") {
+                cs.push(rs(
+                    "crates/pflow-metamodel/src/game.rs",
+                    311,
+                    314,
+                    "score: the reward of a final marking",
+                ));
+            }
+            c.hover(
+                Rect::from_center_size(at, Vec2::splat(r * 2.0)),
+                with_cites(i, cs),
+            );
+        }
+    }
+    for t in &doc.transitions {
+        let at = pos[t.id.as_str()].0;
+        let auto = c4_is_auto(&t.id);
+        let en = moves.contains(t.id.as_str());
+        let s_ = xf.len(TS);
+        let r = Rect::from_center_size(at, Vec2::splat(s_));
+        let (fill, stroke) = if en {
+            (EN_FILL, Stroke::new(1.6 * xf.k.max(1.0), EN))
+        } else {
+            (PAPER, Stroke::new(1.0, if auto { MUTED } else { INK }))
+        };
+        c.p.rect(r, xf.len(1.5), fill, stroke, StrokeKind::Middle);
+        let hit = Rect::from_center_size(at, Vec2::new(xf.len(13.0), xf.len(18.0)));
+        if en {
+            c.hand_if(hit);
+            if c.click_in(hit) && hot == Some(t.id.as_str()) {
+                c.command("plan.play", json!({"transition": t.id}));
+            }
+        }
+        if hot == Some(t.id.as_str()) {
+            let pre: Vec<&str> = doc
+                .arcs
+                .iter()
+                .filter(|a| a.target == t.id)
+                .map(|a| a.source.as_str())
+                .collect();
+            let post: Vec<&str> = doc
+                .arcs
+                .iter()
+                .filter(|a| a.source == t.id)
+                .map(|a| a.target.as_str())
+                .collect();
+            let mut i = info(format!("transition {}", t.id))
+                .fact("concept", "ns:Transition")
+                .fact("fixture x, y", format!("{}, {}", t.x, t.y))
+                .fact("preset", pre.join(", "))
+                .fact("postset", post.join(", "))
+                .fact(
+                    "read as (tests/common/mod.rs)",
+                    if auto {
+                        "automatic: its name contains \"win\"; it fires as soon as it is enabled"
+                            .to_string()
+                    } else {
+                        format!(
+                            "a move, sign {}",
+                            if t.id.starts_with("x_") {
+                                "+1 (x)"
+                            } else {
+                                "−1 (o)"
+                            }
+                        )
+                    },
+                );
+            let ok = en || (auto && !pre.is_empty() && pre.iter().all(|p| tokens(p) > 0));
+            i = i.fact(
+                "at this marking",
+                if en {
+                    "enabled: click to play".to_string()
+                } else if auto && ok {
+                    "enabled (settles at once)".to_string()
+                } else if auto {
+                    "automatic; not enabled at this marking".to_string()
+                } else {
+                    "not enabled: a move is enabled only for the side to move, in an open slot (pflow-metamodel's enabled_why_not gives the exact reason when you try it)".to_string()
+                },
+            );
+            c.hover(hit, with_cites(i, c4_cites(false)));
+        }
+    }
+    c.text(
+        Pos2::new(xf.pt(M, 0.0).x, xf.pt(0.0, h - 14.0).y),
+        Align2::LEFT_CENTER,
+        &format!("Drawn at the fixture's own x/y, scaled. Hover a node: its preset arcs in blue, postset arcs in amber. {} arcs, all ordinary (no arc in this fixture sets inhibitTransition).", pl_arcs(doc)),
+        10.5 * xf.k,
+        MUTED,
+    );
+}
+
+fn pl_arcs(d: &Document) -> String {
+    let n = d.arcs.len();
+    let s = n.to_string();
+    let mut out = String::new();
+    for (i, ch) in s.chars().enumerate() {
+        if i > 0 && (s.len() - i) % 3 == 0 {
+            out.push(',');
+        }
+        out.push(ch);
+    }
+    out
 }
 
 // ------------------------------------------------------------ 6 boundaries

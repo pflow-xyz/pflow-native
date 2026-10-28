@@ -130,6 +130,8 @@ pub struct Data {
     pub incidence: Option<Value>,
     /// The token game on the flat net (`bundle.game`).
     pub game: Option<Value>,
+    /// The Connect-4 net played by hand (`plan.game`).
+    pub c4game: Option<Value>,
     pub lens: Option<Value>,
     pub runs: Vec<Value>,
     pub plan: Option<Value>,
@@ -149,6 +151,7 @@ impl Default for Data {
             prev_flat: None,
             incidence: None,
             game: None,
+            c4game: None,
             lens: None,
             runs: vec![],
             plan: None,
@@ -245,6 +248,10 @@ impl Data {
                 self.runs = vec![];
             }
         }
+        self.c4game = sess
+            .search_plan
+            .as_ref()
+            .map(|p| pflow_native_core::plan_game::game_json(&p.game));
         self.plan = sess.search_plan.as_ref().map(|p| {
             let c = sp::canonical(&p.plan);
             json!({"plan": c, "json": c.to_string(), "check": sp::check(&c)})
