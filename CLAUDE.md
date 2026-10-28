@@ -25,6 +25,7 @@ make test        # cargo test --workspace (core unit + command tests, CLI MCP st
 make lint        # fmt --check + clippy -D warnings
 make wasm-check  # core + app + wasm shim for wasm32-unknown-unknown
 make wasm-shim   # crates/wasm → target/wasm-shim/ (.wasm + JS glue; needs wasm-bindgen-cli 0.2.129)
+make wasm-publish  # wasm-shim → cdn.stackdump.com/ipfs/<cid>/ (cid = the .wasm's sha256; DRAFT=1 default; prints what pflow-xyz pins with sync-native-wasm.mjs --cdn)
 make test-offline  # the build without the `services` feature (no pflow.xyz / sim / GitHub)
 make screenshot  # regenerate docs/screenshot-sir.png
 ```
