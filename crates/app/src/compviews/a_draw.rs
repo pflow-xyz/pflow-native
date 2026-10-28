@@ -208,6 +208,7 @@ impl<'a> Ctx<'a> {
         }
     }
 
+    #[allow(dead_code)]
     /// Hover on a polyline: the pointer within `tol` px of any segment.
     pub(super) fn hover_poly(&mut self, pts: &[Pos2], tol: f32, i: Info) {
         let hit = self
@@ -355,5 +356,46 @@ impl<'a> Ctx<'a> {
             self.p
                 .add(Shape::line(pts.to_vec(), Stroke::new(w0 + 2.5, col)));
         }
+    }
+
+    /// A plan slot's drop zone with the drawing left to the caller: `Some(ok)`
+    /// while a piece is dragged and `plan.slot_candidates` has a verdict for
+    /// the slot (`ok` = legal: light it), the inspector entry, and the drop
+    /// (`plan.add_piece`) on release over a legal slot.
+    pub(super) fn slot_zone(&mut self, r: Rect, slot: &str) -> Option<bool> {
+        let mut v: Option<Value> = None;
+        if let Some(Drag::Piece { cands: Some(c), .. }) = self.drag {
+            v = arr(&c["slots"])
+                .iter()
+                .find(|x| s(&x["slot"]) == slot)
+                .cloned();
+        }
+        if self.pointer_in(r) {
+            let mut i = info(format!("slot {slot}"));
+            if let Some(sl) = sp::slot(slot) {
+                i = i.fact("accepts", sl.accepts).fact(
+                    "field",
+                    sl.field
+                        .unwrap_or("(designed in the ROADMAP, not a SearchPlan field)"),
+                );
+            }
+            if let Some(x) = &v {
+                let ok = x["ok"] == true;
+                i = i.fact(
+                    if ok { "drop" } else { "refused" },
+                    s(&x["why"]).to_string() + if ok { "legal" } else { "" },
+                );
+            }
+            self.hover_if(true, i);
+        }
+        if self.released && self.pointer_in(r) {
+            if let (Some(Drag::Piece { name, .. }), Some(x)) = (self.drag, &v) {
+                if x["ok"] == true {
+                    let n = name.clone();
+                    self.command("plan.add_piece", json!({"piece": n, "slot": slot}));
+                }
+            }
+        }
+        v.map(|x| x["ok"] == true)
     }
 }
