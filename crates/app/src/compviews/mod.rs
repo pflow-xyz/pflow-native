@@ -95,6 +95,10 @@ impl Scene {
 /// What the views draw, read from the session once per revision.
 pub struct Data {
     rev: Option<u64>,
+    /// Link keys and `slot/name` pieces as of the last refresh, to name what
+    /// a change added (`take_event`).
+    seen: Option<Seen>,
+    event: Option<Event>,
     pub state: Option<Value>,
     pub flat: Option<Value>,
     pub incidence: Option<Value>,
@@ -110,6 +114,8 @@ impl Default for Data {
     fn default() -> Self {
         Self {
             rev: None,
+            seen: None,
+            event: None,
             state: None,
             flat: None,
             incidence: None,
@@ -123,7 +129,61 @@ impl Default for Data {
     }
 }
 
+/// What just changed in the composition or the plan (the prototype's
+/// `ctx.event`): a view animates the thing that merged, once.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Event {
+    LinkAdded { key: String, kind: String },
+    LinkRemoved { key: String },
+    InstanceAdded { id: String },
+    PieceAdded { name: String, slot: String },
+}
+
+#[derive(Default)]
+struct Seen {
+    links: BTreeSet<String>,
+    subnets: BTreeSet<String>,
+    pieces: BTreeSet<String>,
+}
+
+/// How long a merge animation runs (VIEWS.md rule 5: about 600-900 ms).
+pub const ANIM_SECS: f32 = 0.75;
+
 impl Data {
+    /// The event the last refresh found, once.
+    pub fn take_event(&mut self) -> Option<Event> {
+        self.event.take()
+    }
+
+    fn seen_now(&self) -> Seen {
+        let mut s = Seen::default();
+        if let Some(st) = &self.state {
+            s.links = arr(&st["links"])
+                .iter()
+                .map(|l| self::s(&l["key"]).to_string())
+                .collect();
+            s.subnets = arr(&st["subnets"])
+                .iter()
+                .map(|x| self::s(&x["id"]).to_string())
+                .collect();
+        }
+        if let Some(p) = &self.plan {
+            let plan = &p["plan"];
+            for slot in ["order", "filters", "heuristics"] {
+                for x in arr(&plan[slot]) {
+                    s.pieces.insert(format!("{slot}/{}", driver_name(x)));
+                }
+            }
+            for x in arr(&plan["drivers"]) {
+                s.pieces.insert(format!("drivers/{}", driver_name(x)));
+            }
+            if plan.get("memo").is_some_and(|m| !m.is_null()) {
+                s.pieces.insert("memo/memo".into());
+            }
+        }
+        s
+    }
+
     /// Re-reads the session when it changed.
     pub fn refresh(&mut self, sess: &Session) {
         if self.rev == Some(sess.revision) {
@@ -156,6 +216,34 @@ impl Data {
             let c = sp::canonical(&p.plan);
             json!({"plan": c, "json": c.to_string(), "check": sp::check(&c)})
         });
+        let now = self.seen_now();
+        if let Some(prev) = &self.seen {
+            self.event = if let Some(k) = now.links.difference(&prev.links).next() {
+                let kind = self
+                    .state
+                    .as_ref()
+                    .and_then(|st| arr(&st["links"]).iter().find(|l| self::s(&l["key"]) == k))
+                    .map_or("", |l| self::s(&l["kind"]))
+                    .to_string();
+                Some(Event::LinkAdded {
+                    key: k.clone(),
+                    kind,
+                })
+            } else if let Some(k) = prev.links.difference(&now.links).next() {
+                Some(Event::LinkRemoved { key: k.clone() })
+            } else if let Some(i) = now.subnets.difference(&prev.subnets).next() {
+                Some(Event::InstanceAdded { id: i.clone() })
+            } else if let Some(p) = now.pieces.difference(&prev.pieces).next() {
+                let (slot, name) = p.split_once('/').unwrap_or(("", p));
+                Some(Event::PieceAdded {
+                    name: name.into(),
+                    slot: slot.into(),
+                })
+            } else {
+                None
+            };
+        }
+        self.seen = Some(now);
     }
 }
 
@@ -243,6 +331,9 @@ pub struct State {
     pub pinned: Option<Info>,
     /// The notes the last frame drew, shown under the view.
     pub last_notes: Vec<(&'static str, String)>,
+    /// The merge animation in progress: the event and the `ui.input.time`
+    /// it started at.
+    pub anim: Option<(Event, f64)>,
 }
 
 // ------------------------------------------------------------ drawing context
@@ -267,6 +358,9 @@ pub struct Ctx<'a> {
     start_drag: Option<Drag>,
     clicked_info: Option<Info>,
     pub dark: bool,
+    /// The merge animation: what just merged and how far along it is, 0..1
+    /// (None when none is running; always None headless).
+    pub event: Option<(Event, f32)>,
 }
 
 const INK: Color32 = Color32::from_rgb(0x22, 0x28, 0x33);
@@ -328,7 +422,54 @@ fn strs(v: &Value) -> Vec<String> {
     arr(v).iter().map(|x| s(x).to_string()).collect()
 }
 
+/// A drawing in design coordinates (the prototype's SVG viewBox) mapped
+/// into a rectangle of the window: uniform scale, left-top aligned.
+#[derive(Clone, Copy)]
+pub struct Xf {
+    pub origin: Pos2,
+    pub k: f32,
+}
+
+impl Xf {
+    /// Fits a `w`×`h` design into `area` (never scaled up past `max_k`).
+    pub fn fit(area: Rect, w: f32, h: f32, max_k: f32) -> Self {
+        let k = (area.width() / w.max(1.0))
+            .min(area.height() / h.max(1.0))
+            .min(max_k);
+        Self {
+            origin: area.left_top(),
+            k,
+        }
+    }
+    pub fn pt(&self, x: f32, y: f32) -> Pos2 {
+        self.origin + Vec2::new(x, y) * self.k
+    }
+    pub fn rect(&self, x: f32, y: f32, w: f32, h: f32) -> Rect {
+        Rect::from_min_size(self.pt(x, y), Vec2::new(w, h) * self.k)
+    }
+    pub fn len(&self, d: f32) -> f32 {
+        d * self.k
+    }
+}
+
+/// Smooth 0..1 ease for the merge animations.
+pub fn ease(t: f32) -> f32 {
+    let t = t.clamp(0.0, 1.0);
+    t * t * (3.0 - 2.0 * t)
+}
+
 impl<'a> Ctx<'a> {
+    /// Progress (eased, 0..1) of the running merge animation when it is
+    /// the event `f` accepts; keeps the window repainting while it runs.
+    /// Same state, same drawing: with no event this is `None` and the view
+    /// draws its resting state.
+    pub fn anim<T>(&self, f: impl Fn(&Event) -> Option<T>) -> Option<(T, f32)> {
+        let (e, t) = self.event.as_ref()?;
+        let v = f(e)?;
+        self.p.ctx().request_repaint();
+        Some((v, ease(*t)))
+    }
+
     fn hover(&mut self, r: Rect, i: Info) {
         if self.pointer.is_some_and(|p| r.contains(p)) {
             if self.clicked {
@@ -647,6 +788,7 @@ pub fn draw(
     drag: Option<&Drag>,
     cv: &pflow_native_core::CompositionView,
     dark: bool,
+    anim: Option<(Event, f32)>,
 ) -> Frame {
     let (view, example, lens_mode, rewrite) = (
         cv.view.as_str(),
@@ -675,6 +817,7 @@ pub fn draw(
         start_drag: None,
         clicked_info: None,
         dark,
+        event: anim,
     };
     let title = VIEWS.iter().find(|v| v.0 == view).map_or(view, |v| v.2);
     c.text(
@@ -1080,6 +1223,19 @@ fn palette(c: &mut Ctx, area: Rect) {
 
 pub fn panel(app_state: &mut State, sess: &Session, ui: &mut egui::Ui) -> Vec<Step> {
     app_state.data.refresh(sess);
+    let now = ui.input(|i| i.time);
+    if let Some(e) = app_state.data.take_event() {
+        app_state.anim = Some((e, now));
+    }
+    let anim = match &app_state.anim {
+        Some((e, t0)) if ((now - t0) as f32) < ANIM_SECS => {
+            Some((e.clone(), (now - t0) as f32 / ANIM_SECS))
+        }
+        _ => {
+            app_state.anim = None;
+            None
+        }
+    };
     let cv = sess.composition_view.clone();
     let mut out: Vec<Step> = vec![];
     ui.horizontal_wrapped(|ui| {
@@ -1178,6 +1334,7 @@ pub fn panel(app_state: &mut State, sess: &Session, ui: &mut egui::Ui) -> Vec<St
             app_state.drag.as_ref(),
             &cv,
             ui.visuals().dark_mode,
+            anim,
         );
         frame = Some(f);
     });
@@ -1256,7 +1413,7 @@ pub fn headless_manifest(sess: &Session, view: &str, example: &str, state: &str)
     cv.example = example.into();
     cv.rewrite = None;
     ctx.run_ui(raw, |ui| {
-        let f = draw(ui, &data, None, &cv, false);
+        let f = draw(ui, &data, None, &cv, false, None);
         manifest = f.scene.manifest(view, example, state);
     })
     .drop_without_applying_deltas();
