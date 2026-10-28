@@ -1428,27 +1428,67 @@ pub fn incidence(m: &Model) -> Vec<Vec<i64>> {
     c
 }
 
+/// A declared constraint read as a P-invariant, with the numbers behind its
+/// check.
+#[derive(Debug, Clone, PartialEq)]
+pub struct InvariantCheck {
+    /// y: the coefficient of each named place (a place named twice counts twice).
+    pub y: Vec<(String, i64)>,
+    /// The declared constant n.
+    pub n: i64,
+    /// (y·C)[t] for every transition (column order of C).
+    pub y_c: Vec<i64>,
+    /// y·M₀.
+    pub y_m0: i64,
+}
+
+impl InvariantCheck {
+    /// y·C = 0 and y·M₀ = n.
+    pub fn holds(&self) -> bool {
+        self.y_c.iter().all(|v| *v == 0) && self.y_m0 == self.n
+    }
+}
+
 /// A declared constraint read as a P-invariant: `tokens("a") + … == n`
-/// gives y (1 on each named place); it holds when y·C = 0 and y·M₀ = n
-/// (together they prove it for every reachable marking: the prototype's
-/// incidence.js check). `None` when the expression is not a plain sum of
-/// tokens(…) equal to an integer.
-pub fn invariant_holds(m: &Model, c: &[Vec<i64>], expr: &str) -> Option<bool> {
+/// gives y (1 on each named place). `None` when the expression is not a
+/// plain sum of tokens(…) equal to an integer, or names a place the net
+/// lacks.
+pub fn invariant_check(m: &Model, c: &[Vec<i64>], expr: &str) -> Option<InvariantCheck> {
     let (lhs, rhs) = expr.rsplit_once(" == ")?;
     let n: i64 = rhs.trim().parse().ok()?;
     let mut y = vec![0i64; m.places.len()];
+    let mut named: Vec<(String, i64)> = vec![];
     for term in lhs.split(" + ") {
         let p = term.trim().strip_prefix("tokens(\"")?.strip_suffix("\")")?;
         y[m.places.iter().position(|q| q.id == p)?] += 1;
+        match named.iter_mut().find(|(q, _)| q == p) {
+            Some(e) => e.1 += 1,
+            None => named.push((p.to_string(), 1)),
+        }
     }
     let y_m0: i64 = m.places.iter().zip(&y).map(|(p, k)| k * p.initial).sum();
-    let y_c =
-        (0..m.transitions.len()).all(|t| (0..y.len()).map(|p| y[p] * c[p][t]).sum::<i64>() == 0);
-    Some(y_c && y_m0 == n)
+    let y_c = (0..m.transitions.len())
+        .map(|t| (0..y.len()).map(|p| y[p] * c[p][t]).sum::<i64>())
+        .collect();
+    Some(InvariantCheck {
+        y: named,
+        n,
+        y_c,
+        y_m0,
+    })
+}
+
+/// A declared constraint read as a P-invariant: it holds when y·C = 0 and
+/// y·M₀ = n (together they prove it for every reachable marking: the
+/// prototype's incidence.js check). `None` when the expression is not a
+/// plain sum of tokens(…) equal to an integer.
+pub fn invariant_holds(m: &Model, c: &[Vec<i64>], expr: &str) -> Option<bool> {
+    invariant_check(m, c, expr).map(|k| k.holds())
 }
 
 /// `bundle.incidence`'s result: the flat net's matrix, each subnet's own
-/// block, and each declared constraint checked as y·C = 0.
+/// block, and each declared constraint checked as y·C = 0 and y·M₀ = n
+/// (with y, n, the vector y·C per transition and y·M₀ beside `holds`).
 pub fn incidence_json(b: &Bundle) -> Value {
     let flat = match flatten(b) {
         Ok(f) => f,
@@ -1471,7 +1511,11 @@ pub fn incidence_json(b: &Bundle) -> Value {
         .model
         .constraints
         .iter()
-        .map(|k| json!({"id": k.id, "expr": k.expr, "holds": invariant_holds(&flat.model, &c, &k.expr)}))
+        .map(|k| match invariant_check(&flat.model, &c, &k.expr) {
+            Some(v) => json!({"id": k.id, "expr": k.expr, "holds": v.holds(),
+                              "y": v.y, "n": v.n, "y_c": v.y_c, "y_m0": v.y_m0}),
+            None => json!({"id": k.id, "expr": k.expr, "holds": null}),
+        })
         .collect();
     json!({
         "ok": true,
