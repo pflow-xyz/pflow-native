@@ -168,6 +168,35 @@ pub enum NoteTarget {
     },
 }
 
+/// What the composition views show (`view.composition`): view-only state,
+/// not part of undo.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CompositionView {
+    pub open: bool,
+    /// One of `commands::view::COMPOSITION_VIEWS`.
+    pub view: String,
+    /// `orders` or `connect4`.
+    pub example: String,
+    /// The lens view's mode: `strict` or `assume`.
+    pub lens: String,
+    /// The Laws view's selected rewrite (`None`: the one the live state
+    /// connects to, or the theory's first).
+    #[serde(default)]
+    pub rewrite: Option<String>,
+}
+
+impl Default for CompositionView {
+    fn default() -> Self {
+        Self {
+            open: false,
+            view: "cospan".into(),
+            example: "orders".into(),
+            lens: "strict".into(),
+            rewrite: None,
+        }
+    }
+}
+
 /// What the app last reported it shows (`view.report_focus`).
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Focus {
@@ -213,6 +242,10 @@ pub(crate) struct Snapshot {
     /// fit / distill with `apply`): undoing an unrelated edit must not
     /// rewind rate tweaks made since, so ordinary snapshots carry `None`.
     pub rates: Option<BTreeMap<String, f64>>,
+    /// The open composition and search plan: they change only through
+    /// undoable edits (`bundle.*`, `plan.*`), so every snapshot carries them.
+    pub composition: Option<crate::composition::Composition>,
+    pub search_plan: Option<crate::search_plan::OpenPlan>,
 }
 
 const HISTORY_LIMIT: usize = 200;
@@ -268,6 +301,13 @@ pub struct Session {
     next_note: u64,
     /// What the app shows (`view.report_focus`, read by `view.focus`).
     pub focus: Focus,
+    /// The open composition of pattern instances (`bundle.*`), for the
+    /// composition views. Separate from the document; part of undo.
+    pub composition: Option<crate::composition::Composition>,
+    /// The open search plan (`plan.*`). Part of undo.
+    pub search_plan: Option<crate::search_plan::OpenPlan>,
+    /// What the composition views show (`view.composition`).
+    pub composition_view: CompositionView,
     pub(crate) undo: Vec<Snapshot>,
     pub(crate) redo: Vec<Snapshot>,
     compiled: Option<std::result::Result<Compiled, String>>,
@@ -316,6 +356,9 @@ impl Session {
             notes: vec![],
             next_note: 0,
             focus: Focus::default(),
+            composition: None,
+            search_plan: None,
+            composition_view: CompositionView::default(),
             undo: vec![],
             redo: vec![],
             compiled: None,
@@ -345,6 +388,8 @@ impl Session {
         s.systems = self.systems.clone();
         s.notes = self.notes.clone();
         s.next_note = self.next_note;
+        s.composition = self.composition.clone();
+        s.search_plan = self.search_plan.clone();
         s
     }
 
@@ -441,6 +486,8 @@ impl Session {
             marking: self.marking.clone(),
             selection: self.selection.clone(),
             rates: None,
+            composition: self.composition.clone(),
+            search_plan: self.search_plan.clone(),
         }
     }
 
@@ -475,6 +522,8 @@ impl Session {
         self.doc = s.doc;
         self.marking = s.marking;
         self.selection = s.selection;
+        self.composition = s.composition;
+        self.search_plan = s.search_plan;
         if let Some(r) = s.rates {
             self.rates = r;
         }

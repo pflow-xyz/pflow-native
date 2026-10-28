@@ -1,4 +1,4 @@
-.PHONY: build build-zk build-rnn build-offline run test test-zk test-rnn test-offline lint wasm-check wasm-shim web web-build screenshot mcp
+.PHONY: screenshot-views composition-goldens build build-zk build-rnn build-offline run test test-zk test-rnn test-offline lint wasm-check wasm-shim web web-build screenshot mcp
 
 build:
 	cargo build --release
@@ -46,9 +46,9 @@ wasm-check:
 # The registry for pflow.xyz's browser (crates/wasm): a .wasm plus JS glue in
 # target/wasm-shim/. Needs `cargo install wasm-bindgen-cli --version 0.2.129`.
 wasm-shim:
-	cargo build --release -p pflow-native-wasm --target wasm32-unknown-unknown
+	cargo build --profile wasm-release -p pflow-native-wasm --target wasm32-unknown-unknown
 	wasm-bindgen --target web --out-dir target/wasm-shim \
-	  target/wasm32-unknown-unknown/release/pflow_native_wasm.wasm
+	  target/wasm32-unknown-unknown/wasm-release/pflow_native_wasm.wasm
 	@ls -l target/wasm-shim/*.wasm && gzip -9 -c target/wasm-shim/pflow_native_wasm_bg.wasm | wc -c | xargs echo gzip bytes:
 
 # Needs `cargo install trunk`; serves on :8080.
@@ -65,3 +65,19 @@ screenshot:
 
 mcp:
 	cargo run --release -p pflow-native-cli -- mcp
+
+# The composition views: one PNG per view x example (docs/composition-views/),
+# and the parity manifests drawn headless (no window).
+VIEWS := cospan spiders operad string flat boundaries lens incidence process laws
+screenshot-views:
+	cargo build --release -p pflow-native
+	@mkdir -p docs/composition-views
+	@n=0; for v in $(VIEWS); do n=$$((n+1)); for ex in orders connect4; do \
+	  ./target/release/pflow-native --fresh --no-control \
+	    --cmd 'view.set {"bottom_panel":false,"inspector":false}' \
+	    --cmd "view.composition {\"view\":\"$$v\",\"example\":\"$$ex\"}" \
+	    --screenshot docs/composition-views/$$(printf %02d $$n)-$$v-$$ex.png --size 1600x1000 || exit 1; \
+	done; done
+
+composition-goldens:
+	cargo run --release -p pflow-native -- --composition-goldens parity/composition-views/goldens.json

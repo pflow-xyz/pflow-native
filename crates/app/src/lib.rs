@@ -5,6 +5,7 @@
 
 mod canvas;
 mod clipboard;
+pub mod compviews;
 #[cfg(not(target_arch = "wasm32"))]
 pub mod control;
 mod dialogs;
@@ -95,6 +96,8 @@ pub struct App {
     /// Whether the window is on screen (not minimized, hidden or covered),
     /// as of the last logic pass. A hidden window cannot be captured.
     window_visible: bool,
+    /// The composition views' cache, drag and inspector (compviews.rs).
+    pub(crate) comp: compviews::State,
     /// What was last sent to view.report_focus.
     last_focus: Option<(Option<String>, BottomTab, bool, bool)>,
 }
@@ -135,6 +138,7 @@ impl App {
             screenshot_pending: false,
             window_visible: true,
             last_focus: None,
+            comp: Default::default(),
         };
         let restore = storage.filter(|_| !opts.fresh && app.exit_after_screenshot.is_none());
         if let Some(st) = restore.and_then(|s| s.get_string(KEY_SETTINGS)) {
@@ -555,6 +559,45 @@ impl App {
 
     /// Tells the session what the window shows (view.report_focus) when that
     /// changes, so an agent's view.focus matches what the person sees.
+    /// The composition views: drawn from the session, every action queued
+    /// as a registry command; a drag asks the registry which targets light.
+    fn composition_views(&mut self, ui: &mut egui::Ui) {
+        let steps = compviews::panel(&mut self.comp, &self.sess, ui);
+        for st in steps {
+            self.queue(&st.command, st.args);
+        }
+        match self.comp.drag.clone() {
+            Some(compviews::Drag::Port {
+                subnet,
+                port,
+                cands: None,
+            }) => {
+                let c = self
+                    .sess
+                    .execute(
+                        "bundle.candidates",
+                        json!({ "from": format!("{subnet}:{port}") }),
+                    )
+                    .ok();
+                self.comp.drag = Some(compviews::Drag::Port {
+                    subnet,
+                    port,
+                    cands: c,
+                });
+                ui.ctx().request_repaint();
+            }
+            Some(compviews::Drag::Piece { name, cands: None }) => {
+                let c = self
+                    .sess
+                    .execute("plan.slot_candidates", json!({ "piece": name }))
+                    .ok();
+                self.comp.drag = Some(compviews::Drag::Piece { name, cands: c });
+                ui.ctx().request_repaint();
+            }
+            _ => {}
+        }
+    }
+
     fn report_focus(&mut self) {
         let now = (
             self.results.selected.clone(),
@@ -936,7 +979,11 @@ impl eframe::App for App {
                 .default_size(380.0)
                 .show(ui, |ui| json_pane::ui(self, ui));
         }
-        egui::CentralPanel::default().show(ui, |ui| canvas::ui(self, ui));
+        if self.sess.composition_view.open {
+            egui::CentralPanel::default().show(ui, |ui| self.composition_views(ui));
+        } else {
+            egui::CentralPanel::default().show(ui, |ui| canvas::ui(self, ui));
+        }
         dialogs::ui(self, &ctx);
 
         self.drain();

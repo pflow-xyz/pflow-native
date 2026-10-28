@@ -112,6 +112,7 @@ CommandSpec {
 | `export.*` | json/svg/csv (1), png (app), artifact export in every format (3+) |
 | `macro.*` | record/stop/play/list/get/delete (1) |
 | `command.*` | batch, list (1) |
+| `bundle.*`, `plan.*` | the composition views' state: an open composition of pattern instances (link verdicts, drag candidates, flatten, scenario runs, lens test, ontology facts) and an open search plan (`crates/core/src/composition/`, `lens.rs`, `search_plan.rs`) |
 | `session.*` | dump_state/restore_state: what outlives one document, for the browser's storage |
 
 ## Artifacts → views

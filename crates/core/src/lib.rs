@@ -14,6 +14,7 @@ pub mod auth;
 pub mod cid;
 pub mod commands;
 pub mod compose;
+pub mod composition;
 pub mod conformance;
 pub mod control_auth;
 pub mod doc;
@@ -23,6 +24,7 @@ pub mod game;
 pub mod jobs;
 pub mod layout;
 pub mod learn;
+pub mod lens;
 pub mod mining;
 #[cfg(feature = "rnn")]
 pub(crate) mod mlp_net;
@@ -33,6 +35,7 @@ pub mod provenance;
 pub mod registry;
 #[cfg(feature = "rnn")]
 pub(crate) mod rnn_net;
+pub mod search_plan;
 pub mod session;
 pub mod sim;
 #[cfg(feature = "services")]
@@ -49,7 +52,8 @@ pub use artifact::{Artifact, ArtifactData};
 pub use doc::{Arc, Document, NodeKind, Place, Transition};
 pub use registry::{ArgSpec, ArgType, CommandSpec, Registry};
 pub use session::{
-    Focus, Highlight, Note, NoteTarget, Session, Settings, Step, Theme, Tool, UiRequest, View,
+    CompositionView, Focus, Highlight, Note, NoteTarget, Session, Settings, Step, Theme, Tool,
+    UiRequest, View,
 };
 pub use sim::{Marking, OdeResult};
 

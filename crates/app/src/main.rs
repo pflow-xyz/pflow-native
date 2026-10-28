@@ -3,7 +3,12 @@
 //! ```text
 //! pflow-native [NET.json] [--example NAME] [--cmd 'ID {json}']... [--screenshot OUT.png]
 //!              [--size WxH] [--control ADDR | --no-control] [--fresh]
+//! pflow-native --composition-goldens OUT.json
 //! ```
+//!
+//! `--composition-goldens` draws every composition view × example × state
+//! headless (no window) and writes the manifests the drawing collected
+//! (`parity/composition-views/goldens.json`).
 
 #[cfg(not(target_arch = "wasm32"))]
 fn main() -> eframe::Result {
@@ -41,6 +46,26 @@ fn main() -> eframe::Result {
     let mut args = std::env::args().skip(1);
     while let Some(a) = args.next() {
         match a.as_str() {
+            "--composition-goldens" => {
+                let out = args
+                    .next()
+                    .unwrap_or_else(|| "parity/composition-views/goldens.json".into());
+                match pflow_native::compviews::goldens() {
+                    Ok(v) => {
+                        let text = serde_json::to_string_pretty(&v).expect("JSON") + "\n";
+                        if let Err(e) = std::fs::write(&out, text) {
+                            eprintln!("{out}: {e}");
+                            std::process::exit(1);
+                        }
+                        println!("wrote {out}");
+                        std::process::exit(0);
+                    }
+                    Err(e) => {
+                        eprintln!("composition goldens: {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
             "--cmd" => {
                 let line = args.next().unwrap_or_default();
                 let (id, rest) = line.split_once(char::is_whitespace).unwrap_or((&line, ""));
