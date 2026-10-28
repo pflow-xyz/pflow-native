@@ -27,6 +27,10 @@ use serde_json::{json, Map, Value};
 mod a_draw;
 mod a_operad_c4;
 mod a_operad_theme;
+mod b_c4;
+mod b_draw;
+mod b_orders;
+mod b_transition;
 mod boundaries_view;
 mod cospan_view;
 mod flat_view;
@@ -87,12 +91,23 @@ impl Scene {
     }
 
     pub fn manifest(&self, view: &str, example: &str, state: &str) -> Value {
+        self.manifest_at(view, example, state, "pattern")
+    }
+
+    /// The manifest at a view `level`. Only the string view has two, and
+    /// the transition level says so in a `level` field; the pattern level
+    /// (the default) has none, so those manifests stay as they were.
+    pub fn manifest_at(&self, view: &str, example: &str, state: &str, level: &str) -> Value {
         let elements: Vec<Value> = self
             .entries
             .iter()
             .map(|((k, id), a)| json!({"kind": k, "id": id, "attrs": a}))
             .collect();
-        json!({"view": view, "example": example, "state": state, "elements": elements})
+        let mut m = json!({"view": view, "example": example, "state": state, "elements": elements});
+        if level != "pattern" {
+            m["level"] = json!(level);
+        }
+        m
     }
 }
 
@@ -107,6 +122,9 @@ pub struct Data {
     event: Option<Event>,
     pub state: Option<Value>,
     pub flat: Option<Value>,
+    /// `flat` as of the revision before (the string view's transition level
+    /// slides the boxes a new event link fused from where they were).
+    pub prev_flat: Option<Value>,
     pub incidence: Option<Value>,
     pub lens: Option<Value>,
     pub runs: Vec<Value>,
@@ -124,6 +142,7 @@ impl Default for Data {
             event: None,
             state: None,
             flat: None,
+            prev_flat: None,
             incidence: None,
             lens: None,
             runs: vec![],
@@ -199,6 +218,7 @@ impl Data {
         match &sess.composition {
             Some(c) => {
                 self.state = Some(c.to_json());
+                self.prev_flat = self.flat.take();
                 self.flat = Some(comp::flatten_json(&c.bundle));
                 self.incidence = Some(comp::incidence_json(&c.bundle));
                 self.lens = Some(lens::report(c, true));
@@ -367,6 +387,10 @@ pub struct Ctx<'a> {
     /// The merge animation: what just merged and how far along it is, 0..1
     /// (None when none is running; always None headless).
     pub event: Option<(Event, f32)>,
+    /// The string view's level (`pattern` or `transition`) and the
+    /// transition level's lens position (`view.composition {level, lens_y}`).
+    pub level: String,
+    pub lens_y: f64,
 }
 
 const INK: Color32 = Color32::from_rgb(0x22, 0x28, 0x33);
@@ -824,6 +848,8 @@ pub fn draw(
         clicked_info: None,
         dark,
         event: anim,
+        level: cv.level.clone(),
+        lens_y: cv.lens_y,
     };
     let title = VIEWS.iter().find(|v| v.0 == view).map_or(view, |v| v.2);
     c.text(
@@ -1411,6 +1437,17 @@ fn notes_ui(ui: &mut egui::Ui, notes: &[(&'static str, String)]) {
 /// Draws `view` × `example` for `sess` in a headless egui context (no
 /// window) and returns the manifest the drawing collected.
 pub fn headless_manifest(sess: &Session, view: &str, example: &str, state: &str) -> Value {
+    headless_manifest_at(sess, view, example, state, "pattern")
+}
+
+/// [`headless_manifest`] at a string-view `level` (`pattern` or `transition`).
+pub fn headless_manifest_at(
+    sess: &Session,
+    view: &str,
+    example: &str,
+    state: &str,
+    level: &str,
+) -> Value {
     let mut data = Data::default();
     data.refresh(sess);
     let ctx = egui::Context::default();
@@ -1423,9 +1460,10 @@ pub fn headless_manifest(sess: &Session, view: &str, example: &str, state: &str)
     cv.view = view.into();
     cv.example = example.into();
     cv.rewrite = None;
+    cv.level = level.into();
     ctx.run_ui(raw, |ui| {
         let f = draw(ui, &data, None, &cv, false, None);
-        manifest = f.scene.manifest(view, example, state);
+        manifest = f.scene.manifest_at(view, example, state, level);
     })
     .drop_without_applying_deltas();
     manifest
@@ -1475,6 +1513,32 @@ pub fn session_in(state: &str) -> Result<Session, String> {
             .map_err(|e| format!("{state}: {id}: {e}"))?;
     }
     Ok(s)
+}
+
+/// The string view's transition-level manifests (docs/cv-notes/b.md): one per
+/// example × state, each with `level: "transition"`. Not part of
+/// [`goldens`] until the spec adopts them.
+pub fn goldens_transition() -> Result<Value, String> {
+    let mut manifests = vec![];
+    for example in ["orders", "connect4"] {
+        for (state, _) in STATES {
+            let s = session_in(state)?;
+            manifests.push(headless_manifest_at(
+                &s,
+                "string",
+                example,
+                state,
+                "transition",
+            ));
+        }
+    }
+    Ok(json!({
+        "format": "composition-views-scene/1",
+        "spec": "docs/composition-views-scene.md",
+        "generated_by": "pflow-native crates/app/src/compviews (egui renderers, headless), string view at the transition level",
+        "pflow_rs": pflow_native_core::provenance::PFLOW_RS_REV,
+        "manifests": manifests,
+    }))
 }
 
 /// Every view × example × state's manifest, as

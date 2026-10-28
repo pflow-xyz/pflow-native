@@ -66,6 +66,26 @@ fn main() -> eframe::Result {
                     }
                 }
             }
+            "--composition-goldens-transition" => {
+                let out = args
+                    .next()
+                    .unwrap_or_else(|| "goldens-transition.json".into());
+                match pflow_native::compviews::goldens_transition() {
+                    Ok(v) => {
+                        let text = serde_json::to_string_pretty(&v).expect("JSON") + "\n";
+                        if let Err(e) = std::fs::write(&out, text) {
+                            eprintln!("{out}: {e}");
+                            std::process::exit(1);
+                        }
+                        println!("wrote {out}");
+                        std::process::exit(0);
+                    }
+                    Err(e) => {
+                        eprintln!("composition goldens (transition): {e}");
+                        std::process::exit(1);
+                    }
+                }
+            }
             "--cmd" => {
                 let line = args.next().unwrap_or_default();
                 let (id, rest) = line.split_once(char::is_whitespace).unwrap_or((&line, ""));
