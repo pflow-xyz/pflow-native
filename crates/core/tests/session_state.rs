@@ -583,3 +583,82 @@ fn a_macro_step_this_build_lacks_is_kept_and_warned_about() {
         "the macro's first step is rolled back"
     );
 }
+
+#[test]
+fn the_open_composition_and_plan_round_trip() {
+    memory_store();
+    let mut s = Session::default();
+    run(&mut s, "bundle.open", json!({}));
+    run(&mut s, "bundle.add_instance", json!({"id": "payment2"}));
+    run(
+        &mut s,
+        "bundle.add_link",
+        json!({"kind": "token", "from": "payment:account:customer", "to": "payment2:account:customer"}),
+    );
+    run(&mut s, "plan.open", json!({}));
+    run(
+        &mut s,
+        "plan.add_piece",
+        json!({"piece": "threats", "slot": "order"}),
+    );
+    run(
+        &mut s,
+        "view.composition",
+        json!({"view": "laws", "example": "connect4", "lens": "assume"}),
+    );
+    let state = run(&mut s, "session.dump_state", Value::Null);
+    assert_eq!(
+        state["composition"]["instances"].as_array().unwrap().len(),
+        4
+    );
+    assert_eq!(
+        state["plan"]["order"].as_array().unwrap().last().unwrap(),
+        "threats"
+    );
+    assert_eq!(state["composition_view"]["view"], "laws");
+
+    let mut t = Session::default();
+    memory_store();
+    let rev = t.revision;
+    let out = run(&mut t, "session.restore_state", json!({"state": state}));
+    assert_eq!(out["composition"], 4, "{out}");
+    assert_eq!(out["plan"], true, "{out}");
+    assert!(t.revision > rev, "the views re-read");
+    assert_eq!(
+        run(&mut t, "bundle.state", Value::Null)["links"],
+        run(&mut s, "bundle.state", Value::Null)["links"]
+    );
+    assert_eq!(
+        run(&mut t, "plan.state", Value::Null),
+        run(&mut s, "plan.state", Value::Null)
+    );
+    assert_eq!(t.composition_view, s.composition_view);
+    assert_eq!(run(&mut t, "session.dump_state", Value::Null), state);
+
+    // Closed means closed: null restores as nothing open.
+    run(&mut s, "bundle.close", Value::Null);
+    run(&mut s, "plan.close", Value::Null);
+    let closed = run(
+        &mut s,
+        "session.dump_state",
+        json!({"parts": ["composition", "plan"]}),
+    );
+    assert!(closed["composition"].is_null() && closed["plan"].is_null());
+    run(&mut t, "session.restore_state", json!({"state": closed}));
+    assert!(t.composition.is_none() && t.search_plan.is_none());
+
+    // A saved link this build's rules refuse refuses the whole state.
+    let mut bad = state.clone();
+    bad["composition"]["links"] =
+        json!([{"kind": "token", "from": "orders:in", "to": "workers:available"}]);
+    let e = refused(&mut t, "session.restore_state", json!({"state": bad}));
+    assert!(
+        e.contains("composition") && e.contains("schemas differ"),
+        "{e}"
+    );
+    // An unknown instance refuses the whole state.
+    let mut worse = state.clone();
+    worse["composition"]["instances"] = json!(["nope"]);
+    let e = refused(&mut t, "session.restore_state", json!({"state": worse}));
+    assert!(e.contains("composition"), "{e}");
+}

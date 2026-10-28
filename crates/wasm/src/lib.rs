@@ -403,7 +403,8 @@ mod tests {
         assert_eq!(
             summary,
             json!({"store": 6, "models": 2, "systems": {"bindings": 1, "systems": 0},
-                   "macros": 1, "recording": null, "notes": 1, "artifacts": 1})
+                   "macros": 1, "recording": null, "notes": 1, "artifacts": 1,
+                   "composition": null, "plan": false, "composition_view": "cospan"})
         );
         assert_eq!(f.dump_state_json().unwrap(), saved, "it dumps the same");
         assert_eq!(observe(&mut f, &art, &a), before);

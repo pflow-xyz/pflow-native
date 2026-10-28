@@ -8,6 +8,9 @@
 //!
 //! The document, marking, rates, selection, view and undo history are not
 //! part of it: the page owns the document, and history ends with the page.
+//! What the composition views show is: the open composition (its instances
+//! and links), the open search plan, and which view, example and mode is
+//! up, so the page and the app come back to the same drawing.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
@@ -36,6 +39,9 @@ pub const PARTS: &[&str] = &[
     "notes",
     "artifacts",
     "store",
+    "composition",
+    "plan",
+    "composition_view",
 ];
 /// Header keys beside the parts.
 const HEADER: &[&str] = &["format", "version", "pflowNative"];
@@ -46,14 +52,16 @@ pub const SET: &[CommandSpec] = &[
         label: "Dump Session State",
         help: "The state that outlives one document, as one JSON object for a front end to save (pflow.xyz's page keeps it \
                in browser storage): models (the library), systems, macros, recording (the steps of a recording in progress, \
-               or null), notes, artifacts (results) and store (every file of the local store, as text); `parts` picks some. \
+               or null), notes, artifacts (results), store (every file of the local store, as text), composition (the open \
+               composition's instances and links, or null when none is open), plan (the open search plan, or null) and \
+               composition_view (which composition view, example and mode is shown); `parts` picks some. \
                Not the document, marking, rates, selection or undo history.",
         menu: "",
         shortcut: None,
         args: &[opt(
             "parts",
             StrList,
-            "models, systems, macros, recording, notes, artifacts, store (default all)",
+            "models, systems, macros, recording, notes, artifacts, store, composition, plan, composition_view (default all)",
         )],
         enabled: always,
         run: dump,
@@ -135,6 +143,18 @@ fn dump_part(sess: &Session, part: &str) -> Result<Value> {
             let st = store::open();
             json!({ "location": st.location(), "blobs": st.dump_blobs()? })
         }
+        "composition" => match &sess.composition {
+            Some(c) => json!({
+                "instances": c.specs.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
+                "links": c.bundle.links.iter().map(crate::composition::link_json).collect::<Vec<_>>(),
+            }),
+            None => Value::Null,
+        },
+        "plan" => match &sess.search_plan {
+            Some(p) => p.plan.clone(),
+            None => Value::Null,
+        },
+        "composition_view" => serde_json::to_value(&sess.composition_view).expect("serializable"),
         _ => unreachable!("checked against PARTS"),
     })
 }
@@ -152,6 +172,11 @@ struct Parsed {
     /// that did not.
     artifacts: Option<(Vec<Artifact>, u64, Vec<String>)>,
     store: Option<BTreeMap<String, String>>,
+    /// `Some(None)`: restored as no composition open.
+    composition: Option<Option<crate::composition::Composition>>,
+    /// `Some(None)`: restored as no plan open.
+    plan: Option<Option<Value>>,
+    composition_view: Option<crate::session::CompositionView>,
     /// What was let through, for the summary.
     warnings: Vec<String>,
 }
@@ -206,6 +231,29 @@ fn restore(sess: &mut Session, a: &Value) -> Result<Value> {
             out.insert("artifacts_dropped".into(), json!(dropped));
         }
         sess.replace_artifacts(items, next);
+    }
+    if let Some(c) = p.composition {
+        out.insert(
+            "composition".into(),
+            json!(c.as_ref().map(|c| c.specs.len())),
+        );
+        // The views re-read on a new revision; nothing to redraw when there
+        // was none and none comes back.
+        if sess.composition.is_some() || c.is_some() {
+            sess.revision += 1;
+        }
+        sess.composition = c;
+    }
+    if let Some(plan) = p.plan {
+        out.insert("plan".into(), json!(plan.is_some()));
+        if sess.search_plan.is_some() || plan.is_some() {
+            sess.revision += 1;
+        }
+        sess.search_plan = plan.map(|plan| crate::search_plan::OpenPlan { plan });
+    }
+    if let Some(cv) = p.composition_view {
+        out.insert("composition_view".into(), json!(cv.view));
+        sess.composition_view = cv;
     }
     if !p.warnings.is_empty() {
         out.insert("warnings".into(), json!(p.warnings));
@@ -298,6 +346,45 @@ fn parse(sess: &Session, state: &Value) -> Result<Parsed> {
             ));
         }
         p.notes = Some((items, next));
+    }
+    if let Some(v) = obj.get("composition") {
+        p.composition = Some(match v {
+            Value::Null => None,
+            v => {
+                let ids: Vec<String> = typed("composition", &v["instances"])?;
+                let raw: Vec<Value> = typed("composition", &v["links"])?;
+                let links = raw
+                    .iter()
+                    .map(|l| crate::composition::parse_link(l).map_err(|e| bad("composition", e)))
+                    .collect::<Result<Vec<_>>>()?;
+                let c = crate::composition::Composition::open(&ids, &links)
+                    .map_err(|e| bad("composition", e))?;
+                Some(c)
+            }
+        });
+    }
+    if let Some(v) = obj.get("plan") {
+        p.plan = Some(match v {
+            Value::Null => None,
+            v @ Value::Object(_) => Some(crate::search_plan::canonical(v)),
+            other => return Err(bad("plan", format!("a plan object or null, not {other}"))),
+        });
+    }
+    if let Some(v) = obj.get("composition_view") {
+        let cv: crate::session::CompositionView = typed("composition_view", v)?;
+        if !super::view::COMPOSITION_VIEWS.contains(&cv.view.as_str()) {
+            return Err(bad(
+                "composition_view",
+                format!("no composition view {:?}", cv.view),
+            ));
+        }
+        if !["orders", "connect4"].contains(&cv.example.as_str()) {
+            return Err(bad(
+                "composition_view",
+                format!("no example {:?}", cv.example),
+            ));
+        }
+        p.composition_view = Some(cv);
     }
     if let Some(v) = obj.get("artifacts") {
         let (raw, next) = parse_items("artifacts", v, 'a', MAX_ARTIFACTS)?;

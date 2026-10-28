@@ -64,6 +64,9 @@ const KEY_PATH: &str = "pflow-native/path";
 const KEY_SETTINGS: &str = "pflow-native/settings";
 const KEY_MODELS: &str = "pflow-native/models";
 const KEY_SYSTEMS: &str = "pflow-native/systems";
+/// The open composition, search plan and which composition view is up
+/// (`session.dump_state` parts `composition`, `plan`, `composition_view`).
+const KEY_COMPOSITION: &str = "pflow-native/composition";
 
 pub struct App {
     pub sess: Session,
@@ -162,6 +165,12 @@ impl App {
             .map(|t| serde_json::from_str::<Value>(&t))
         {
             app.run("system.restore_state", json!({ "state": st }));
+        }
+        if let Some(Ok(st)) = restore
+            .and_then(|s| s.get_string(KEY_COMPOSITION))
+            .map(|t| serde_json::from_str::<Value>(&t))
+        {
+            app.run("session.restore_state", json!({ "state": st }));
         }
         let autosaved = restore.and_then(|s| s.get_string(KEY_DOC));
         match (&opts.open, autosaved) {
@@ -919,6 +928,12 @@ impl eframe::App for App {
         storage.set_string(KEY_MODELS, Value::Object(models).to_string());
         if let Ok(st) = self.sess.execute("system.dump_state", Value::Null) {
             storage.set_string(KEY_SYSTEMS, st.to_string());
+        }
+        if let Ok(st) = self.sess.execute(
+            "session.dump_state",
+            json!({"parts": ["composition", "plan", "composition_view"]}),
+        ) {
+            storage.set_string(KEY_COMPOSITION, st.to_string());
         }
         storage.set_string(
             KEY_SETTINGS,
