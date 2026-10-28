@@ -3,10 +3,10 @@
 
 use serde_json::{json, Value};
 
-use crate::registry::{always, CommandSpec};
+use crate::registry::{always, opt, s, ArgType::*, CommandSpec};
 use crate::session::{Session, Step};
 use crate::string_diagram;
-use crate::Result;
+use crate::{Error, Result};
 
 pub const SET: &[CommandSpec] = &[CommandSpec {
     id: "view.string_diagram",
@@ -20,7 +20,57 @@ pub const SET: &[CommandSpec] = &[CommandSpec {
     enabled: always,
     run: string_diagram_cmd,
     journal: true,
+},
+CommandSpec {
+    id: "diagram.transition_layout",
+    label: "Transition-level Layout",
+    help: "The string diagram's layout, exactly as pflow.xyz's diagram-viewer.js computes it (translatePetriNet): \
+           boxes with their input and output ports' positions, wires with their ends (back and crossing flags), \
+           boundary places, back edges and the size. `source`: `flat` (the open composition's `bundle.flatten`, \
+           the default) or `connect4` (the Connect-4 net the plan searches). `wires: false` leaves the wire list \
+           out (the counts stay). A query: nothing is stored.",
+    menu: "",
+    shortcut: None,
+    args: &[
+        opt("source", Str, "flat (default) or connect4"),
+        opt("wires", Bool, "include the wire list (default true)"),
+    ],
+    enabled: always,
+    run: transition_layout,
+    journal: false,
 }];
+
+/// `diagram.transition_layout`: the layout of the flat orders net or the
+/// Connect-4 net.
+fn transition_layout(sess: &mut Session, a: &Value) -> Result<Value> {
+    let src = s(a, "source").unwrap_or("flat");
+    let doc = match src {
+        "flat" => {
+            let c = sess
+                .composition
+                .as_ref()
+                .ok_or_else(|| Error::BadArgs("no composition is open (bundle.open)".into()))?;
+            let flat = crate::composition::flatten_json(&c.bundle);
+            if flat["ok"] != true {
+                return Err(Error::BadArgs(format!(
+                    "the composition does not flatten: {}",
+                    flat["error"].as_str().unwrap_or("")
+                )));
+            }
+            string_diagram::flat_document(&flat)
+        }
+        "connect4" => crate::Document::from_json(crate::search_plan::CONNECT4_JSON.as_bytes())?,
+        other => {
+            return Err(Error::BadArgs(format!(
+                "source is \"flat\" or \"connect4\", not {other:?}"
+            )))
+        }
+    };
+    let d = string_diagram::translate(&doc);
+    let mut out = d.to_json(crate::registry::b(a, "wires").unwrap_or(true));
+    out["source"] = json!(src);
+    Ok(out)
+}
 
 fn string_diagram_cmd(sess: &mut Session, a: &Value) -> Result<Value> {
     let d = string_diagram::translate(&sess.doc);

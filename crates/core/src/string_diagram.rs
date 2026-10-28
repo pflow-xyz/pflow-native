@@ -97,6 +97,10 @@ pub struct Wire {
     pub inhibit: bool,
     /// The producer's arc weight (first color).
     pub weight: Option<f64>,
+    /// `isCrossing` (dv:341): this and another forward wire swap their
+    /// x order between their ends. `generateSVG` never reads it; the
+    /// Connect-4 view's header counts it.
+    pub crossing: bool,
 }
 
 /// `translatePetriNet`'s result (dv:407).
@@ -434,13 +438,29 @@ pub fn translate(doc: &Document) -> Diagram {
                         back: dag.back.contains(&(prod, cons)),
                         inhibit: cons_arc.inhibit,
                         weight: prod_arc.weight.first().copied(),
+                        crossing: false,
                     });
                 }
             }
         }
     }
-    // dv:341 also flags crossing wires, but generateSVG never reads the
-    // flag, so it is not computed here.
+    // Crossings (dv:341): two forward wires cross when their x order swaps.
+    for i in 0..wires.len() {
+        if wires[i].back {
+            continue;
+        }
+        for j in i + 1..wires.len() {
+            if wires[j].back {
+                continue;
+            }
+            let (a, b) = (&wires[i], &wires[j]);
+            if (a.from.0 < b.from.0 && a.to.0 > b.to.0) || (a.from.0 > b.from.0 && a.to.0 < b.to.0)
+            {
+                wires[i].crossing = true;
+                wires[j].crossing = true;
+            }
+        }
+    }
 
     // findBoundaries (dv:360).
     let mut boundary_inputs = vec![];
@@ -495,6 +515,195 @@ pub fn port_x(b: &DiagramBox, index: usize, count: usize) -> f64 {
     let total_span = (count as f64 - 1.0) * PORT_SPACING;
     let start_x = b.x + (b.width - total_span) / 2.0;
     start_x + index as f64 * PORT_SPACING
+}
+
+/// A cubic Bézier as its four control points.
+pub type Cubic = [(f64, f64); 4];
+
+impl Wire {
+    /// A forward wire's curve (dv:473): vertical tangents at both ends, the
+    /// control points at the mid height.
+    pub fn forward_curve(&self) -> Cubic {
+        let ((fx, fy), (tx, ty)) = (self.from, self.to);
+        let mid_y = (fy + ty) / 2.0;
+        [(fx, fy), (fx, mid_y), (tx, mid_y), (tx, ty)]
+    }
+
+    /// A back edge's two curves round the right side (dv:491): out to
+    /// `svg_width - PADDING / 2` and back in (the second carries the
+    /// arrowhead), and the label's anchor `(x, y)` at the turn.
+    pub fn back_curves(&self, svg_width: f64) -> (Cubic, Cubic, (f64, f64)) {
+        let ((fx, fy), (tx, ty)) = (self.from, self.to);
+        let right_x = svg_width - PADDING / 2.0;
+        let (mid_y1, mid_y2) = (fy + 20.0, ty - 20.0);
+        let mid = (fy + ty) / 2.0;
+        (
+            [
+                (fx, fy),
+                (fx + 30.0, mid_y1),
+                (right_x, mid_y1),
+                (right_x, mid),
+            ],
+            [
+                (right_x, mid),
+                (right_x, mid_y2),
+                (tx + 30.0, mid_y2),
+                (tx, ty),
+            ],
+            (right_x - 4.0, mid - 3.0),
+        )
+    }
+}
+
+/// A boundary wire: a place nobody produces enters from the top (dv:446),
+/// one nobody consumes leaves at the bottom (dv:529). One per port that
+/// carries it, in `generateSVG`'s order.
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Stub {
+    pub wire: String,
+    /// True: enters a box's top edge; false: leaves a box's bottom edge.
+    pub input: bool,
+    pub inhibit: bool,
+    pub x: f64,
+    /// The free end and the box end (`y0` above `y1` for an input stub,
+    /// `y1` is the port for both).
+    pub y_free: f64,
+    pub y_port: f64,
+}
+
+impl Diagram {
+    /// The size `generateSVG` draws at (dv:427).
+    pub fn svg_size(&self) -> (f64, f64) {
+        (self.width.max(200.0), self.height.max(100.0))
+    }
+
+    /// Every boundary wire stub (dv:442, 529).
+    pub fn stubs(&self) -> Vec<Stub> {
+        let mut out = vec![];
+        for pid in &self.boundary_inputs {
+            for b in &self.boxes {
+                for (i, p) in b.inputs.iter().enumerate().filter(|(_, p)| &p.wire == pid) {
+                    let y = b.y;
+                    out.push(Stub {
+                        wire: pid.clone(),
+                        input: true,
+                        inhibit: p.inhibit,
+                        x: port_x(b, i, b.inputs.len()),
+                        y_free: (y - LAYER_GAP / 2.0).max(0.0),
+                        y_port: y,
+                    });
+                }
+            }
+        }
+        for pid in &self.boundary_outputs {
+            for b in &self.boxes {
+                for (i, _) in b.outputs.iter().enumerate().filter(|(_, p)| &p.wire == pid) {
+                    let y = b.y + BOX_HEIGHT;
+                    out.push(Stub {
+                        wire: pid.clone(),
+                        input: false,
+                        inhibit: false,
+                        x: port_x(b, i, b.outputs.len()),
+                        y_free: y + LAYER_GAP / 2.0,
+                        y_port: y,
+                    });
+                }
+            }
+        }
+        out
+    }
+
+    /// The JSON `diagram.transition_layout` returns: boxes with their
+    /// ports' positions, wires with their ends, the boundaries and the
+    /// back edges, at diagram-viewer.js's own coordinates.
+    pub fn to_json(&self, with_wires: bool) -> serde_json::Value {
+        use serde_json::json;
+        let ports = |b: &DiagramBox, list: &[Port], y: f64| -> Vec<serde_json::Value> {
+            list.iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    json!({"wire": p.wire, "weight": p.weight, "inhibit": p.inhibit,
+                           "x": port_x(b, i, list.len()), "y": y})
+                })
+                .collect()
+        };
+        let boxes: Vec<_> = self
+            .boxes
+            .iter()
+            .map(|b| {
+                json!({"id": b.id, "layer": b.layer, "pos_in_layer": b.pos_in_layer,
+                       "x": b.x, "y": b.y, "width": b.width, "height": BOX_HEIGHT,
+                       "inputs": ports(b, &b.inputs, b.y),
+                       "outputs": ports(b, &b.outputs, b.y + BOX_HEIGHT)})
+            })
+            .collect();
+        let wires: Vec<_> = if with_wires {
+            self.wires
+                .iter()
+                .map(|w| {
+                    json!({"wire": w.wire, "from": [w.from.0, w.from.1], "to": [w.to.0, w.to.1],
+                           "back": w.back, "inhibit": w.inhibit, "crossing": w.crossing,
+                           "weight": w.weight})
+                })
+                .collect()
+        } else {
+            vec![]
+        };
+        json!({
+            "width": self.width, "height": self.height,
+            "boxes": boxes,
+            "wires": wires,
+            "wire_count": self.wires.len(),
+            "back_wire_count": self.wires.iter().filter(|w| w.back).count(),
+            "crossing_wire_count": self.wires.iter().filter(|w| w.crossing).count(),
+            "boundary_inputs": self.boundary_inputs,
+            "boundary_outputs": self.boundary_outputs,
+            "back_edges": self.back_edges.iter().map(|(a, b)| json!([a, b])).collect::<Vec<_>>(),
+        })
+    }
+}
+
+/// The net diagram-viewer.js is handed for a flat net: what pflow-views-
+/// prototype's `dvModel` builds from `bundle.flatten`'s JSON. Read arcs are
+/// left out (diagram-viewer.js knows only input and output arcs, dv:20),
+/// an arc weighs `a.weight || 1`, an inhibitor arc is an inhibitor.
+pub fn flat_document(flat: &serde_json::Value) -> Document {
+    use crate::doc::{Arc, Place, Transition};
+    let list = |k: &str| flat[k].as_array().cloned().unwrap_or_default();
+    let id = |v: &serde_json::Value| v["id"].as_str().unwrap_or("").to_string();
+    let place = |v: &serde_json::Value| Place {
+        id: id(v),
+        label: None,
+        initial: vec![],
+        capacity: vec![],
+        x: 0.0,
+        y: 0.0,
+        extra: Default::default(),
+    };
+    let transition = |v: &serde_json::Value| Transition {
+        id: id(v),
+        label: None,
+        role: None,
+        x: 0.0,
+        y: 0.0,
+        extra: Default::default(),
+    };
+    Document {
+        places: list("places").iter().map(place).collect(),
+        transitions: list("transitions").iter().map(transition).collect(),
+        arcs: list("arcs")
+            .iter()
+            .filter(|a| a["type"].as_str() != Some("read"))
+            .map(|a| Arc {
+                source: a["from"].as_str().unwrap_or("").to_string(),
+                target: a["to"].as_str().unwrap_or("").to_string(),
+                weight: vec![a["weight"].as_f64().filter(|w| *w != 0.0).unwrap_or(1.0)],
+                inhibit: a["type"].as_str() == Some("inhibitor"),
+                extra: Default::default(),
+            })
+            .collect(),
+        ..Default::default()
+    }
 }
 
 /// `generateSVG` (dv:419) as a [`ArtifactData::Drawing`]: the same

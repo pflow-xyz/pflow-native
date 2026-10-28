@@ -1,0 +1,9 @@
+{"token":[],
+ "places":{"b":{"initial":[1]},"10":{},"2":{},"a":{},"z":{},"q":{}},
+ "transitions":{"t":{},"u":{},"v":{},"7":{}},
+ "arcs":[{"source":"b","target":"t"},{"source":"t","target":"10","weight":[3]},
+         {"source":"10","target":"u"},{"source":"u","target":"b"},
+         {"source":"a","target":"v","inhibitTransition":true},{"source":"v","target":"z"},
+         {"source":"z","target":"v"},{"source":"u","target":"a"},
+         {"source":"2","target":"7","inhibitTransition":true},{"source":"7","target":"q"},
+         {"source":"q","target":"t","inhibitTransition":true},{"source":"b","target":"t"}]}
