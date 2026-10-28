@@ -76,7 +76,7 @@ fn source(id: &str, a: &Value) -> Step {
 }
 
 /// The resolver for `cid` subnets: a net in the local store.
-fn from_store(cid: &str) -> Option<Value> {
+pub fn from_store(cid: &str) -> Option<Value> {
     let v = store::open().get_model(cid).ok()?;
     (store::kind_of(&v) == store::DocKind::Net).then_some(v)
 }

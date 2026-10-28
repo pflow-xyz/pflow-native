@@ -736,9 +736,19 @@ pub struct Loaded {
 pub fn load(doc: &Value, resolve: PartResolver) -> Result<Loaded> {
     let ty = doc.get("@type").and_then(Value::as_str);
     if ty == Some(TYPE_COMPOSITION) {
+        let mut composition = Composition::from_composition_document(doc)?;
+        // A document that is a library example gets the library's content
+        // back: the content records the CID it was written against.
+        if let Some(lib) = crate::cid::seal(doc)
+            .ok()
+            .and_then(|cid| content::library_for_cid(&cid))
+        {
+            composition.doc.content = Some(lib.content.clone());
+            composition.doc.content_source = ContentSource::Library(lib.id.to_string());
+        }
         Ok(Loaded {
             form: Form::Composition,
-            composition: Composition::from_composition_document(doc)?,
+            composition,
         })
     } else {
         Ok(Loaded {
@@ -746,6 +756,54 @@ pub fn load(doc: &Value, resolve: PartResolver) -> Result<Loaded> {
             composition: Composition::from_bundle_document(doc, resolve)?,
         })
     }
+}
+
+/// The composition as `session.dump_state` keeps it: the document (either
+/// form, so a loaded Bundle or a non-catalog composition survives), plus the
+/// content when it is not the library's (the library's is a name).
+pub fn dump_part(c: &Composition) -> Result<Value> {
+    let exp = c.export(None)?;
+    let mut v = json!({"form": exp.form.name(), "document": exp.document});
+    match (&c.doc.content_source, &c.doc.content) {
+        (ContentSource::Library(id), _) => v["library"] = json!(id),
+        (ContentSource::Loaded, Some(k)) => v["content"] = k.to_document(),
+        _ => {}
+    }
+    Ok(v)
+}
+
+/// Reads [`dump_part`]'s shape back (and the older `{instances, links}` of
+/// catalog ids). Content that no longer resolves is attached dormant.
+pub fn restore_part(v: &Value, resolve: PartResolver) -> Result<Composition> {
+    if v.get("instances").is_some() {
+        let ids: Vec<String> = serde_json::from_value(v["instances"].clone())
+            .map_err(|e| Error::BadArgs(format!("composition instances: {e}")))?;
+        let links = v["links"]
+            .as_array()
+            .into_iter()
+            .flatten()
+            .map(|l| parse_link_value(l))
+            .collect::<Result<Vec<_>>>()?;
+        return Composition::open(&ids, &links).map_err(Error::Invalid);
+    }
+    let doc = v
+        .get("document")
+        .ok_or_else(|| Error::BadArgs("composition: `document` is required".into()))?;
+    let mut c = load(doc, resolve)?.composition;
+    if let Some(id) = v.get("library").and_then(Value::as_str) {
+        let lib = content::library_entry(id)
+            .ok_or_else(|| Error::NotFound(format!("no library content {id:?}")))?;
+        c.doc.content = Some(lib.content.clone());
+        c.doc.content_source = ContentSource::Library(id.to_string());
+    } else if let Some(k) = v.get("content").filter(|k| !k.is_null()) {
+        c.doc.content = Some(ModelContent::parse(k)?);
+        c.doc.content_source = ContentSource::Loaded;
+    }
+    Ok(c)
+}
+
+fn parse_link_value(l: &Value) -> Result<Link> {
+    super::parse_link(l).map_err(|e| Error::BadArgs(format!("composition link: {e}")))
 }
 
 /// What `bundle.export` writes.

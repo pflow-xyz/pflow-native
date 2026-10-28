@@ -507,6 +507,15 @@ pub fn library_entry(id: &str) -> Option<&'static Library> {
     library().iter().find(|l| l.id == id)
 }
 
+/// The library content written against the composition document `cid`
+/// (its `composition` field): what a document that IS a library example
+/// gets back when it is loaded.
+pub fn library_for_cid(cid: &str) -> Option<&'static Library> {
+    library()
+        .iter()
+        .find(|l| l.content.composition.as_deref() == Some(cid))
+}
+
 /// The library content a set of instance ids attaches (those with anchors
 /// that the instances include).
 pub fn library_for_instances(instances: &[String]) -> Option<&'static Library> {
