@@ -1,0 +1,1972 @@
+{
+ "@context": "https://pflow.xyz/schema",
+ "@type": "ModelContent",
+ "name": "connect4",
+ "subject": {"kind": "plan", "name": "connect4"},
+ "entries": [
+  {
+   "id": "c4-convention-cospan", "kind": "convention-example", "title": "Cospans: a plan is not an open net",
+   "text": "Does not apply: a search plan is not an open net. The Connect-4 game net is drawn as the closed net ∅ → N ← ∅ (no ports, so both feet are empty), as a miniature at the fixture's own coordinates, with the plan beside it as a strip of slots. The plan runs over N (SearchPlan::solver takes the game); it does not compose with it. The plan's composition is the operad view.",
+   "about": ["model:"],
+   "views": ["cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1292, "to": 1292, "note": "the connect4 example text of the convention panel"},
+     {"bib": "baez-master"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 240, "to": 252, "note": "SearchPlan::solver(&self, g: &Game): the plan builds a solver over a game; it is not glued to the net"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"}
+   ]
+  },
+  {
+   "id": "c4-convention-spiders", "kind": "convention-example", "title": "Spiders: shared tables as junctions",
+   "text": "A plan has no event links, so nothing fuses and no spider is drawn. The nearest honest picture: the two pieces of shared state the search keeps, the transposition table and the history table, as junctions (hollow dots, not spiders) with a leg to each part of the plan that reads, writes or caps them. A piece's leg is drawn only when that piece is in the plan.",
+   "about": ["model:"],
+   "views": ["spiders"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/spiders.js", "from": 244, "to": 244, "note": "the connect4 example text of the convention panel"},
+     {"bib": "coecke-duncan"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 601, "to": 611, "note": "tt.get: bounds lo/hi and the remembered best move (first = e.best)"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 514, "to": 519, "note": "store: remember what a search found"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 52, "to": 58, "note": "TtBest::key: t == cx.first"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 68, "to": 71, "note": "History::key reads cx.history[t]"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 73, "to": 75, "note": "History::cutoff: history[t] += 1, the only writer"}
+   ]
+  },
+  {
+   "id": "c4-convention-operad", "kind": "convention-example", "title": "Operad: the plan as one composite",
+   "text": "The Connect-4 exact plan is one composite, Solver = budget ∘ null_window ∘ core[order, filters, heuristics, memo] (ROADMAP Phase 6). Each driver is a one-hole box around the search it wraps, nested in the fixed order the code runs them; the core's holes are the SearchPlan fields, filled by the chain (its pieces as sub-boxes) and the memo, plus bounds and engine, which the design has and plan.rs does not: dashed, never fillable.",
+   "about": ["model:"],
+   "views": ["operad"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 1170, "to": 1170, "note": "the connect4 example text of the convention panel"},
+     {"bib": "spivak-wd"},
+     {"bib": "fong-spivak"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "Solver = drivers ∘ core[order chain, filters, bounds, memo]; core is Position → Value⊥"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 479, "to": 480, "note": "Slice B: drivers as nested boxes budget(null_window(core))"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 307, "to": 307, "note": "plan.rs has no Bound kind and no engine choice"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 194, "note": "drivers(): the list is read into the two flags"}
+   ],
+   "check": {
+      "claim": "the plan has no bounds and no engine field, and the default plan is accepted",
+      "steps": [
+        {"command": "plan.state", "args": {}, "expect": [
+          {"path": "/check/ok", "op": "==", "value": true},
+          {"path": "/plan/drivers/0", "op": "==", "value": "null_window"},
+          {"path": "/plan/drivers/1/budget/nodes", "op": "==", "value": 1000000}]},
+        {"command": "plan.check", "args": {"plan": {"bounds": []}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "parse"},
+          {"path": "/error", "op": "contains", "value": "unknown field `bounds`"}]},
+        {"command": "plan.check", "args": {"plan": {"engine": "bit"}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "parse"},
+          {"path": "/error", "op": "contains", "value": "unknown field `engine`"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-convention-string", "kind": "convention-example", "title": "String diagram: the plan and the net",
+   "text": "Pattern level (ROADMAP Slice B): the alpha-beta core Position → Value⊥, the order chain as MoveList → MoveList boxes on its parameter wire, the memo as a side wire (Table), and the drivers as nested frames budget ⊃ null_window. Back edges, each read from game.rs: the null-window loop, the recursion, the transposition-table feedback and cutoff → history. Transition level: the Connect-4 net through diagram-viewer.js, which is too large to read on one stage, so it is shown as a scaled overview with a 1:1 lens.",
+   "about": ["model:"],
+   "views": ["string"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/string.js", "from": 176, "to": 176, "note": "the connect4 example text of the convention panel"},
+     {"bib": "selinger"},
+     {"bib": "joyal-street"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 476, "to": 482, "note": "Slice B: diagram-viewer.js conventions"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 556, "to": 588, "note": "Solver::solve: yes/no searches, one per gap between adjacent rewards"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 590, "to": 693, "note": "Solver::search: fail-soft alpha-beta with the transposition table"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 666, "to": 666, "note": "chain.cutoff: a cutoff is reported back to the pieces"},
+     {"repo": "pflow-xyz", "rev": "954b75c", "path": "public/diagram-viewer.js", "from": 1, "to": 5, "note": "transitions → boxes (morphisms), places → wire types (objects), arcs → typed ports and wires"}
+   ]
+  },
+  {
+   "id": "c4-convention-flat", "kind": "convention-example", "title": "Flat net: the net the plan searches",
+   "text": "A search plan is not a net, so there is nothing to flatten. Drawn instead is the net the plan searches: the pflow-rs Connect-4 fixture (131 places, 222 transitions, 1,924 arcs) at its own coordinates. Click a green drop to play; the automatic win detectors then settle, as pflow-rs's Game does.",
+   "about": ["model:"],
+   "views": ["flat"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1467, "to": 1467, "note": "the connect4 example text of the convention panel"},
+     {"bib": "meseguer-montanari"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 23, "to": 30, "note": "auto = name contains \"win\"; sign +1 for x_, -1 otherwise; reward win_x +1, win_o -1"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 221, "to": 232, "note": "settle: fire automatic transitions, lowest index first, until none is enabled"}
+   ],
+   "check": {
+      "claim": "the Connect-4 net has 131 places, 222 transitions and 1,924 arcs",
+      "steps": [
+        {"command": "plan.net", "args": {}, "expect": [
+          {"path": "/id", "op": "==", "value": "connect-4"},
+          {"path": "/places", "op": "==", "value": 131},
+          {"path": "/transitions", "op": "==", "value": 222},
+          {"path": "/arcs", "op": "==", "value": 1924}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-convention-boundaries", "kind": "convention-example", "title": "Boundaries: a closed net, N : 0 → 0",
+   "text": "Does not apply. A search plan has no transition synchronisation, and the Connect-4 net is closed (no ports): as a net with boundaries it is N : 0 → 0 (Def. 4.1 with m = n = 0; Remark 3.6 for C/E nets). It is drawn as that closed box with the fixture's counts, with pointers to the Operad and Lens views.",
+   "about": ["model:"],
+   "views": ["boundaries"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/boundaries.js", "from": 836, "to": 836, "note": "the connect4 example text of the convention panel"},
+     {"bib": "bruni-et-al"},
+     {"bib": "sobocinski-2010"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 1, "to": 1, "note": "the Connect-4 net (byte-identical to data/connect-4.json): no ports"}
+   ]
+  },
+  {
+   "id": "c4-convention-lens", "kind": "convention-example", "title": "Lenses: drivers around the search core",
+   "text": "For plan:connect4-exact, budget ∘ null_window ∘ core, as game.rs nests them (the drawing follows the current plan as pieces are dropped or removed): each driver is a frame whose left band carries its two lanes; inside, the alpha-beta core turns a position into children, ranks them with the order chain (small lenses on the move-list lane) and turns child values back into a max/min with cutoffs. The memo is a lens inside the core: its get feeds the forward pass, its store is fed by the backward pass. Dashed loops are state a backward pass leaves for a later forward pass (the table for tt_best, history for history). The recursion and the leaf, where values come from, close the right end.",
+   "about": ["model:"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 248, "to": 248, "note": "the connect4 example text of the convention panel"},
+     {"bib": "ghani-hedges"},
+     {"bib": "cybercat"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 6, "to": 11, "note": "module doc example"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 554, "note": "Solver::value: nodes reset to 0 (541, 548), then solve"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 590, "to": 693, "note": "Solver::search: fail-soft alpha-beta"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "the core as a box Position → Value⊥, drivers as nested boxes around it"}
+   ],
+   "check": {
+      "claim": "the default plan is budget over null_window over the core: both drivers named, the plan accepted",
+      "steps": [
+        {"command": "plan.state", "args": {}, "expect": [
+          {"path": "/check/ok", "op": "==", "value": true},
+          {"path": "/plan/drivers/0", "op": "==", "value": "null_window"},
+          {"path": "/plan/drivers/1/budget/nodes", "op": "==", "value": 1000000},
+          {"path": "/plan/order", "op": "==", "value": ["tt_best", "immediate_win", "centrality", "history"]},
+          {"path": "/plan/memo/entries", "op": "==", "value": 500000}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-convention-incidence", "kind": "convention-example", "title": "Incidence: the Connect-4 net's matrix",
+   "text": "A SearchPlan has no incidence matrix: it is a composite of search pieces, not a net. Drawn instead: the 131 × 222 incidence matrix of the Connect-4 net the plan searches (data/connect-4.json), with places grouped by prefix (open_, x_, o_ cells; other) and transitions by prefix (x_play_ / o_play_ drops, x_win_ / o_win_ detectors). The win detectors take a cell and put it back (pre = post = 1), which C records as 0; grey dots mark those pairs.",
+   "about": ["model:"],
+   "views": ["incidence"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/incidence.js", "from": 140, "to": 140, "note": "the connect4 example text of the convention panel"},
+     {"bib": "baez-master"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-reachability/src/invariants.rs", "from": 142, "to": 184, "note": "incidence_matrix: output − input; read and inhibitor arcs excluded"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 1, "to": 1, "note": "the Connect-4 net; byte-identical to data/connect-4.json"}
+   ],
+   "check": {
+      "claim": "the incidence matrix is places × transitions = 131 × 222",
+      "steps": [
+        {"command": "plan.net", "args": {}, "expect": [
+          {"path": "/places", "op": "==", "value": 131},
+          {"path": "/transitions", "op": "==", "value": 222}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-convention-process", "kind": "convention-example", "title": "Processes: one four-drop opening",
+   "text": "One play is one process: a fixed four-drop opening fired on the fixture net. The search plan computes a value over all plays; no search is run here and the plan is not drawn.",
+   "about": ["model:"],
+   "views": ["process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1407, "to": 1407, "note": "the connect4 example text of the convention panel"},
+     {"bib": "meseguer-montanari"},
+     {"bib": "baez-gms"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 4, "to": 11, "note": "automatic transitions fire as soon as enabled; every other transition is a move"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 221, "to": 232, "note": "settle: automatic transitions, lowest index first, until none is enabled"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 17, "to": 35, "note": "game(): auto = name contains \"win\", x_ moves are +1, reward win_x - win_o, settled start"}
+   ],
+   "check": {
+      "claim": "the fixed four-drop opening fires: four steps, each enabled",
+      "steps": [
+        {"command": "plan.opening", "args": {}, "expect": [
+          {"path": "/ok", "op": "==", "value": true},
+          {"path": "/fired", "op": "==", "value": 4},
+          {"path": "/steps/0/transition", "op": "==", "value": "x_play_3_0"},
+          {"path": "/steps/0/enabled", "op": "==", "value": true},
+          {"path": "/steps/1/transition", "op": "==", "value": "o_play_3_1"},
+          {"path": "/steps/1/enabled", "op": "==", "value": true},
+          {"path": "/steps/2/transition", "op": "==", "value": "x_play_2_0"},
+          {"path": "/steps/2/enabled", "op": "==", "value": true},
+          {"path": "/steps/3/transition", "op": "==", "value": "o_play_4_0"},
+          {"path": "/steps/3/enabled", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-convention-laws", "kind": "convention-example", "title": "Laws: order chains, filters, drivers",
+   "text": "orderer-monoid (order chains under chaining: a monoid), filter-meet (sound filters under intersection; must_win and non_losing are built at the pinned pflow-rs, the prototype called this PROPOSED) and driver-wrap (drivers as Search → Search boxes after the core). The live card draws the current plan's order chain as the term being bracketed (or its drivers as the solver they denote), laid out with hypergraph.js, and says which Chyp rewrite covers it. Drop palette pieces on that drawing.",
+   "about": ["model:"],
+   "views": ["laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/laws.js", "from": 1314, "to": 1314, "note": "the connect4 example text of the convention panel"},
+     {"bib": "chyp"},
+     {"bib": "fong-spivak"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 250, "to": 265, "note": "key(): one slot per piece in list order; before(): arrays compared lexicographically"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 196, "to": 210, "note": "chain(): absent \"order\" is Chain::default(); a repeated piece is refused"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 194, "note": "drivers(): the list is read into two flags (driver-wrap.chyp)"}
+   ]
+  },
+  {
+   "id": "c4-finding-max-pieces", "kind": "finding", "title": "MAX_PIECES = 8 cannot be reached from a plan",
+   "text": "MAX_PIECES = 8 cannot be reached from a plan: only five order names exist and chain() refuses repeats before Chain::new counts (plan.rs:204-206, order.rs:117-123).",
+   "about": ["slot:order"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "README.md", "from": 127, "to": 128},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 41, "to": 43},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/RESULTS.md", "from": 640, "to": 645},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 204, "to": 206, "note": "chain(): a name listed twice is refused"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 117, "to": 123, "note": "Piece::NAMES: the five order pieces"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 220, "to": 230, "note": "Chain::new: at most 8 pieces"}
+   ],
+   "check": {
+      "claim": "five distinct order names are accepted; nine names (the five and four repeats) are refused for the repeat, not for the count; a sixth name does not exist",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"order": ["tt_best", "immediate_win", "history", "centrality", "threats"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["tt_best", "immediate_win", "history", "centrality", "threats", "tt_best", "immediate_win", "history", "centrality"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "==", "value": "search plan: order piece \"tt_best\" is listed twice"}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["tt_best", "immediate_win", "history", "centrality", "threats", "lmr"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "unknown order piece \"lmr\" (known: [\"tt_best\", \"immediate_win\", \"history\", \"centrality\", \"threats\"], ["}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-finding-driver-order", "kind": "finding", "title": "The JSON order of drivers does not change the nesting",
+   "text": "The JSON order of drivers does not change the nesting (plan.rs reads them into flags; game.rs counts nodes across the whole null-window run).",
+   "about": ["slot:drivers", "piece:null_window", "piece:budget"],
+   "views": ["operad", "string", "lens", "laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "README.md", "from": 129, "to": 132},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 194, "note": "drivers(): the list is read into flags"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 597, "note": "value, solve, search: one node count for the whole null-window run"},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/driver-wrap.chyp", "from": 96, "to": 96, "note": "Chyp proves both JSON orders denote the same solver (rules assumed from plan.rs)"}
+   ],
+   "check": {
+      "claim": "a plan naming null_window and a budget is accepted in either JSON order, and so is mtd_f with a budget",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"drivers": ["null_window", {"budget": {"nodes": 1000000}}]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": [{"budget": {"nodes": 1000000}}, "null_window"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["mtd_f", {"budget": {"nodes": 1000000}}]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": [{"budget": {"nodes": 1000000}}, "mtd_f"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-finding-empty-drivers", "kind": "finding", "title": "\"drivers\": [] is not an absent drivers",
+   "text": "\"drivers\": [] turns null_window off while an absent drivers keeps it on.",
+   "about": ["slot:drivers", "piece:null_window"],
+   "views": ["operad", "string", "spiders", "lens", "cospan", "laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "README.md", "from": 129, "to": 132},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/RESULTS.md", "from": 650, "to": 655},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 17, "to": 19, "note": "null_window is on by default, and off when drivers is given without it"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 147, "to": 152, "note": "drivers absent: null_window on, no budget"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 564, "to": 565, "note": "without null_window: one search over the whole reward range"},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/driver-wrap.chyp", "from": 103, "to": 103, "note": "Chyp proves leaving \"drivers\" out equals [\"null_window\"]"},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/driver-wrap.chyp", "from": 120, "to": 120, "note": "Chyp: \"drivers\": [] is not the absent key"}
+   ],
+   "check": {
+      "claim": "a drivers list that does not name null_window leaves it off: mtd_f stands alone in such a list, and is refused beside null_window",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"drivers": []}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["mtd_f"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["null_window", "mtd_f"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "drivers \"null_window\" and \"mtd_f\" both find the value by yes/no searches: name one"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-finding-empty-order", "kind": "finding", "title": "\"order\": [] is not an absent order",
+   "text": "\"order\": [] is the empty chain while an absent order is the default chain.",
+   "about": ["slot:order"],
+   "views": ["operad", "string", "lens", "laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "README.md", "from": 129, "to": 132},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/RESULTS.md", "from": 650, "to": 655},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 196, "to": 210, "note": "chain(): absent means Chain::default; a name listed twice is refused"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 197, "to": 199, "note": "the empty chain: every key ties, moves keep the net's own order"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 205, "to": 217, "note": "Chain::default: tt_best, immediate_win, history"},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/orderer-monoid.chyp", "from": 74, "to": 74, "note": "an absent \"order\" is Chain::default(), not []"}
+   ]
+  },
+  {
+   "id": "c4-model-plan", "kind": "note", "title": "plan:connect4-exact",
+   "text": "The connect-4 exact plan: the SearchPlan example from pflow-rs crates/pflow-metamodel/src/plan.rs ({\"mode\":\"exact\",\"order\":[\"tt_best\",\"immediate_win\",\"centrality\",\"history\"],\"drivers\":[\"null_window\",{\"budget\":{\"nodes\":1000000}}],\"memo\":{\"entries\":500000}}), ROADMAP Phases 5 and 6. It is the plan.rs module-doc example, which ROADMAP Slice A names plan:connect4-exact.",
+   "about": ["model:"],
+   "views": ["operad", "cospan", "boundaries", "string", "lens", "laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "README.md", "from": 11, "to": 13},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 28, "to": 35},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 6, "to": 11, "note": "plan:connect4-exact, the module-doc example"}
+   ],
+   "check": {
+      "claim": "the open plan is the plan.rs module-doc example, and pflow-rs accepts it for Connect-4",
+      "steps": [
+        {"command": "plan.state", "args": {}, "expect": [
+          {"path": "/plan/mode", "op": "==", "value": "exact"},
+          {"path": "/plan/order", "op": "==", "value": ["tt_best", "immediate_win", "centrality", "history"]},
+          {"path": "/plan/drivers", "op": "==", "value": ["null_window", {"budget": {"nodes": 1000000}}]},
+          {"path": "/plan/memo/entries", "op": "==", "value": 500000},
+          {"path": "/check/ok", "op": "==", "value": true}]},
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/default_plan/order", "op": "==", "value": ["tt_best", "immediate_win", "centrality", "history"]},
+          {"path": "/default_plan/drivers/1/budget/nodes", "op": "==", "value": 1000000}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-model-composite", "kind": "note", "title": "Solver = drivers ∘ core[…]",
+   "text": "A whole plan is one operadic composite: Solver = drivers ∘ core[order chain, filters, bounds, memo]. Each driver is a one-hole box around the search it wraps; the core's holes are typed by piece kind, and SearchPlan::check is the typing (plan.rs:216-238).",
+   "about": ["model:"],
+   "views": ["operad"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 272, "to": 272},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 268, "to": 268},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "Solver = drivers ∘ core[order chain, filters, bounds, memo]; core is Position → Value⊥"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 401, "to": 401, "note": "operad of wiring diagrams: the best fit for a SearchPlan"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 216, "to": 238, "note": "check(): every name in its place"},
+     {"bib": "spivak-wd"},
+     {"bib": "fong-spivak"}
+   ],
+   "check": {
+      "claim": "check is the typing: a piece in a hole of another kind is refused by its kind",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"order": ["budget"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "\"budget\" is a driver, not a order piece"}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["tt_best"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "\"tt_best\" is a order piece, not a driver"}]},
+        {"command": "plan.check", "args": {"plan": {"filters": ["history"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "\"history\" is a order piece, not a filter"}]},
+        {"command": "plan.check", "args": {"plan": {"heuristics": ["must_win"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "\"must_win\" is a filter, not a heuristic"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-model-core", "kind": "note", "title": "The core: the alpha-beta search",
+   "text": "The search is fixed (alpha-beta over Game); a plan chooses what swaps in. As a box it is Position → Value⊥, and it has one typed hole per SearchPlan field. Fail-soft alpha-beta in the +1 side's view: inside the bounds every result is a bound on the true value; with the window the whole range, it is the value (game.rs:590-592). It is not a piece. It reads and writes the transposition table and lends the history table to the chain; no plan field names it, because plan.rs fixes the search and a plan picks what swaps in.",
+   "about": ["model:"],
+   "views": ["operad", "spiders", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 375, "to": 383},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/spiders.js", "from": 1080, "to": 1080},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 427, "to": 427},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 1, "to": 4, "note": "the search is fixed; a plan chooses what swaps in"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 590, "to": 693, "note": "Solver::search: fail-soft alpha-beta with the transposition table"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "the core is Position → Value⊥"}
+   ]
+  },
+  {
+   "id": "c4-wire-position", "kind": "note", "title": "Wire type Position",
+   "text": "Position: a marking of the net, what the search is asked about. Every box on the way in has the same input: it enters budget, then null_window, then the core (each boundary passes it inward).",
+   "about": ["model:"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 391, "to": 396},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "the core is Position → Value⊥"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 436, "to": 436, "note": "ns:WireType: Position, Value, Value⊥, MoveList (PROPOSED)"}
+   ]
+  },
+  {
+   "id": "c4-wire-value", "kind": "note", "title": "Wire type Value⊥",
+   "text": "Value⊥: the exact value of the position, or ⊥ (None) when the budget runs out. Every box on the way out has the same output: it leaves the core, then null_window, then budget.",
+   "about": ["model:"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 391, "to": 396},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "the core is Position → Value⊥"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 554, "note": "Solver::value: Option<f64>"}
+   ]
+  },
+  {
+   "id": "c4-caveat-value-bottom", "kind": "caveat", "title": "Value⊥ is out of reach without a budget",
+   "text": "Value⊥: Solver::value returns None past the budget (game.rs:526-528). With no budget, plan.rs passes usize::MAX (plan.rs:245), so ⊥ is out of reach in practice but stays in the type.",
+   "about": ["slot:drivers", "piece:budget"],
+   "views": ["operad", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 1181, "to": 1181},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 528, "note": "Solver::value returns None past the budget"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 245, "to": 245, "note": "d.budget.unwrap_or(usize::MAX)"}
+   ]
+  },
+  {
+   "id": "c4-model-mode", "kind": "note", "title": "Mode: exact or play",
+   "text": "\"exact\" (the default) holds every piece to returning the value. \"play\" would allow pieces that trade the value for speed.",
+   "about": ["model:"],
+   "views": ["operad", "string"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 286, "to": 286},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 36, "to": 45, "note": "Mode: Exact (default) or Play"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 229, "to": 234, "note": "exact mode refuses a piece that can change the value; play: not built in this release"}
+   ],
+   "check": {
+      "claim": "exact mode refuses a piece that can change the value (beam, static_eval); play mode parses the plan but refuses the same pieces as not built",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"mode": "exact", "filters": ["beam"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "filter \"beam\" can change the value, which exact mode does not allow"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "exact", "heuristics": ["static_eval"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "heuristic \"static_eval\" can change the value, which exact mode does not allow"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "play", "filters": ["beam"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "filter \"beam\" is not built in this release"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "play", "heuristics": ["static_eval"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "heuristic \"static_eval\" is not built in this release"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-caveat-partial-operad", "kind": "caveat", "title": "The plan is a partial operad",
+   "text": "The plan's holes are typed by piece kind, and SearchPlan::check is the typing (plan.rs:216-238). It is partial: check also refuses some fillings of the right kind (a name listed twice), so the plan is read as a partial operad, not proved to be one. Pieces have no wires of their own, so only the search's interface, Position → Value⊥ (ROADMAP:428-430), is drawn as wires; every driver has the interface of what it wraps.",
+   "about": ["model:"],
+   "views": ["operad"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 1178, "to": 1178},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 216, "to": 238, "note": "check()"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 204, "to": 206, "note": "a name listed twice is refused"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "the search's interface, Position → Value⊥"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 420, "to": 423, "note": "orderers: a partial monoid under chaining"},
+     {"bib": "fong-spivak"}
+   ],
+   "check": {
+      "claim": "a name listed twice is refused in an order chain, in drivers and in filters",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"order": ["tt_best", "tt_best"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "order piece \"tt_best\" is listed twice"}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["null_window", "null_window"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "driver \"null_window\" is listed twice"}]},
+        {"command": "plan.check", "args": {"plan": {"filters": ["must_win", "must_win"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "filter \"must_win\" is listed twice"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-caveat-driver-order-general", "kind": "caveat", "title": "Driver order matters in general, but not here",
+   "text": "The nesting order of the drivers is fixed by the code: plan.rs reads them into flags (plan.rs:134-138, 146-194) and game.rs counts nodes across the whole null-window run (game.rs:526-597). ROADMAP Phase 6 says driver order matters in general (ROADMAP:426-427); for the drivers a plan can name, it cannot be chosen.",
+   "about": ["slot:drivers"],
+   "views": ["operad"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 1179, "to": 1179},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 134, "to": 138, "note": "Drivers: two flags, not a list"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 194, "note": "drivers(): the list is read into flags"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 597, "note": "value, solve, search"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 426, "to": 427, "note": "drivers: endomorphisms around the core; order matters in general"}
+   ]
+  },
+  {
+   "id": "c4-caveat-drivers-fixed-nesting", "kind": "caveat", "title": "budget is outermost: the nesting is the code's",
+   "text": "The nesting is game.rs's, not the JSON's: drivers are read into flags (plan.rs:146-193). budget counts nodes across every yes/no search of one solve() run (nodes is reset only in value(), before each engine run: game.rs:541, 548), so it is outermost; null_window wraps the root search. The ROADMAP's \"Solver = drivers ∘ core[...]\" is a PROPOSED reading, and it types the core Position → Value⊥ (ROADMAP:428-430): here ⊥ is drawn on the budget frame and passes through the inner lanes unchanged (game.rs:578-580, 654-656).",
+   "about": ["slot:drivers", "piece:budget", "piece:null_window"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 253, "to": 253},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 193, "note": "drivers(): read into flags"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 541, "to": 548, "note": "value(): nodes = 0 at the start, and again before the retry by counts"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 578, "to": 580, "note": "a None from below is returned at once"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 654, "to": 656, "note": "a None from a child is returned at once"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 428, "to": 430, "note": "the core as a box Position → Value⊥, drivers as nested boxes around it"}
+   ]
+  },
+  {
+   "id": "c4-caveat-string-design", "kind": "caveat", "title": "The string diagram is the ROADMAP design; the code is a comparator and flags",
+   "text": "Connect-4: the core box, the chain as MoveList → MoveList boxes, the drivers as frames and the memo as a side wire are the ROADMAP design. In code the chain is one comparator over a key per piece (order.rs:249-265), and the drivers are flags (plan.rs:146-194). The nesting budget(null_window(core)) is fixed by game.rs, whatever order the JSON lists them in.",
+   "about": ["model:"],
+   "views": ["string"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/string.js", "from": 183, "to": 183},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 249, "to": 265, "note": "Chain::key and before: one comparator over a key per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 194, "note": "drivers(): the list is read into flags"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 476, "to": 482, "note": "Slice B"}
+   ]
+  },
+  {
+   "id": "c4-caveat-lens-labels", "kind": "caveat", "title": "Lane labels are paraphrases; the wire types are PROPOSED",
+   "text": "Lane labels paraphrase the cited lines. Position, Value, Value⊥ and MoveList are the ROADMAP's PROPOSED wire types; Window, Table and Cutoff are the view's labels.",
+   "about": ["model:"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 254, "to": 254},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 436, "to": 436, "note": "ns:WireType: Position, Value, Value⊥, MoveList (PROPOSED)"}
+   ]
+  },
+  {
+   "id": "c4-judgment-lens-analogy", "kind": "judgment", "title": "The lens reading is an analogy of shape",
+   "text": "Analogy of shape only. Open games characterise equilibria: a best-response condition on strategy profiles. This plan computes a value: minimax with alpha-beta under a node budget (game.rs:526-693). No equilibrium is computed or checked here, and no game-theoretic claim is made.",
+   "about": ["model:"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 251, "to": 251, "note": "honesty bullet of the lens convention panel"},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "README.md", "from": 204, "to": 210},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 693, "note": "Solver::value, solve, search"},
+     {"bib": "ghani-hedges"},
+     {"bib": "cybercat"}
+   ]
+  },
+  {
+   "id": "c4-caveat-cospan-na", "kind": "caveat", "title": "No cospan applies to a plan",
+   "text": "Connect-4: no cospan applies to the plan. The closed net and the \"runs over\" arrow are the honest nearest picture.",
+   "about": ["model:"],
+   "views": ["cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1301, "to": 1301},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 240, "to": 252, "note": "SearchPlan::solver(&self, g: &Game)"}
+   ]
+  },
+  {
+   "id": "c4-caveat-cospan-laws", "kind": "caveat", "title": "The caption's laws are the ROADMAP's reading",
+   "text": "The laws named for the plan (a partial monoid of order pieces, drivers composed around the core) are the ontology ROADMAP's reading of plan.rs, not a theorem checked here.",
+   "about": ["model:"],
+   "views": ["cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1218, "to": 1218},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 420, "to": 427, "note": "orderers: a partial monoid under chaining; drivers: endomorphisms composed around the core"}
+   ]
+  },
+  {
+   "id": "c4-note-cospan-feet", "kind": "note", "title": "∅ → N ← ∅: both feet empty",
+   "text": "The fixture declares no ports: every place is interior, so each foot is the empty set. A closed net is an open net with empty feet, ∅ → N ← ∅. Gluing along ∅ is only the disjoint union: there is nothing to identify. Nothing on its boundary can be glued: no place is exposed.",
+   "about": ["model:"],
+   "views": ["cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1145, "to": 1145},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1121, "to": 1121},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"},
+     {"bib": "baez-master"}
+   ]
+  },
+  {
+   "id": "c4-note-boundaries-closed", "kind": "note", "title": "N : 0 → 0: nothing to synchronise",
+   "text": "The Connect-4 net declares no ports, so neither boundary has a port to synchronise on. Def. 4.1 with m = n = 0: a P/T net with no ports is a net with boundaries N : 0 → 0 (Remark 3.6 says so for C/E nets, and that composing two of them is their disjoint union). Remark 3.11: a net N : 0 → 0 has no boundary, so there is no way of interacting with it. The fixture is a plain P/T net (no inhibitor arcs, no capacities), so Def. 4.1 applies as stated.",
+   "about": ["model:"],
+   "views": ["boundaries"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/boundaries.js", "from": 766, "to": 766},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/boundaries.js", "from": 61, "to": 61},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/boundaries.js", "from": 791, "to": 791},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 1, "to": 1, "note": "the Connect-4 net: no ports"},
+     {"bib": "bruni-et-al"}
+   ]
+  },
+  {
+   "id": "c4-caveat-spiders-junctions", "kind": "caveat", "title": "Junctions are shared state, not spiders",
+   "text": "Connect-4: the junctions are shared state, not spiders. A plan has no event links, so no spider law applies to it at all.",
+   "about": ["model:"],
+   "views": ["spiders"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/spiders.js", "from": 255, "to": 255},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/spiders.js", "from": 934, "to": 934},
+     {"bib": "coecke-duncan"}
+   ]
+  },
+  {
+   "id": "c4-note-process-search", "kind": "note", "title": "One play is one process; no search is run",
+   "text": "No search is run and the search plan is not drawn here. The plan (plan.rs) computes one value over all plays from a position; one play is one process. This is a fixed four-drop opening, each drop checked enabled by the firing rule.",
+   "about": ["model:"],
+   "views": ["process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1387, "to": 1387},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 240, "to": 252, "note": "SearchPlan::solver"}
+   ]
+  },
+  {
+   "id": "c4-caveat-process-board", "kind": "caveat", "title": "The board is a reading of the codomain",
+   "text": "Connect-4: the drops are read by the fixture's naming convention, as the pflow-rs tests do (x_ moves are +1, names containing \"win\" are automatic). The board is a reading of the codomain.",
+   "about": ["model:"],
+   "views": ["process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1416, "to": 1416},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 5, "to": 8, "note": "the fixtures name their parts by convention"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 17, "to": 35, "note": "game(): auto = name contains \"win\", x_ moves are +1"}
+   ]
+  },
+  {
+   "id": "c4-caveat-flat-declaration", "kind": "caveat", "title": "Sides, automatic transitions and rewards are the tests' declaration",
+   "text": "Connect-4: the sides, the automatic transitions and the rewards are what pflow-rs tests/common/mod.rs declares for this fixture; nothing else is claimed. Automatic transitions settle as Game::settle does, lowest index first, and pflow-rs's index order is the sorted transition IDs (pflow-parser model_from_json).",
+   "about": ["model:"],
+   "views": ["flat", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1475, "to": 1475},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 23, "to": 30, "note": "auto = name contains \"win\"; sign +1 for x_, -1 otherwise; reward win_x +1, win_o -1"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 221, "to": 232, "note": "settle: fire automatic transitions, lowest index first, until none is enabled"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-parser/src/lib.rs", "from": 129, "to": 131, "note": "model_from_json sorts the transition IDs, so a transition's index is its place in ID order"}
+   ]
+  },
+  {
+   "id": "c4-note-net-declaration", "kind": "note", "title": "The net: 131 places, 222 transitions, 1,924 arcs",
+   "text": "The net the plan searches is the pflow-rs fixture connect-4.json: \"Connect Four with gravity, after the sim.pflow.xyz ODE Connect-4 experiment: an open-slot chain per column (row 0 is the bottom), 84 drops, 138 catalytic win detectors that consume the opponent's turn token and game_active. A full board ends the game with no winner.\" pflow-rs reads it as a game only through tests/common/mod.rs, which declares the win transitions automatic, x_ moves for the side with sign +1, and rewards win_x +1, win_o −1. Nothing else (no goal, no strategy) is claimed here.",
+   "about": ["model:"],
+   "views": ["flat", "cospan", "incidence", "boundaries", "string"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1426, "to": 1426},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 5, "to": 8, "note": "the fixtures name their parts by convention; this file declares sides, auto and rewards"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 23, "to": 30, "note": "auto = name contains \"win\"; sign +1 for x_, -1 otherwise; reward win_x +1, win_o -1"}
+   ],
+   "check": {
+      "claim": "the Connect-4 net has 131 places, 222 transitions (84 drops plus 138 win detectors) and 1,924 arcs",
+      "steps": [
+        {"command": "plan.net", "args": {}, "expect": [
+          {"path": "/id", "op": "==", "value": "connect-4"},
+          {"path": "/places", "op": "==", "value": 131},
+          {"path": "/transitions", "op": "==", "value": 222},
+          {"path": "/arcs", "op": "==", "value": 1924}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-note-cospan-runs-over", "kind": "note", "title": "The plan runs over N; it is not glued to it",
+   "text": "The plan runs over N: SearchPlan::solver(&Game) builds a solver for a game on this net. It is not glued to it: the plan has no places. A SearchPlan is the pieces of the game search, picked by name. Its slots are filled by pieces; plan.rs's check decides what fits. It composes by chaining, wrapping and filling, which is the operad view's subject. Composite: none. N is closed (∅ → N ← ∅), and a plan is not a net, so there is no pushout to draw here.",
+   "about": ["model:"],
+   "views": ["cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1214, "to": 1214},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1218, "to": 1218},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1276, "to": 1276},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 240, "to": 252, "note": "SearchPlan::solver(&self, g: &Game)"},
+     {"bib": "baez-master"}
+   ],
+   "check": {
+      "claim": "pflow-rs builds a solver for the plan over the Connect-4 game: the open plan passes from_json, check and solver",
+      "steps": [
+        {"command": "plan.check", "args": {}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.net", "args": {}, "expect": [
+          {"path": "/id", "op": "==", "value": "connect-4"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-note-cospan-slots", "kind": "note", "title": "Slots take pieces by kind",
+   "text": "Slots take pieces by kind: the order chain is a partial monoid under chaining, drivers wrap the search, the memo fills one slot (ROADMAP). Bounds and engine are designed, not built.",
+   "about": ["model:"],
+   "views": ["cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1271, "to": 1271},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 420, "to": 427, "note": "orderers: a partial monoid under chaining; drivers: endomorphisms composed around the core"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 307, "to": 307, "note": "plan.rs has no Bound kind and no engine choice"}
+   ],
+   "check": {
+      "claim": "SearchPlan has fields for the order chain, drivers and memo, and none for bounds or engine",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"bounds": []}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "parse"},
+          {"path": "/error", "op": "contains", "value": "unknown field `bounds`"}]},
+        {"command": "plan.check", "args": {"plan": {"engine": "bit"}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "parse"},
+          {"path": "/error", "op": "contains", "value": "unknown field `engine`"}]},
+        {"command": "plan.check", "args": {"plan": {"bounds": []}}, "expect": [
+          {"path": "/error", "op": "contains", "value": "`order`"},
+          {"path": "/error", "op": "contains", "value": "`drivers`"},
+          {"path": "/error", "op": "contains", "value": "`memo`"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-note-boundaries-plan", "kind": "note", "title": "A plan has no transitions to synchronise",
+   "text": "The search plan fills slots with pieces; it has no transitions to synchronise. SearchPlan JSON, checked by plan.rs SearchPlan::check: order pieces, drivers, filters, heuristics and memo go into slots. No piece is a transition, and no slot is a boundary port.",
+   "about": ["model:"],
+   "views": ["boundaries"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/boundaries.js", "from": 809, "to": 809},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/boundaries.js", "from": 811, "to": 811},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 216, "to": 238, "note": "check()"},
+     {"bib": "bruni-et-al"}
+   ],
+   "check": {
+      "claim": "order pieces, drivers, filters, heuristics and memo are the plan's fields",
+      "steps": [
+        {"command": "plan.check", "args": {"plan": {"bounds": []}}, "expect": [
+          {"path": "/step", "op": "==", "value": "parse"},
+          {"path": "/error", "op": "contains", "value": "`order`"},
+          {"path": "/error", "op": "contains", "value": "`drivers`"},
+          {"path": "/error", "op": "contains", "value": "`filters`"},
+          {"path": "/error", "op": "contains", "value": "`heuristics`"},
+          {"path": "/error", "op": "contains", "value": "`memo`"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-note-decisive", "kind": "note", "title": "Decisive pieces form a top tier",
+   "text": "Decisive pieces: whether a nonzero key settles the move's rank, so that the pieces after it do not sort it further. It sits in a top tier of its own, as when the table names it (tt_best), or when it wins (immediate_win). A piece that is not decisive is consulted only when every piece before it ties.",
+   "about": ["piece:tt_best", "piece:immediate_win"],
+   "views": ["operad", "string", "spiders", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 508, "to": 508},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 235, "to": 235},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 26, "to": 31, "note": "DECISIVE: a nonzero key settles the rank"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 249, "to": 265, "note": "keys compared piece by piece; a decisive nonzero key stops the comparison"}
+   ],
+   "check": {
+      "claim": "tt_best and immediate_win are decisive; history, centrality and threats are not",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/0/name", "op": "==", "value": "tt_best"},
+          {"path": "/pieces/1/name", "op": "==", "value": "immediate_win"},
+          {"path": "/pieces/2/name", "op": "==", "value": "history"},
+          {"path": "/pieces/3/name", "op": "==", "value": "centrality"},
+          {"path": "/pieces/4/name", "op": "==", "value": "threats"},
+          {"path": "/pieces/0/decisive", "op": "==", "value": true},
+          {"path": "/pieces/1/decisive", "op": "==", "value": true},
+          {"path": "/pieces/2/decisive", "op": "==", "value": false},
+          {"path": "/pieces/3/decisive", "op": "==", "value": false},
+          {"path": "/pieces/4/decisive", "op": "==", "value": false}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-slot-drivers", "kind": "note", "title": "Slot: drivers",
+   "text": "SearchPlan field \"drivers\". Takes Driver pieces. Each driver is a one-hole box, Search → Search, filled by everything inside it. null_window is on by default and off when drivers is given without it. The dashed frame is where a driver would sit: the nesting is fixed by the code, not by the JSON order.",
+   "about": ["slot:drivers"],
+   "views": ["operad", "string", "spiders", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 181, "to": 187},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 342, "to": 342},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 346, "to": 346},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 193, "note": "drivers()"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 17, "to": 19, "note": "null_window on by default, off when drivers is given without it"}
+   ],
+   "check": {
+      "claim": "the drivers slot takes Driver pieces, and a name of another kind is refused there",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/slots/0/id", "op": "==", "value": "drivers"},
+          {"path": "/slots/0/accepts", "op": "==", "value": "Driver"},
+          {"path": "/slots/0/field", "op": "==", "value": "drivers"},
+          {"path": "/slots/0/designed", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["tt_best"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "\"tt_best\" is a order piece, not a driver"}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["null_window", {"budget": {"nodes": 1}}]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-slot-order", "kind": "note", "title": "Slot: the order chain",
+   "text": "SearchPlan field \"order\". Takes Order pieces, chained (≤ 8, none twice): a monoid under ++, [] the identity. Absent, the chain is Chain::default (order.rs:205-216: tt_best, immediate_win, history). Order never changes a value, only how soon a cutoff comes: reordering changes node counts, never the value (order.rs:1-7). The empty chain: every key ties and the moves keep the net's own order (order.rs:197-199); it is the monoid's identity, not the default chain. The chain is compared piece by piece, the first to differ decides; a decisive piece's nonzero key settles the rank, so decisive pieces that lead the chain form a top tier (order.rs:26-31, 249-265). The ROADMAP's law: every composite stays ct:order-only.",
+   "about": ["slot:order"],
+   "views": ["operad", "string", "spiders", "lens", "laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 181, "to": 187},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 440, "to": 440},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 463, "to": 463},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 583, "to": 584},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 1, "to": 7, "note": "order never changes a value, only how soon a cutoff comes"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 26, "to": 31, "note": "DECISIVE: a nonzero key settles the rank"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 205, "to": 216, "note": "Chain::default: tt_best, immediate_win, history"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 249, "to": 265, "note": "keys compared piece by piece; a decisive nonzero key stops the comparison"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 420, "to": 423, "note": "orderers: a partial monoid under chaining, [] the identity, lexicographic"},
+     {"bib": "fong-spivak"}
+   ],
+   "check": {
+      "claim": "the order slot takes Order pieces, none twice, and the empty chain is a legal plan",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/slots/1/id", "op": "==", "value": "order"},
+          {"path": "/slots/1/accepts", "op": "==", "value": "Order"},
+          {"path": "/slots/1/field", "op": "==", "value": "order"},
+          {"path": "/slots/1/designed", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["history", "history"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "order piece \"history\" is listed twice"}]},
+        {"command": "plan.check", "args": {"plan": {"order": []}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-slot-filters", "kind": "note", "title": "Slot: filters",
+   "text": "SearchPlan field \"filters\". Takes Filter pieces. beam is a reserved name, refused in exact mode: it can change the value.",
+   "about": ["slot:filters"],
+   "views": ["operad", "string", "spiders", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 181, "to": 187},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 536, "to": 536},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 222, "to": 236, "note": "filters / heuristics: exact refuses a reserved name; play: not built"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 70, "to": 71, "note": "UNSOUND: beam, static_eval"}
+   ],
+   "check": {
+      "claim": "the filters slot takes Filter pieces, and beam is refused there in exact mode",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/slots/2/id", "op": "==", "value": "filters"},
+          {"path": "/slots/2/accepts", "op": "==", "value": "Filter"},
+          {"path": "/slots/2/field", "op": "==", "value": "filters"},
+          {"path": "/slots/2/designed", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"filters": ["beam"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "filter \"beam\" can change the value, which exact mode does not allow"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-slot-heuristics", "kind": "note", "title": "Slot: heuristics",
+   "text": "SearchPlan field \"heuristics\". Takes Heuristic pieces. static_eval is a reserved name, refused in exact mode: it can change the value. Mode::Play parses, but static_eval is refused there as not built.",
+   "about": ["slot:heuristics"],
+   "views": ["operad", "string", "spiders", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 181, "to": 187},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 536, "to": 536},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 222, "to": 236, "note": "filters / heuristics: exact refuses a reserved name; play: not built"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 70, "to": 71, "note": "UNSOUND: beam, static_eval"}
+   ],
+   "check": {
+      "claim": "the heuristics slot takes Heuristic pieces; static_eval is refused in exact mode and as not built in play mode",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/slots/3/id", "op": "==", "value": "heuristics"},
+          {"path": "/slots/3/accepts", "op": "==", "value": "Heuristic"},
+          {"path": "/slots/3/field", "op": "==", "value": "heuristics"},
+          {"path": "/slots/3/designed", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"heuristics": ["static_eval"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "heuristic \"static_eval\" can change the value, which exact mode does not allow"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "play", "heuristics": ["static_eval"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "heuristic \"static_eval\" is not built in this release"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-slot-memo", "kind": "note", "title": "Slot: memo",
+   "text": "SearchPlan field \"memo\". Type: Memo {entries: N}, N ≥ 1. It fills the core's memo hole: ct:value-preserving, the table is kept to N entries.",
+   "about": ["slot:memo", "piece:memo"],
+   "views": ["operad", "string", "spiders", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 181, "to": 187},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 561, "to": 561},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 548, "to": 548},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 107, "to": 112, "note": "Memo"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 219, "to": 221, "note": "memo: entries must be at least 1"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 495, "to": 505, "note": "with_memo"}
+   ],
+   "check": {
+      "claim": "memo takes {entries: N} with N at least 1: zero entries is refused, one is accepted",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/slots/4/id", "op": "==", "value": "memo"},
+          {"path": "/slots/4/accepts", "op": "==", "value": "Memo"},
+          {"path": "/slots/4/field", "op": "==", "value": "memo"},
+          {"path": "/slots/4/designed", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"memo": {"entries": 0}}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "memo: entries must be at least 1"}]},
+        {"command": "plan.check", "args": {"plan": {"memo": {"entries": 1}}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-slot-bounds", "kind": "note", "title": "Slot: bounds (designed, not built)",
+   "text": "A slot the design has and plan.rs does not: shown, never fillable. Designed, not built: plan.rs has no Bound kind, so nothing can fill this hole (ROADMAP:307). Every drop on it is refused. The ROADMAP's bounds compose by interval meet; not built (ROADMAP:424-425).",
+   "about": ["slot:bounds"],
+   "views": ["operad", "string", "spiders", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 186, "to": 186},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 567, "to": 567},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 1180, "to": 1180, "note": "honesty bullet of the operad convention panel"},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 445, "to": 445},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 307, "to": 307, "note": "plan.rs has no Bound kind and no engine choice"},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 424, "to": 425, "note": "Bounds: interval meet. Neither is built."}
+   ],
+   "check": {
+      "claim": "SearchPlan has no bounds field, and the registry refuses every drop on the bounds slot while accepting a legal one elsewhere",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/slots/5/id", "op": "==", "value": "bounds"},
+          {"path": "/slots/5/accepts", "op": "==", "value": "Bound"},
+          {"path": "/slots/5/designed", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"bounds": []}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "parse"},
+          {"path": "/error", "op": "contains", "value": "unknown field `bounds`"}]},
+        {"command": "plan.slot_candidates", "args": {"piece": "threats"}, "expect": [
+          {"path": "/slots/1/slot", "op": "==", "value": "order"},
+          {"path": "/slots/1/ok", "op": "==", "value": true},
+          {"path": "/slots/5/slot", "op": "==", "value": "bounds"},
+          {"path": "/slots/5/ok", "op": "==", "value": false}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-slot-engine", "kind": "note", "title": "Slot: engine (designed, not built)",
+   "text": "A slot the design has and plan.rs does not: shown, never fillable. Designed, not built: no engine choice; game.rs picks BitModel or IndexedModel itself (ROADMAP:307). Every drop on it is refused. Today game.rs picks the engine itself: the bit engine when the marking fits, else counts (game.rs:533-553).",
+   "about": ["slot:engine"],
+   "views": ["operad", "string", "spiders", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 186, "to": 186},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 568, "to": 568},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/operad.js", "from": 1180, "to": 1180, "note": "honesty bullet of the operad convention panel"},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 358, "to": 358},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 307, "to": 307, "note": "plan.rs has no Bound kind and no engine choice"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 533, "to": 553, "note": "value(): the bit engine when the marking fits, else counts"}
+   ],
+   "check": {
+      "claim": "SearchPlan has no engine field, and the registry refuses every drop on the engine slot while accepting a legal one elsewhere",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/slots/6/id", "op": "==", "value": "engine"},
+          {"path": "/slots/6/accepts", "op": "==", "value": "Engine"},
+          {"path": "/slots/6/designed", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"engine": "bit"}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "parse"},
+          {"path": "/error", "op": "contains", "value": "unknown field `engine`"}]},
+        {"command": "plan.slot_candidates", "args": {"piece": "threats"}, "expect": [
+          {"path": "/slots/1/slot", "op": "==", "value": "order"},
+          {"path": "/slots/1/ok", "op": "==", "value": true},
+          {"path": "/slots/6/slot", "op": "==", "value": "engine"},
+          {"path": "/slots/6/ok", "op": "==", "value": false}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-judgment-lens-bounds", "kind": "judgment", "title": "Placement of bounds is a judgment",
+   "text": "The bounds socket sits beside the window (a, b) it would narrow: the view's judgment.",
+   "about": ["slot:bounds"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 445, "to": 445},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 424, "to": 425, "note": "Bounds: interval meet. Neither is built."}
+   ]
+  },
+  {
+   "id": "c4-judgment-lens-filters", "kind": "judgment", "title": "Placement of filters is a judgment",
+   "text": "Filters are placed on the move-list lane, after the chain: the view's judgment. An empty slot is the identity: the lane passes through unchanged.",
+   "about": ["slot:filters"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 606, "to": 606},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 424, "to": 425, "note": "Sound filters: a meet-semilattice under intersection"}
+   ]
+  },
+  {
+   "id": "c4-judgment-lens-heuristics", "kind": "judgment", "title": "Placement of heuristics is a judgment",
+   "text": "Heuristics are placed by the recursion, where a static evaluation would stand in for searching further down: the view's judgment.",
+   "about": ["slot:heuristics"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 709, "to": 709}
+   ]
+  },
+  {
+   "id": "c4-piece-tt-best", "kind": "note", "title": "Piece: tt_best",
+   "text": "Order piece tt_best. The move the transposition table remembers as best. Contract: order-only. Decisive: yes, a nonzero key settles the rank (top tier). Reads: memo (Entry.best).",
+   "about": ["piece:tt_best"],
+   "views": ["operad", "spiders", "string", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 201, "to": 201},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 160, "to": 177},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 52, "to": 58, "note": "TtBest::key: t == cx.first; DECISIVE"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 1, "to": 7, "note": "order never changes a value, only how soon a cutoff comes"}
+   ],
+   "check": {
+      "claim": "tt_best is a built Order piece with contract order-only (decisive: true, needs goals: false), and a plan naming it is accepted on the Connect-4 net",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/0/name", "op": "==", "value": "tt_best"},
+          {"path": "/pieces/0/kind", "op": "==", "value": "Order"},
+          {"path": "/pieces/0/status", "op": "==", "value": "built"},
+          {"path": "/pieces/0/contract", "op": "==", "value": "order-only"},
+          {"path": "/pieces/0/decisive", "op": "==", "value": true},
+          {"path": "/pieces/0/needs_goals", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["tt_best"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-immediate-win", "kind": "note", "title": "Piece: immediate_win",
+   "text": "Order piece immediate_win. A move that ends the game in the mover's favour. Contract: order-only. Decisive: yes, a nonzero key settles the rank (top tier). Reads: the next position.",
+   "about": ["piece:immediate_win"],
+   "views": ["operad", "spiders", "string", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 203, "to": 203},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 160, "to": 177},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 60, "to": 66, "note": "ImmediateWin: key 1 when next is over and the mover wins; DECISIVE"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 1, "to": 7, "note": "order never changes a value, only how soon a cutoff comes"}
+   ],
+   "check": {
+      "claim": "immediate_win is a built Order piece with contract order-only (decisive: true, needs goals: false), and a plan naming it is accepted on the Connect-4 net",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/1/name", "op": "==", "value": "immediate_win"},
+          {"path": "/pieces/1/kind", "op": "==", "value": "Order"},
+          {"path": "/pieces/1/status", "op": "==", "value": "built"},
+          {"path": "/pieces/1/contract", "op": "==", "value": "order-only"},
+          {"path": "/pieces/1/decisive", "op": "==", "value": true},
+          {"path": "/pieces/1/needs_goals", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["immediate_win"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-history", "kind": "note", "title": "Piece: history",
+   "text": "Order piece history. Moves that caused cutoffs before, per transition. Contract: order-only. Decisive: no, consulted only when every piece before it ties. Reads: history counts, written by cutoff.",
+   "about": ["piece:history"],
+   "views": ["operad", "spiders", "string", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 205, "to": 205},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 160, "to": 177},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 68, "to": 76, "note": "History: key = history[t]; cutoff adds one"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 1, "to": 7, "note": "order never changes a value, only how soon a cutoff comes"}
+   ],
+   "check": {
+      "claim": "history is a built Order piece with contract order-only (decisive: false, needs goals: false), and a plan naming it is accepted on the Connect-4 net",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/2/name", "op": "==", "value": "history"},
+          {"path": "/pieces/2/kind", "op": "==", "value": "Order"},
+          {"path": "/pieces/2/status", "op": "==", "value": "built"},
+          {"path": "/pieces/2/contract", "op": "==", "value": "order-only"},
+          {"path": "/pieces/2/decisive", "op": "==", "value": false},
+          {"path": "/pieces/2/needs_goals", "op": "==", "value": false}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["history"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-centrality", "kind": "note", "title": "Piece: centrality",
+   "text": "Order piece centrality. Moves that play towards more of the mover's goals: the goals its output places feed, fixed per transition. Needs goals. Contract: order-only. Decisive: no, consulted only when every piece before it ties. Reads: Game::centrality. Needs the net's goals (Connect-4 declares them).",
+   "about": ["piece:centrality"],
+   "views": ["operad", "spiders", "string", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 207, "to": 207},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 160, "to": 177},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 90, "to": 94, "note": "Centrality: key = centrality[t]"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 1, "to": 7, "note": "order never changes a value, only how soon a cutoff comes"}
+   ],
+   "check": {
+      "claim": "centrality is a built Order piece with contract order-only (decisive: false, needs goals: true), and a plan naming it is accepted on the Connect-4 net",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/3/name", "op": "==", "value": "centrality"},
+          {"path": "/pieces/3/kind", "op": "==", "value": "Order"},
+          {"path": "/pieces/3/status", "op": "==", "value": "built"},
+          {"path": "/pieces/3/contract", "op": "==", "value": "order-only"},
+          {"path": "/pieces/3/decisive", "op": "==", "value": false},
+          {"path": "/pieces/3/needs_goals", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["centrality"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-threats", "kind": "note", "title": "Piece: threats",
+   "text": "Order piece threats. Moves after which more of the mover's goals that its output places feed are one token short of enabled. Needs goals. Contract: order-only. Decisive: no, consulted only when every piece before it ties. Reads: Game::fed, deficit(). Needs the net's goals (Connect-4 declares them).",
+   "about": ["piece:threats"],
+   "views": ["operad", "spiders", "string", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 209, "to": 209},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 160, "to": 177},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 96, "to": 103, "note": "Threats: goals t feeds one token short after t"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 1, "to": 7, "note": "order never changes a value, only how soon a cutoff comes"}
+   ],
+   "check": {
+      "claim": "threats is a built Order piece with contract order-only (decisive: false, needs goals: true), and a plan naming it is accepted on the Connect-4 net",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/4/name", "op": "==", "value": "threats"},
+          {"path": "/pieces/4/kind", "op": "==", "value": "Order"},
+          {"path": "/pieces/4/status", "op": "==", "value": "built"},
+          {"path": "/pieces/4/contract", "op": "==", "value": "order-only"},
+          {"path": "/pieces/4/decisive", "op": "==", "value": false},
+          {"path": "/pieces/4/needs_goals", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"order": ["threats"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-null-window", "kind": "note", "title": "Piece: null_window",
+   "text": "Driver piece null_window. Finds a value by yes/no searches, one per gap between adjacent rewards. On by default; off when drivers is given without it. Contract: value-preserving. Off, there is one search over the whole reward range (game.rs:564-565); with fewer than three reward values it is one search anyway. Connect-4 has rewards win_x +1 and win_o −1 (tests/common/mod.rs:30), so vals = [-1, 0, 1]: two gaps, at most two yes/no searches (game.rs:105-122, 573-586).",
+   "about": ["piece:null_window"],
+   "views": ["operad", "string", "spiders", "lens", "cospan", "laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 211, "to": 211},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 117, "to": 117},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 17, "to": 19},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 556, "to": 588, "note": "Solver::solve"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 564, "to": 566, "note": "null_window off (or under 3 rewards): one search over the whole range"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 105, "to": 122, "note": "rewards(): the distinct sums of the reward weights"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 30, "to": 30, "note": "Connect-4 rewards: win_x +1, win_o -1"}
+   ],
+   "check": {
+      "claim": "null_window is a built, value-preserving Driver, and a plan naming it is accepted",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/5/name", "op": "==", "value": "null_window"},
+          {"path": "/pieces/5/kind", "op": "==", "value": "Driver"},
+          {"path": "/pieces/5/status", "op": "==", "value": "built"},
+          {"path": "/pieces/5/contract", "op": "==", "value": "value-preserving"}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["null_window"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-budget", "kind": "note", "title": "Piece: budget",
+   "text": "Driver piece budget. Gives a value up on a position past N nodes: the exact value or None, never a wrong value. Contract: partial. It takes arguments: a bare name is refused. Absent, there is no budget: plan.rs passes usize::MAX (plan.rs:245).",
+   "about": ["piece:budget"],
+   "views": ["operad", "string", "spiders", "lens", "cospan", "laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 213, "to": 213},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 112, "to": 112},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 18, "to": 19},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 593, "to": 597, "note": "search: nodes > budget"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 245, "to": 245, "note": "d.budget.unwrap_or(usize::MAX)"}
+   ],
+   "check": {
+      "claim": "budget is a built Driver with contract partial; it takes arguments {nodes: N} (a bare name is refused), and zero nodes is refused",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/6/name", "op": "==", "value": "budget"},
+          {"path": "/pieces/6/kind", "op": "==", "value": "Driver"},
+          {"path": "/pieces/6/status", "op": "==", "value": "built"},
+          {"path": "/pieces/6/contract", "op": "==", "value": "partial"}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": ["budget"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "driver \"budget\" takes arguments: {\"budget\": {\"nodes\": N}}"}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": [{"budget": {"nodes": 1000000}}]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]},
+        {"command": "plan.check", "args": {"plan": {"drivers": [{"budget": {"nodes": 0}}]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "driver \"budget\": nodes and ms must be at least 1"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-memo", "kind": "note", "title": "Piece: memo",
+   "text": "Memo piece memo. Keeps the transposition table to N entries. Contract: value-preserving (ROADMAP: tested by a_memo_bounds_the_table_not_the_value). It fills the core's memo hole and goes in the memo slot as {\"entries\": N}, not in a list.",
+   "about": ["piece:memo"],
+   "views": ["operad", "string", "spiders", "lens", "cospan"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 215, "to": 215},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 257, "to": 257},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/spiders.js", "from": 1172, "to": 1172},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 20, "to": 20},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 495, "to": 505, "note": "Solver::with_memo"}
+   ],
+   "check": {
+      "claim": "memo is a built, value-preserving Memo piece, and its slot takes {entries: N}",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/7/name", "op": "==", "value": "memo"},
+          {"path": "/pieces/7/kind", "op": "==", "value": "Memo"},
+          {"path": "/pieces/7/status", "op": "==", "value": "built"},
+          {"path": "/pieces/7/contract", "op": "==", "value": "value-preserving"}]},
+        {"command": "plan.check", "args": {"plan": {"memo": {"entries": 500000}}}, "expect": [
+          {"path": "/ok", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-beam", "kind": "note", "title": "Piece: beam (reserved)",
+   "text": "Filter piece beam. Reserved name. Can change the value; refused in exact mode, and not built in play mode. Contract: value-changing. Status: reserved, named only to be refused.",
+   "about": ["piece:beam"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 217, "to": 217},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 163, "to": 163},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 70, "to": 71, "note": "UNSOUND: beam, static_eval"}
+   ],
+   "check": {
+      "claim": "beam is a reserved, value-changing Filter: refused in exact mode as able to change the value, and in play mode as not built",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/10/name", "op": "==", "value": "beam"},
+          {"path": "/pieces/10/kind", "op": "==", "value": "Filter"},
+          {"path": "/pieces/10/status", "op": "==", "value": "reserved"},
+          {"path": "/pieces/10/contract", "op": "==", "value": "value-changing"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "exact", "filters": ["beam"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "filter \"beam\" can change the value, which exact mode does not allow"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "play", "filters": ["beam"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "filter \"beam\" is not built in this release"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-static-eval", "kind": "note", "title": "Piece: static_eval (reserved)",
+   "text": "Heuristic piece static_eval. Reserved name. Can change the value; refused in exact mode, and not built in play mode. Contract: value-changing. Status: reserved, named only to be refused.",
+   "about": ["piece:static_eval"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 219, "to": 219},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 163, "to": 163},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 70, "to": 71, "note": "UNSOUND: beam, static_eval"}
+   ],
+   "check": {
+      "claim": "static_eval is a reserved, value-changing Heuristic: refused in exact mode as able to change the value, and in play mode as not built",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/11/name", "op": "==", "value": "static_eval"},
+          {"path": "/pieces/11/kind", "op": "==", "value": "Heuristic"},
+          {"path": "/pieces/11/status", "op": "==", "value": "reserved"},
+          {"path": "/pieces/11/contract", "op": "==", "value": "value-changing"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "exact", "heuristics": ["static_eval"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "heuristic \"static_eval\" can change the value, which exact mode does not allow"}]},
+        {"command": "plan.check", "args": {"plan": {"mode": "play", "heuristics": ["static_eval"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "heuristic \"static_eval\" is not built in this release"}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-forced-moves", "kind": "note", "title": "Piece: forced_moves (proposed)",
+   "text": "Filter piece forced_moves. Falls out of non_losing (approved candidate). Not built. Contract: sound-pruning. Status: PROPOSED in the ontology ROADMAP (approved 2026-10-27); plan.rs refuses it as unknown.",
+   "about": ["piece:forced_moves"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 225, "to": 225},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 163, "to": 163},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 353, "to": 353, "note": "approved candidate pieces"}
+   ],
+   "check": {
+      "claim": "forced_moves is a proposed Filter with contract sound-pruning, and plan.rs refuses it as unknown",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/14/name", "op": "==", "value": "forced_moves"},
+          {"path": "/pieces/14/kind", "op": "==", "value": "Filter"},
+          {"path": "/pieces/14/status", "op": "==", "value": "proposed"},
+          {"path": "/pieces/14/contract", "op": "==", "value": "sound-pruning"}]},
+        {"command": "plan.check", "args": {"plan": {"filters": ["forced_moves"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "unknown filter \"forced_moves\""}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-lmr", "kind": "note", "title": "Piece: lmr (proposed)",
+   "text": "Heuristic piece lmr. Late move reductions, play mode only (approved candidate). Not built. Contract: value-changing. Status: PROPOSED in the ontology ROADMAP (approved 2026-10-27); plan.rs refuses it as unknown.",
+   "about": ["piece:lmr"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 226, "to": 226},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 163, "to": 163},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 354, "to": 354, "note": "approved candidate pieces"}
+   ],
+   "check": {
+      "claim": "lmr is a proposed Heuristic with contract value-changing, and plan.rs refuses it as unknown",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/15/name", "op": "==", "value": "lmr"},
+          {"path": "/pieces/15/kind", "op": "==", "value": "Heuristic"},
+          {"path": "/pieces/15/status", "op": "==", "value": "proposed"},
+          {"path": "/pieces/15/contract", "op": "==", "value": "value-changing"}]},
+        {"command": "plan.check", "args": {"plan": {"heuristics": ["lmr"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "unknown heuristic \"lmr\""}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-piece-futility", "kind": "note", "title": "Piece: futility (proposed)",
+   "text": "Filter piece futility. Futility pruning, play mode only (approved candidate). Not built. Contract: value-changing. Status: PROPOSED in the ontology ROADMAP (approved 2026-10-27); plan.rs refuses it as unknown.",
+   "about": ["piece:futility"],
+   "views": ["operad", "string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/model/plan.js", "from": 227, "to": 227},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/info.js", "from": 163, "to": 163},
+     {"repo": "ontology-pflow-xyz", "rev": "f854116", "path": "ROADMAP.md", "from": 355, "to": 355, "note": "approved candidate pieces"}
+   ],
+   "check": {
+      "claim": "futility is a proposed Filter with contract value-changing, and plan.rs refuses it as unknown",
+      "steps": [
+        {"command": "plan.pieces", "args": {}, "expect": [
+          {"path": "/pieces/16/name", "op": "==", "value": "futility"},
+          {"path": "/pieces/16/kind", "op": "==", "value": "Filter"},
+          {"path": "/pieces/16/status", "op": "==", "value": "proposed"},
+          {"path": "/pieces/16/contract", "op": "==", "value": "value-changing"}]},
+        {"command": "plan.check", "args": {"plan": {"filters": ["futility"]}}, "expect": [
+          {"path": "/ok", "op": "==", "value": false},
+          {"path": "/step", "op": "==", "value": "check"},
+          {"path": "/error", "op": "contains", "value": "unknown filter \"futility\""}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-note-laws-noncommuting", "kind": "note", "title": "The laws that must fail do fail",
+   "text": "The order chain does not commute (NOT_chains_commute fails, as it must); its value does (value_ignores_order, from the assumed rule order_only, order.rs:4-6). null_window and budget do not commute in the theory (NOT_drivers_commute fails, as it must). \"order\": [] is the unit of chain (rules unitL, unitR); it is not the absent key, which is Chain::default() (RESULTS.md, mismatch 3). The rules are readings of order.rs and plan.rs, marked ASSUMED; Chyp checks that each rewrite follows from them.",
+   "about": ["slot:order", "slot:drivers"],
+   "views": ["laws"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/laws.js", "from": 901, "to": 901},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/laws.js", "from": 932, "to": 932},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/laws.js", "from": 899, "to": 899},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/driver-wrap.chyp", "from": 114, "to": 114},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/orderer-monoid.chyp", "from": 137, "to": 137},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/RESULTS.md", "from": 650, "to": 655},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 1, "to": 7, "note": "order never changes a value, only how soon a cutoff comes"},
+     {"bib": "chyp"}
+   ]
+  },
+  {
+   "id": "c4-lens-budget", "kind": "note", "title": "Lens lanes: budget",
+   "text": "Lens lanes of budget. Forward: counts nodes, passes the position on. Backward: the value, or ⊥ (None) past N nodes. Scope: nodes is reset only in value(), before each engine run (game.rs:541, 548), and counted in every search() call (game.rs:594): one budget covers every yes/no search of one solve() run, so it is the outermost frame. A run the bit engine cannot finish is redone over counts with the count reset (game.rs:544-553). ⊥ goes straight up: a None from below is returned at once (game.rs:578-580, 654-656). Absent: no budget, usize::MAX (plan.rs:245).",
+   "about": ["piece:budget"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 108, "to": 114, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 554, "note": "Solver::value: nodes reset to 0 (541, 548)"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 594, "to": 594, "note": "nodes counted in every search() call"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 544, "to": 553, "note": "a run the bit engine cannot finish is redone over counts, nodes reset again"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 245, "to": 245, "note": "d.budget.unwrap_or(usize::MAX)"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-null-window", "kind": "note", "title": "Lens lanes: null_window",
+   "text": "Lens lanes of null_window. Forward: picks the window (a, b) for the next gap between adjacent rewards, the mover's worst gap first. Backward: v narrows (i, j), repeat while i < j; returns vals[i]. Connect-4: rewards win_x +1, win_o -1 (tests/common/mod.rs:30), so vals = [-1, 0, 1]: two gaps, at most two yes/no searches (game.rs:105-122, 573-586). Off: drivers given without it: one search over the whole range, (a, b) = bounds (game.rs:564-566).",
+   "about": ["piece:null_window"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 115, "to": 120, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 556, "to": 588, "note": "Solver::solve"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 564, "to": 566, "note": "null_window off: one search over the whole range"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/plan.rs", "from": 146, "to": 162, "note": "drivers(): null_window on when drivers is absent, off when given without it"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 105, "to": 122, "note": "rewards()"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 30, "to": 30, "note": "Connect-4 rewards"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-memo", "kind": "note", "title": "Lens lanes: memo",
+   "text": "Lens lanes of the memo. Forward: get(k): a settled entry returns at once; otherwise [lo, hi] narrows (a, b) and the remembered best move goes to tt_best. Backward: store(k, lo, hi, best), capped at N entries. The memo is shared state between passes, drawn as a dashed loop: not a lens.",
+   "about": ["piece:memo", "slot:memo"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 121, "to": 125, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 599, "to": 611, "note": "tt.get: a settled entry returns at once; else (a, b) narrowed and first = best"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 514, "to": 519, "note": "store"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 670, "to": 691, "note": "the result as [lo, hi], merged with the old entry, stored"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 495, "to": 505, "note": "with_memo"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-tt-best", "kind": "note", "title": "Lens lanes: tt_best",
+   "text": "Lens lanes of tt_best. Key: t = table best, decisive. Forward: key 1 for the move the table remembers as best (cx.first), else 0; decisive: a nonzero key settles the rank. Backward: none of its own (cutoff is a no-op). Its forward reads what the backward pass stored: store (game.rs:514-519), then tt.get, then first (game.rs:601-611). A loop through state: backward pass, table, a later forward pass; not a lens law.",
+   "about": ["piece:tt_best"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 126, "to": 131, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 52, "to": 58, "note": "TtBest: key 1 for cx.first; DECISIVE"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 15, "to": 24, "note": "Ctx: what a piece may read (first, history)"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 36, "to": 37, "note": "Orderer::cutoff: a no-op unless a piece overrides it"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 514, "to": 519, "note": "store"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 599, "to": 611, "note": "tt.get"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-immediate-win", "kind": "note", "title": "Lens lanes: immediate_win",
+   "text": "Lens lanes of immediate_win. Key: t wins now, decisive. Forward: key 1 for a move that ends the game in the mover's favour; decisive. Backward: none (cutoff is a no-op).",
+   "about": ["piece:immediate_win"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 132, "to": 136, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 60, "to": 66, "note": "ImmediateWin: key 1 when next is over and the mover wins; DECISIVE"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 36, "to": 37, "note": "Orderer::cutoff: a no-op unless a piece overrides it"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-history", "kind": "note", "title": "Lens lanes: history",
+   "text": "Lens lanes of history. Key: history[t], past cutoffs. Forward: key = history[t]: how often t caused a cutoff before. Backward: a cutoff increments history[t] (order.rs:73-75, via chain.cutoff at game.rs:666). State: history[t] += 1 on a cutoff (order.rs:73-75); the key of t is history[t] next time (order.rs:68-71). A loop through state, not a lens law.",
+   "about": ["piece:history"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 137, "to": 141, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 68, "to": 71, "note": "History: key = history[t]"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 73, "to": 75, "note": "History::cutoff: history[t] += 1"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 267, "to": 271, "note": "Chain::cutoff: every piece's cutoff"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 665, "to": 668, "note": "a >= b: self.chain.cutoff(&mut self.history, t); break"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-centrality", "kind": "note", "title": "Lens lanes: centrality",
+   "text": "Lens lanes of centrality. Key: goals t feeds, fixed per t. Forward: key = centrality[t]: the mover's goals that t's output places feed, fixed per transition. Backward: none (cutoff is a no-op).",
+   "about": ["piece:centrality"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 142, "to": 146, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 90, "to": 94, "note": "Centrality: key = centrality[t]"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 36, "to": 37, "note": "Orderer::cutoff: a no-op unless a piece overrides it"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-threats", "kind": "note", "title": "Lens lanes: threats",
+   "text": "Lens lanes of threats. Key: goals 1 short, after t. Forward: key = the goals t feeds that are one token short of enabled after t. Backward: none (cutoff is a no-op).",
+   "about": ["piece:threats"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 147, "to": 151, "note": "the LENS table: lane text per piece"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 96, "to": 103, "note": "Threats: goals t feeds one token short after t"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 36, "to": 37, "note": "Orderer::cutoff: a no-op unless a piece overrides it"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-result", "kind": "note", "title": "The lens result: the value, or ⊥",
+   "text": "The exact value (+1 side's view) of a settled position with both sides playing perfectly, or None past the budget (game.rs:526-527). Forward in: the marking mk (a position). Backward out: Result<Option<f64>>: Some(value), or ⊥ (None) past the budget. Not drawn: the Err case, e.g. automatic transitions that never stop (game.rs:101-103).",
+   "about": ["model:"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 346, "to": 346},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 526, "to": 527, "note": "Solver::value"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 101, "to": 103, "note": "an Err, e.g. automatic transitions that never stop"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-leaf", "kind": "note", "title": "The leaf: the reward of a final marking",
+   "text": "Where values come from: a position with no moves is scored and stored as exact (game.rs:612-625). In an open game, this end is where the utility comes in; here it is the reward of a final marking. Connect-4 rewards: win_x +1, win_o -1 (tests/common/mod.rs:30). Only the turning-around shape is borrowed.",
+   "about": ["net-place:win_x", "net-place:win_o"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 486, "to": 486},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 612, "to": 625, "note": "no moves: the score, stored as exact"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 30, "to": 30, "note": "Connect-4 rewards: win_x +1, win_o -1"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-window", "kind": "note", "title": "The table narrows the window",
+   "text": "[lo, hi] narrows the window: a = max(a, lo), b = min(b, hi); a settled entry (lo = hi, lo ≥ b or hi ≤ a) returns at once without searching (game.rs:601-609). The remembered best move goes to tt_best, as first (game.rs:610).",
+   "about": ["slot:memo", "piece:memo", "piece:tt_best"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 566, "to": 566},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 599, "to": 611, "note": "tt.get: a settled entry returns at once; else (a, b) narrowed and first = best"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-children", "kind": "note", "title": "Children, keyed by the order chain",
+   "text": "The moves enabled at the position; each is played and settled into a child, then keyed by the order chain (game.rs:612-642). Forward: Position → MoveList. A leaf: no moves, so the score comes back at once and is stored as exact (game.rs:612-625).",
+   "about": ["slot:order"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 457, "to": 457},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 612, "to": 643, "note": "children keyed by the chain, sorted best first"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-max-min", "kind": "note", "title": "Max / min over the children",
+   "text": "The mover maximizes (s > 0) or minimizes; a = max(a, v) or b = min(b, v) (game.rs:657-664).",
+   "about": ["model:"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 658, "to": 658},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 653, "to": 669, "note": "each child searched with (a, b); max/min; a >= b: chain.cutoff, break"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-lens-cutoff", "kind": "note", "title": "A cutoff is told to every piece",
+   "text": "A cutoff, a ≥ b: the window closed, the remaining children are not tried (break), and every chain piece is told (chain.cutoff, game.rs:665-668). It stops the forward pass: alpha-beta interleaves the two passes. Chain::cutoff calls each piece's cutoff (order.rs:267-271); only history overrides the no-op (order.rs:36-37, 73-75). Every other piece's cutoff does nothing.",
+   "about": ["slot:order", "piece:history"],
+   "views": ["lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 662, "to": 662},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/lens.js", "from": 670, "to": 670},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 665, "to": 668, "note": "a >= b: self.chain.cutoff(&mut self.history, t); break"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 267, "to": 271, "note": "Chain::cutoff: every piece's cutoff"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 36, "to": 37, "note": "Orderer::cutoff: a no-op unless a piece overrides it"},
+     {"bib": "ghani-hedges"}
+   ]
+  },
+  {
+   "id": "c4-table-tt", "kind": "note", "title": "Junction: the transposition table",
+   "text": "The transposition table: shared state (Solver.tt, game.rs:454), a junction and not a spider. Entry { lo, hi, best } per position key (game.rs:440-444). Read by the core (bounds and best move) and, through Ctx.first, by tt_best. Written by the core, through store. Capped by memo (with_memo). The yes/no searches null_window runs share it, and it persists across calls. A junction, not a ZX spider: shared state that several parts read or write. Nothing fuses and no spider law applies.",
+   "about": ["piece:tt_best", "slot:memo", "piece:memo"],
+   "views": ["spiders"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/spiders.js", "from": 1095, "to": 1095},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 440, "to": 444, "note": "Entry { lo, hi, best }"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 454, "to": 454, "note": "Solver.tt"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 601, "to": 611, "note": "tt.get"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 514, "to": 519, "note": "store"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 495, "to": 505, "note": "with_memo"},
+     {"bib": "coecke-duncan"}
+   ]
+  },
+  {
+   "id": "c4-table-history", "kind": "note", "title": "Junction: the history table",
+   "text": "The history table: shared state (Solver.history, game.rs:455), a junction and not a spider. One u32 counter per transition (game.rs:485). Read by History, through Ctx.history. Written by History::cutoff only (history[t] += 1). Lent by the core: &history in Ctx, &mut history to chain.cutoff on a cutoff. Without History in the chain the table is still allocated and lent, but nothing reads or writes it.",
+   "about": ["piece:history"],
+   "views": ["spiders"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/spiders.js", "from": 1107, "to": 1107},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 485, "to": 485, "note": "one u32 counter per transition"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 455, "to": 455, "note": "Solver.history"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 68, "to": 71, "note": "History::key reads cx.history[t]"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 73, "to": 75, "note": "History::cutoff: history[t] += 1, the only writer"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 666, "to": 666, "note": "chain.cutoff(&mut self.history, t)"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 36, "to": 37, "note": "Orderer::cutoff: a no-op by default"},
+     {"bib": "coecke-duncan"}
+   ]
+  },
+  {
+   "id": "c4-edge-null-window", "kind": "note", "title": "Back edge: null window",
+   "text": "Back edge: the null-window loop. The value as a run of yes/no searches, one per gap between adjacent rewards: if v > (a + b) / 2 then i = k + 1 else j = k, and the next search gets the window (vals[k], vals[k+1]) (game.rs:573-587). Carries Window (a, b), from this search's v.",
+   "about": ["piece:null_window"],
+   "views": ["string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/string.js", "from": 1320, "to": 1320},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 573, "to": 587, "note": "Solver::solve: the loop over gaps"},
+     {"bib": "selinger"}
+   ]
+  },
+  {
+   "id": "c4-edge-recursion", "kind": "note", "title": "Back edge: recursion",
+   "text": "Back edge: alpha-beta recursion. For each child, best first: v = search(next, a, b); the mover's bound moves to v, and a ≥ b is a cutoff (game.rs:653-669). Carries Value⊥ of a child position.",
+   "about": ["model:"],
+   "views": ["string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/string.js", "from": 1326, "to": 1326},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 653, "to": 669, "note": "the child loop"},
+     {"bib": "selinger"}
+   ]
+  },
+  {
+   "id": "c4-edge-tt", "kind": "note", "title": "Back edge: tt",
+   "text": "Back edge: the transposition-table feedback. What a search finds is stored and read back by tt.get at the next visit of the position, in this search or a later one (store: game.rs:515-519, called at 616-623 and 691; read: 601-611). Carries Entry {lo, hi, best}.",
+   "about": ["piece:tt_best", "slot:memo"],
+   "views": ["string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/string.js", "from": 1329, "to": 1329},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 514, "to": 519, "note": "store"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 601, "to": 611, "note": "tt.get"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 678, "to": 691, "note": "merge with what was known, then store"},
+     {"bib": "selinger"}
+   ]
+  },
+  {
+   "id": "c4-edge-cutoff", "kind": "note", "title": "Back edge: cutoff",
+   "text": "Back edge: cutoff → history. A ≥ b: chain.cutoff(history, t) tells every piece; History adds one to the move's count (order.rs:73-75), which its key reads next time (order.rs:69-71). Carries the move that caused the cutoff.",
+   "about": ["piece:history"],
+   "views": ["string", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/string.js", "from": 1335, "to": 1335},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 666, "to": 666, "note": "chain.cutoff"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 267, "to": 271, "note": "Chain::cutoff"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 68, "to": 76, "note": "History"},
+     {"bib": "selinger"}
+   ]
+  },
+  {
+   "id": "c4-net-open-places", "kind": "note", "title": "open_<c>_<r>: the open slot of a column",
+   "text": "open_<c>_<r>: places, 42 of them (row 0 is the bottom). The open slot of column c, row r: the next drop there lands in row r. A group by name only: the fixture's description says each column is an open-slot chain with row 0 at the bottom, and the library reads no names (tests/common/mod.rs:5-8).",
+   "about": [
+      "net-place:open_0_0", "net-place:open_0_1", "net-place:open_0_2", "net-place:open_0_3",
+      "net-place:open_0_4", "net-place:open_0_5", "net-place:open_1_0", "net-place:open_1_1",
+      "net-place:open_1_2", "net-place:open_1_3", "net-place:open_1_4", "net-place:open_1_5",
+      "net-place:open_2_0", "net-place:open_2_1", "net-place:open_2_2", "net-place:open_2_3",
+      "net-place:open_2_4", "net-place:open_2_5", "net-place:open_3_0", "net-place:open_3_1",
+      "net-place:open_3_2", "net-place:open_3_3", "net-place:open_3_4", "net-place:open_3_5",
+      "net-place:open_4_0", "net-place:open_4_1", "net-place:open_4_2", "net-place:open_4_3",
+      "net-place:open_4_4", "net-place:open_4_5", "net-place:open_5_0", "net-place:open_5_1",
+      "net-place:open_5_2", "net-place:open_5_3", "net-place:open_5_4", "net-place:open_5_5",
+      "net-place:open_6_0", "net-place:open_6_1", "net-place:open_6_2", "net-place:open_6_3",
+      "net-place:open_6_4", "net-place:open_6_5"
+     ],
+   "views": ["flat", "cospan", "incidence", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1300, "to": 1300},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1274, "to": 1277},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 5, "to": 8, "note": "the fixtures name their parts by convention"}
+   ],
+   "check": {
+      "claim": "column 3 fills from the bottom: after the drop in row 0 (x_play_3_0) the drop in row 1 (o_play_3_1) is enabled, and the whole fixed opening fires",
+      "steps": [
+        {"command": "plan.opening", "args": {}, "expect": [
+          {"path": "/ok", "op": "==", "value": true},
+          {"path": "/fired", "op": "==", "value": 4},
+          {"path": "/steps/0/transition", "op": "==", "value": "x_play_3_0"},
+          {"path": "/steps/0/enabled", "op": "==", "value": true},
+          {"path": "/steps/1/transition", "op": "==", "value": "o_play_3_1"},
+          {"path": "/steps/1/enabled", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-net-x-places", "kind": "note", "title": "x_<c>_<r>: an X disc",
+   "text": "x_<c>_<r>: places, 42 of them. An X disc in column c, row r (row 0 is the bottom).",
+   "about": [
+      "net-place:x_0_0", "net-place:x_0_1", "net-place:x_0_2", "net-place:x_0_3", "net-place:x_0_4",
+      "net-place:x_0_5", "net-place:x_1_0", "net-place:x_1_1", "net-place:x_1_2", "net-place:x_1_3",
+      "net-place:x_1_4", "net-place:x_1_5", "net-place:x_2_0", "net-place:x_2_1", "net-place:x_2_2",
+      "net-place:x_2_3", "net-place:x_2_4", "net-place:x_2_5", "net-place:x_3_0", "net-place:x_3_1",
+      "net-place:x_3_2", "net-place:x_3_3", "net-place:x_3_4", "net-place:x_3_5", "net-place:x_4_0",
+      "net-place:x_4_1", "net-place:x_4_2", "net-place:x_4_3", "net-place:x_4_4", "net-place:x_4_5",
+      "net-place:x_5_0", "net-place:x_5_1", "net-place:x_5_2", "net-place:x_5_3", "net-place:x_5_4",
+      "net-place:x_5_5", "net-place:x_6_0", "net-place:x_6_1", "net-place:x_6_2", "net-place:x_6_3",
+      "net-place:x_6_4", "net-place:x_6_5"
+     ],
+   "views": ["flat", "cospan", "incidence", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1274, "to": 1277},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1289, "to": 1289},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"}
+   ]
+  },
+  {
+   "id": "c4-net-o-places", "kind": "note", "title": "o_<c>_<r>: an O disc",
+   "text": "o_<c>_<r>: places, 42 of them. An O disc in column c, row r (row 0 is the bottom).",
+   "about": [
+      "net-place:o_0_0", "net-place:o_0_1", "net-place:o_0_2", "net-place:o_0_3", "net-place:o_0_4",
+      "net-place:o_0_5", "net-place:o_1_0", "net-place:o_1_1", "net-place:o_1_2", "net-place:o_1_3",
+      "net-place:o_1_4", "net-place:o_1_5", "net-place:o_2_0", "net-place:o_2_1", "net-place:o_2_2",
+      "net-place:o_2_3", "net-place:o_2_4", "net-place:o_2_5", "net-place:o_3_0", "net-place:o_3_1",
+      "net-place:o_3_2", "net-place:o_3_3", "net-place:o_3_4", "net-place:o_3_5", "net-place:o_4_0",
+      "net-place:o_4_1", "net-place:o_4_2", "net-place:o_4_3", "net-place:o_4_4", "net-place:o_4_5",
+      "net-place:o_5_0", "net-place:o_5_1", "net-place:o_5_2", "net-place:o_5_3", "net-place:o_5_4",
+      "net-place:o_5_5", "net-place:o_6_0", "net-place:o_6_1", "net-place:o_6_2", "net-place:o_6_3",
+      "net-place:o_6_4", "net-place:o_6_5"
+     ],
+   "views": ["flat", "cospan", "incidence", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1274, "to": 1277},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1290, "to": 1290},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"}
+   ]
+  },
+  {
+   "id": "c4-net-turn", "kind": "note", "title": "x_turn, o_turn: whose move",
+   "text": "x_turn: X to move. o_turn: O to move.",
+   "about": ["net-place:x_turn", "net-place:o_turn"],
+   "views": ["flat", "cospan", "incidence", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1277, "to": 1277},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"}
+   ],
+   "check": {
+      "claim": "the turn passes between the sides: in the fixed opening X's drop, then O's, then X's, then O's are each enabled when taken",
+      "steps": [
+        {"command": "plan.opening", "args": {}, "expect": [
+          {"path": "/ok", "op": "==", "value": true},
+          {"path": "/fired", "op": "==", "value": 4},
+          {"path": "/steps/0/transition", "op": "==", "value": "x_play_3_0"},
+          {"path": "/steps/0/enabled", "op": "==", "value": true},
+          {"path": "/steps/1/transition", "op": "==", "value": "o_play_3_1"},
+          {"path": "/steps/1/enabled", "op": "==", "value": true},
+          {"path": "/steps/2/transition", "op": "==", "value": "x_play_2_0"},
+          {"path": "/steps/2/enabled", "op": "==", "value": true},
+          {"path": "/steps/3/transition", "op": "==", "value": "o_play_4_0"},
+          {"path": "/steps/3/enabled", "op": "==", "value": true}]}
+      ]
+     }
+  },
+  {
+   "id": "c4-net-game-active", "kind": "note", "title": "game_active: the game is on",
+   "text": "game_active: the game is on; every win detector consumes it.",
+   "about": ["net-place:game_active"],
+   "views": ["flat", "cospan", "incidence", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1277, "to": 1277},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json", "from": 20457, "to": 20457, "note": "the fixture's description (byte-identical to the prototype's data/connect-4.json)"}
+   ]
+  },
+  {
+   "id": "c4-net-win-x", "kind": "note", "title": "win_x: the reward place of X",
+   "text": "win_x: reward place, X won (+1). A reward place: tests/common/mod.rs:30 weighs it +1. Rewards win_x +1, win_o −1.",
+   "about": ["net-place:win_x"],
+   "views": ["flat", "cospan", "incidence", "process", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1277, "to": 1277},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1452, "to": 1452},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 30, "to": 30, "note": "reward win_x +1, win_o -1"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 239, "to": 242, "note": "score: the reward of a final marking"}
+   ]
+  },
+  {
+   "id": "c4-net-win-o", "kind": "note", "title": "win_o: the reward place of O",
+   "text": "win_o: reward place, O won (-1). A reward place: tests/common/mod.rs:30 weighs it −1. Rewards win_x +1, win_o −1.",
+   "about": ["net-place:win_o"],
+   "views": ["flat", "cospan", "incidence", "process", "lens"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1277, "to": 1277},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1452, "to": 1452},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 30, "to": 30, "note": "reward win_x +1, win_o -1"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 239, "to": 242, "note": "score: the reward of a final marking"}
+   ]
+  },
+  {
+   "id": "c4-net-x-drops", "kind": "note", "title": "x_play_<c>_<r>: X drops",
+   "text": "x_play_<c>_<r>: transitions, 42 of them. A drop (a move) of side X, sign +1: X maximizes the reward. Not automatic: the name has no \"win\" (tests/common/mod.rs:23).",
+   "about": [
+      "net-transition:x_play_0_0", "net-transition:x_play_0_1", "net-transition:x_play_0_2",
+      "net-transition:x_play_0_3", "net-transition:x_play_0_4", "net-transition:x_play_0_5",
+      "net-transition:x_play_1_0", "net-transition:x_play_1_1", "net-transition:x_play_1_2",
+      "net-transition:x_play_1_3", "net-transition:x_play_1_4", "net-transition:x_play_1_5",
+      "net-transition:x_play_2_0", "net-transition:x_play_2_1", "net-transition:x_play_2_2",
+      "net-transition:x_play_2_3", "net-transition:x_play_2_4", "net-transition:x_play_2_5",
+      "net-transition:x_play_3_0", "net-transition:x_play_3_1", "net-transition:x_play_3_2",
+      "net-transition:x_play_3_3", "net-transition:x_play_3_4", "net-transition:x_play_3_5",
+      "net-transition:x_play_4_0", "net-transition:x_play_4_1", "net-transition:x_play_4_2",
+      "net-transition:x_play_4_3", "net-transition:x_play_4_4", "net-transition:x_play_4_5",
+      "net-transition:x_play_5_0", "net-transition:x_play_5_1", "net-transition:x_play_5_2",
+      "net-transition:x_play_5_3", "net-transition:x_play_5_4", "net-transition:x_play_5_5",
+      "net-transition:x_play_6_0", "net-transition:x_play_6_1", "net-transition:x_play_6_2",
+      "net-transition:x_play_6_3", "net-transition:x_play_6_4", "net-transition:x_play_6_5"
+     ],
+   "views": ["flat", "cospan", "incidence", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1309, "to": 1309},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1273, "to": 1273},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1173, "to": 1173},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 23, "to": 30, "note": "auto = name contains \"win\"; sign +1 for x_, -1 otherwise"}
+   ]
+  },
+  {
+   "id": "c4-net-o-drops", "kind": "note", "title": "o_play_<c>_<r>: O drops",
+   "text": "o_play_<c>_<r>: transitions, 42 of them. A drop (a move) of side O, sign −1. Not automatic: the name has no \"win\" (tests/common/mod.rs:23).",
+   "about": [
+      "net-transition:o_play_0_0", "net-transition:o_play_0_1", "net-transition:o_play_0_2",
+      "net-transition:o_play_0_3", "net-transition:o_play_0_4", "net-transition:o_play_0_5",
+      "net-transition:o_play_1_0", "net-transition:o_play_1_1", "net-transition:o_play_1_2",
+      "net-transition:o_play_1_3", "net-transition:o_play_1_4", "net-transition:o_play_1_5",
+      "net-transition:o_play_2_0", "net-transition:o_play_2_1", "net-transition:o_play_2_2",
+      "net-transition:o_play_2_3", "net-transition:o_play_2_4", "net-transition:o_play_2_5",
+      "net-transition:o_play_3_0", "net-transition:o_play_3_1", "net-transition:o_play_3_2",
+      "net-transition:o_play_3_3", "net-transition:o_play_3_4", "net-transition:o_play_3_5",
+      "net-transition:o_play_4_0", "net-transition:o_play_4_1", "net-transition:o_play_4_2",
+      "net-transition:o_play_4_3", "net-transition:o_play_4_4", "net-transition:o_play_4_5",
+      "net-transition:o_play_5_0", "net-transition:o_play_5_1", "net-transition:o_play_5_2",
+      "net-transition:o_play_5_3", "net-transition:o_play_5_4", "net-transition:o_play_5_5",
+      "net-transition:o_play_6_0", "net-transition:o_play_6_1", "net-transition:o_play_6_2",
+      "net-transition:o_play_6_3", "net-transition:o_play_6_4", "net-transition:o_play_6_5"
+     ],
+   "views": ["flat", "cospan", "incidence", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1310, "to": 1310},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1273, "to": 1273},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1173, "to": 1173},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 23, "to": 30, "note": "auto = name contains \"win\"; sign +1 for x_, -1 otherwise"}
+   ]
+  },
+  {
+   "id": "c4-net-x-wins", "kind": "note", "title": "x_win_*: X's win detectors",
+   "text": "x_win_*: transitions, 69 of them. A win detector: automatic in pflow-rs's test game (its name contains \"win\"), it fires as soon as it is enabled, and puts a token on win_x. The fixture's win detectors are catalytic: they consume the opponent's turn token and game_active. Automatic transitions settle lowest index first until none is enabled (game.rs:221-232).",
+   "about": [
+      "net-transition:x_win_d1_0_0", "net-transition:x_win_d1_0_1", "net-transition:x_win_d1_0_2",
+      "net-transition:x_win_d1_1_0", "net-transition:x_win_d1_1_1", "net-transition:x_win_d1_1_2",
+      "net-transition:x_win_d1_2_0", "net-transition:x_win_d1_2_1", "net-transition:x_win_d1_2_2",
+      "net-transition:x_win_d1_3_0", "net-transition:x_win_d1_3_1", "net-transition:x_win_d1_3_2",
+      "net-transition:x_win_d2_0_3", "net-transition:x_win_d2_0_4", "net-transition:x_win_d2_0_5",
+      "net-transition:x_win_d2_1_3", "net-transition:x_win_d2_1_4", "net-transition:x_win_d2_1_5",
+      "net-transition:x_win_d2_2_3", "net-transition:x_win_d2_2_4", "net-transition:x_win_d2_2_5",
+      "net-transition:x_win_d2_3_3", "net-transition:x_win_d2_3_4", "net-transition:x_win_d2_3_5",
+      "net-transition:x_win_h_0_0", "net-transition:x_win_h_0_1", "net-transition:x_win_h_0_2",
+      "net-transition:x_win_h_0_3", "net-transition:x_win_h_1_0", "net-transition:x_win_h_1_1",
+      "net-transition:x_win_h_1_2", "net-transition:x_win_h_1_3", "net-transition:x_win_h_2_0",
+      "net-transition:x_win_h_2_1", "net-transition:x_win_h_2_2", "net-transition:x_win_h_2_3",
+      "net-transition:x_win_h_3_0", "net-transition:x_win_h_3_1", "net-transition:x_win_h_3_2",
+      "net-transition:x_win_h_3_3", "net-transition:x_win_h_4_0", "net-transition:x_win_h_4_1",
+      "net-transition:x_win_h_4_2", "net-transition:x_win_h_4_3", "net-transition:x_win_h_5_0",
+      "net-transition:x_win_h_5_1", "net-transition:x_win_h_5_2", "net-transition:x_win_h_5_3",
+      "net-transition:x_win_v_0_0", "net-transition:x_win_v_0_1", "net-transition:x_win_v_0_2",
+      "net-transition:x_win_v_1_0", "net-transition:x_win_v_1_1", "net-transition:x_win_v_1_2",
+      "net-transition:x_win_v_2_0", "net-transition:x_win_v_2_1", "net-transition:x_win_v_2_2",
+      "net-transition:x_win_v_3_0", "net-transition:x_win_v_3_1", "net-transition:x_win_v_3_2",
+      "net-transition:x_win_v_4_0", "net-transition:x_win_v_4_1", "net-transition:x_win_v_4_2",
+      "net-transition:x_win_v_5_0", "net-transition:x_win_v_5_1", "net-transition:x_win_v_5_2",
+      "net-transition:x_win_v_6_0", "net-transition:x_win_v_6_1", "net-transition:x_win_v_6_2"
+     ],
+   "views": ["flat", "cospan", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1311, "to": 1311},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1173, "to": 1173},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1205, "to": 1205},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 23, "to": 23, "note": "auto = name contains \"win\""},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 4, "to": 11, "note": "automatic transitions fire as soon as enabled"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 221, "to": 232, "note": "settle"}
+   ]
+  },
+  {
+   "id": "c4-net-o-wins", "kind": "note", "title": "o_win_*: O's win detectors",
+   "text": "o_win_*: transitions, 69 of them. A win detector: automatic in pflow-rs's test game (its name contains \"win\"), it fires as soon as it is enabled, and puts a token on win_o. The fixture's win detectors are catalytic: they consume the opponent's turn token and game_active. Automatic transitions settle lowest index first until none is enabled (game.rs:221-232).",
+   "about": [
+      "net-transition:o_win_d1_0_0", "net-transition:o_win_d1_0_1", "net-transition:o_win_d1_0_2",
+      "net-transition:o_win_d1_1_0", "net-transition:o_win_d1_1_1", "net-transition:o_win_d1_1_2",
+      "net-transition:o_win_d1_2_0", "net-transition:o_win_d1_2_1", "net-transition:o_win_d1_2_2",
+      "net-transition:o_win_d1_3_0", "net-transition:o_win_d1_3_1", "net-transition:o_win_d1_3_2",
+      "net-transition:o_win_d2_0_3", "net-transition:o_win_d2_0_4", "net-transition:o_win_d2_0_5",
+      "net-transition:o_win_d2_1_3", "net-transition:o_win_d2_1_4", "net-transition:o_win_d2_1_5",
+      "net-transition:o_win_d2_2_3", "net-transition:o_win_d2_2_4", "net-transition:o_win_d2_2_5",
+      "net-transition:o_win_d2_3_3", "net-transition:o_win_d2_3_4", "net-transition:o_win_d2_3_5",
+      "net-transition:o_win_h_0_0", "net-transition:o_win_h_0_1", "net-transition:o_win_h_0_2",
+      "net-transition:o_win_h_0_3", "net-transition:o_win_h_1_0", "net-transition:o_win_h_1_1",
+      "net-transition:o_win_h_1_2", "net-transition:o_win_h_1_3", "net-transition:o_win_h_2_0",
+      "net-transition:o_win_h_2_1", "net-transition:o_win_h_2_2", "net-transition:o_win_h_2_3",
+      "net-transition:o_win_h_3_0", "net-transition:o_win_h_3_1", "net-transition:o_win_h_3_2",
+      "net-transition:o_win_h_3_3", "net-transition:o_win_h_4_0", "net-transition:o_win_h_4_1",
+      "net-transition:o_win_h_4_2", "net-transition:o_win_h_4_3", "net-transition:o_win_h_5_0",
+      "net-transition:o_win_h_5_1", "net-transition:o_win_h_5_2", "net-transition:o_win_h_5_3",
+      "net-transition:o_win_v_0_0", "net-transition:o_win_v_0_1", "net-transition:o_win_v_0_2",
+      "net-transition:o_win_v_1_0", "net-transition:o_win_v_1_1", "net-transition:o_win_v_1_2",
+      "net-transition:o_win_v_2_0", "net-transition:o_win_v_2_1", "net-transition:o_win_v_2_2",
+      "net-transition:o_win_v_3_0", "net-transition:o_win_v_3_1", "net-transition:o_win_v_3_2",
+      "net-transition:o_win_v_4_0", "net-transition:o_win_v_4_1", "net-transition:o_win_v_4_2",
+      "net-transition:o_win_v_5_0", "net-transition:o_win_v_5_1", "net-transition:o_win_v_5_2",
+      "net-transition:o_win_v_6_0", "net-transition:o_win_v_6_1", "net-transition:o_win_v_6_2"
+     ],
+   "views": ["flat", "cospan", "process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/flat.js", "from": 1312, "to": 1312},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1173, "to": 1173},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/cospan.js", "from": 1205, "to": 1205},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/tests/common/mod.rs", "from": 23, "to": 23, "note": "auto = name contains \"win\""},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 4, "to": 11, "note": "automatic transitions fire as soon as enabled"},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/game.rs", "from": 221, "to": 232, "note": "settle"}
+   ]
+  },
+  {
+   "id": "c4-caveat-incidence-reads", "kind": "caveat", "title": "C cannot see the win detectors' reads",
+   "text": "C forgets read arcs, inhibitor arcs and self-loops (pre = post). The Connect-4 win detectors' reads of the board do not show in C: a win detector takes a cell and puts it back (pre = post = 1), which C records as 0. The fixture declares no invariants, so no y·C check is drawn.",
+   "about": [
+      "net-transition:x_win_d1_0_0", "net-transition:x_win_d1_0_1", "net-transition:x_win_d1_0_2",
+      "net-transition:x_win_d1_1_0", "net-transition:x_win_d1_1_1", "net-transition:x_win_d1_1_2",
+      "net-transition:x_win_d1_2_0", "net-transition:x_win_d1_2_1", "net-transition:x_win_d1_2_2",
+      "net-transition:x_win_d1_3_0", "net-transition:x_win_d1_3_1", "net-transition:x_win_d1_3_2",
+      "net-transition:x_win_d2_0_3", "net-transition:x_win_d2_0_4", "net-transition:x_win_d2_0_5",
+      "net-transition:x_win_d2_1_3", "net-transition:x_win_d2_1_4", "net-transition:x_win_d2_1_5",
+      "net-transition:x_win_d2_2_3", "net-transition:x_win_d2_2_4", "net-transition:x_win_d2_2_5",
+      "net-transition:x_win_d2_3_3", "net-transition:x_win_d2_3_4", "net-transition:x_win_d2_3_5",
+      "net-transition:x_win_h_0_0", "net-transition:x_win_h_0_1", "net-transition:x_win_h_0_2",
+      "net-transition:x_win_h_0_3", "net-transition:x_win_h_1_0", "net-transition:x_win_h_1_1",
+      "net-transition:x_win_h_1_2", "net-transition:x_win_h_1_3", "net-transition:x_win_h_2_0",
+      "net-transition:x_win_h_2_1", "net-transition:x_win_h_2_2", "net-transition:x_win_h_2_3",
+      "net-transition:x_win_h_3_0", "net-transition:x_win_h_3_1", "net-transition:x_win_h_3_2",
+      "net-transition:x_win_h_3_3", "net-transition:x_win_h_4_0", "net-transition:x_win_h_4_1",
+      "net-transition:x_win_h_4_2", "net-transition:x_win_h_4_3", "net-transition:x_win_h_5_0",
+      "net-transition:x_win_h_5_1", "net-transition:x_win_h_5_2", "net-transition:x_win_h_5_3",
+      "net-transition:x_win_v_0_0", "net-transition:x_win_v_0_1", "net-transition:x_win_v_0_2",
+      "net-transition:x_win_v_1_0", "net-transition:x_win_v_1_1", "net-transition:x_win_v_1_2",
+      "net-transition:x_win_v_2_0", "net-transition:x_win_v_2_1", "net-transition:x_win_v_2_2",
+      "net-transition:x_win_v_3_0", "net-transition:x_win_v_3_1", "net-transition:x_win_v_3_2",
+      "net-transition:x_win_v_4_0", "net-transition:x_win_v_4_1", "net-transition:x_win_v_4_2",
+      "net-transition:x_win_v_5_0", "net-transition:x_win_v_5_1", "net-transition:x_win_v_5_2",
+      "net-transition:x_win_v_6_0", "net-transition:x_win_v_6_1", "net-transition:x_win_v_6_2",
+      "net-transition:o_win_d1_0_0", "net-transition:o_win_d1_0_1", "net-transition:o_win_d1_0_2",
+      "net-transition:o_win_d1_1_0", "net-transition:o_win_d1_1_1", "net-transition:o_win_d1_1_2",
+      "net-transition:o_win_d1_2_0", "net-transition:o_win_d1_2_1", "net-transition:o_win_d1_2_2",
+      "net-transition:o_win_d1_3_0", "net-transition:o_win_d1_3_1", "net-transition:o_win_d1_3_2",
+      "net-transition:o_win_d2_0_3", "net-transition:o_win_d2_0_4", "net-transition:o_win_d2_0_5",
+      "net-transition:o_win_d2_1_3", "net-transition:o_win_d2_1_4", "net-transition:o_win_d2_1_5",
+      "net-transition:o_win_d2_2_3", "net-transition:o_win_d2_2_4", "net-transition:o_win_d2_2_5",
+      "net-transition:o_win_d2_3_3", "net-transition:o_win_d2_3_4", "net-transition:o_win_d2_3_5",
+      "net-transition:o_win_h_0_0", "net-transition:o_win_h_0_1", "net-transition:o_win_h_0_2",
+      "net-transition:o_win_h_0_3", "net-transition:o_win_h_1_0", "net-transition:o_win_h_1_1",
+      "net-transition:o_win_h_1_2", "net-transition:o_win_h_1_3", "net-transition:o_win_h_2_0",
+      "net-transition:o_win_h_2_1", "net-transition:o_win_h_2_2", "net-transition:o_win_h_2_3",
+      "net-transition:o_win_h_3_0", "net-transition:o_win_h_3_1", "net-transition:o_win_h_3_2",
+      "net-transition:o_win_h_3_3", "net-transition:o_win_h_4_0", "net-transition:o_win_h_4_1",
+      "net-transition:o_win_h_4_2", "net-transition:o_win_h_4_3", "net-transition:o_win_h_5_0",
+      "net-transition:o_win_h_5_1", "net-transition:o_win_h_5_2", "net-transition:o_win_h_5_3",
+      "net-transition:o_win_v_0_0", "net-transition:o_win_v_0_1", "net-transition:o_win_v_0_2",
+      "net-transition:o_win_v_1_0", "net-transition:o_win_v_1_1", "net-transition:o_win_v_1_2",
+      "net-transition:o_win_v_2_0", "net-transition:o_win_v_2_1", "net-transition:o_win_v_2_2",
+      "net-transition:o_win_v_3_0", "net-transition:o_win_v_3_1", "net-transition:o_win_v_3_2",
+      "net-transition:o_win_v_4_0", "net-transition:o_win_v_4_1", "net-transition:o_win_v_4_2",
+      "net-transition:o_win_v_5_0", "net-transition:o_win_v_5_1", "net-transition:o_win_v_5_2",
+      "net-transition:o_win_v_6_0", "net-transition:o_win_v_6_1", "net-transition:o_win_v_6_2"
+     ],
+   "views": ["incidence"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/incidence.js", "from": 144, "to": 144},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/incidence.js", "from": 999, "to": 999},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/incidence.js", "from": 994, "to": 994},
+     {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-reachability/src/invariants.rs", "from": 142, "to": 184, "note": "incidence_matrix: output − input; read and inhibitor arcs excluded"},
+     {"bib": "baez-master"}
+   ]
+  },
+  {
+   "id": "c4-note-opening", "kind": "note", "title": "The four-drop opening",
+   "text": "One play is one process: a fixed four-drop opening fired on the fixture net. X into column 3, row 0; O into column 3, row 1; X into column 2, row 0; O into column 4, row 0. Each drop is checked enabled by the firing rule. The search plan computes a value over all plays; no search is run here.",
+   "about": [
+      "net-transition:x_play_3_0", "net-transition:o_play_3_1", "net-transition:x_play_2_0",
+      "net-transition:o_play_4_0"
+     ],
+   "views": ["process"],
+   "cites": [
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1225, "to": 1230},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1407, "to": 1407},
+     {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "js/views/process.js", "from": 1387, "to": 1387}
+   ],
+   "check": {
+      "claim": "a column fills from the bottom and the sides alternate: the fixed opening x_play_3_0, o_play_3_1, x_play_2_0, o_play_4_0 fires, every step enabled when taken",
+      "steps": [
+        {"command": "plan.opening", "args": {}, "expect": [
+          {"path": "/ok", "op": "==", "value": true},
+          {"path": "/fired", "op": "==", "value": 4},
+          {"path": "/steps/0/transition", "op": "==", "value": "x_play_3_0"},
+          {"path": "/steps/0/enabled", "op": "==", "value": true},
+          {"path": "/steps/1/transition", "op": "==", "value": "o_play_3_1"},
+          {"path": "/steps/1/enabled", "op": "==", "value": true},
+          {"path": "/steps/2/transition", "op": "==", "value": "x_play_2_0"},
+          {"path": "/steps/2/enabled", "op": "==", "value": true},
+          {"path": "/steps/3/transition", "op": "==", "value": "o_play_4_0"},
+          {"path": "/steps/3/enabled", "op": "==", "value": true}]}
+      ]
+     }
+  }
+ ]
+}

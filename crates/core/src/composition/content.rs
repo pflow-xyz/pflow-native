@@ -47,7 +47,7 @@ pub const SCENARIO_OPS: [&str; 6] = ["==", "!=", "<", "<=", ">", ">="];
 /// work or memory (a document is also at most `document::MAX_DOCUMENT_BYTES`).
 pub const MAX_ENTRIES: usize = 1000;
 pub const MAX_TEXT_BYTES: usize = 32 * 1024;
-pub const MAX_ABOUT: usize = 64;
+pub const MAX_ABOUT: usize = 512;
 
 // ------------------------------------------------------------ types
 
@@ -478,7 +478,7 @@ pub struct Library {
 }
 
 const ORDERS_JSON: &str = include_str!("library/orders.content.json");
-const CONNECT4_JSON: &str = include_str!("library/connect4.stub.json");
+const CONNECT4_JSON: &str = include_str!("library/connect4.content.json");
 
 pub fn library() -> &'static [Library] {
     static L: OnceLock<Vec<Library>> = OnceLock::new();
