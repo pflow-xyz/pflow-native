@@ -24,6 +24,7 @@ use eframe::egui::{
 use pflow_native_core::{composition as comp, lens, search_plan as sp, Document, Session, Step};
 use serde_json::{json, Map, Value};
 
+mod a_draw;
 mod boundaries_view;
 mod cospan_view;
 mod flat_view;
@@ -34,6 +35,7 @@ mod operad_view;
 mod process_view;
 mod spiders_view;
 mod string_view;
+use a_draw::*;
 use boundaries_view::*;
 use cospan_view::*;
 use flat_view::*;
