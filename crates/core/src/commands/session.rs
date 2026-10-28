@@ -249,7 +249,10 @@ fn restore(sess: &mut Session, a: &Value) -> Result<Value> {
         if sess.search_plan.is_some() || plan.is_some() {
             sess.revision += 1;
         }
-        sess.search_plan = plan.map(|plan| crate::search_plan::OpenPlan { plan, game: Default::default() });
+        sess.search_plan = plan.map(|plan| crate::search_plan::OpenPlan {
+            plan,
+            game: Default::default(),
+        });
     }
     if let Some(cv) = p.composition_view {
         out.insert("composition_view".into(), json!(cv.view));

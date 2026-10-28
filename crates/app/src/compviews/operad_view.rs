@@ -7,8 +7,8 @@
 //! A port of the prototype's `js/views/operad.js`; layout is deterministic
 //! and in design coordinates (the prototype's SVG viewBox), mapped by [`Xf`].
 
-use super::a_operad_theme::*;
 use super::a_draw::*;
+use super::a_operad_theme::*;
 use super::*;
 
 const OW: f32 = 1150.0;

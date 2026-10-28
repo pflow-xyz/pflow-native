@@ -562,18 +562,6 @@ impl<'a> Ctx<'a> {
             .extend(Shape::dashed_line(&[a, b], Stroke::new(w, c), 6.0, 4.0));
     }
 
-    fn curve(&self, a: Pos2, b: Pos2, c: Color32, w: f32) {
-        let dx = (b.x - a.x).abs().max(40.0) * 0.5;
-        let pts = [a, a + Vec2::new(dx, 0.0), b - Vec2::new(dx, 0.0), b];
-        self.p
-            .add(egui::epaint::CubicBezierShape::from_points_stroke(
-                pts,
-                false,
-                Color32::TRANSPARENT,
-                Stroke::new(w, c),
-            ));
-    }
-
     fn note(&mut self, level: &'static str, t: impl Into<String>) {
         self.notes.push((level, t.into()));
     }
@@ -731,58 +719,6 @@ impl<'a> Ctx<'a> {
             .chain(arr(&pat["portTemplates"]))
             .find(|p| s(&p["key"]) == key)
             .cloned()
-    }
-
-    /// A plan slot: a drop target lit where `plan.slot_candidates` says the
-    /// piece may go.
-    fn slot(&mut self, r: Rect, slot: &str, title: &str) {
-        let mut stroke = MUTED;
-        let mut v: Option<Value> = None;
-        if let Some(Drag::Piece { cands: Some(c), .. }) = self.drag {
-            if let Some(x) = arr(&c["slots"]).iter().find(|x| s(&x["slot"]) == slot) {
-                if x["ok"] == true {
-                    stroke = LIT;
-                }
-                v = Some(x.clone());
-            }
-        }
-        self.p.rect(
-            r,
-            6.0,
-            Color32::TRANSPARENT,
-            Stroke::new(if stroke == LIT { 3.0 } else { 1.0 }, stroke),
-            StrokeKind::Middle,
-        );
-        self.text(
-            r.left_top() + Vec2::new(6.0, 4.0),
-            Align2::LEFT_TOP,
-            title,
-            11.0,
-            MUTED,
-        );
-        let mut i = info(format!("slot {slot}"));
-        if let Some(sl) = sp::slot(slot) {
-            i = i.fact("accepts", sl.accepts).fact(
-                "field",
-                sl.field
-                    .unwrap_or("(designed in the ROADMAP, not a SearchPlan field)"),
-            );
-        }
-        if let Some(x) = &v {
-            i = i.fact(
-                if x["ok"] == true { "drop" } else { "refused" },
-                s(&x["why"]).to_string() + if x["ok"] == true { "legal" } else { "" },
-            );
-        }
-        self.hover(r, i);
-        if self.released && self.pointer.is_some_and(|p| r.contains(p)) {
-            if let (Some(Drag::Piece { name, .. }), Some(x)) = (self.drag, &v) {
-                if x["ok"] == true {
-                    let n = name.clone();
-                    self.command("plan.add_piece", json!({"piece": n, "slot": slot}));
-                }
-            }
-        }
     }
 
     /// A piece chip (in a slot, or in the palette when `palette`).
@@ -945,7 +881,6 @@ pub fn draw(
 
 // ------------------------------------------------------------ shared layout (orders)
 
-#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 struct Laid {
     id: String,
     pattern: String,
@@ -985,7 +920,6 @@ fn side_of(kind: &str, target: &str) -> &'static str {
 
 /// Subnet boxes in a row across `area` (wrapping to two rows past four),
 /// each port anchored on its side.
-#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn lay_boxes(c: &Ctx, area: Rect, h: f32) -> Vec<Laid> {
     let subs = subnets(c);
     let n = subs.len().max(1);
@@ -1052,7 +986,6 @@ fn subnet_info(sub: &Value) -> Info {
 }
 
 /// Draws the boxes and ports (registering both), returns the layout.
-#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn draw_boxes(c: &mut Ctx, area: Rect, h: f32, port_labels: bool) -> Vec<Laid> {
     let laid = lay_boxes(c, area, h);
     let subs = subnets(c);
@@ -1109,7 +1042,6 @@ fn draw_boxes(c: &mut Ctx, area: Rect, h: f32, port_labels: bool) -> Vec<Laid> {
     laid
 }
 
-#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn anchor(laid: &[Laid], end: &Value, toward: Pos2) -> Option<Pos2> {
     let l = laid.iter().find(|l| l.id == s(&end["subnet"]))?;
     let (_, a) = l.ports.iter().find(|(p, _)| p["id"] == end["port"])?;
@@ -1137,7 +1069,6 @@ fn link_info(l: &Value) -> Info {
 
 /// A link between two anchors, drawn in RenderDOT's style; a click on it
 /// removes it (`bundle.remove_link`).
-#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn draw_link(c: &mut Ctx, laid: &[Laid], l: &Value) -> Option<Rect> {
     let a0 = anchor(laid, &l["from"], c.rect.center())?;
     let b = anchor(laid, &l["to"], a0)?;
@@ -1179,56 +1110,6 @@ fn net_counts(c: &Ctx) -> (i64, i64, i64) {
         c.d.net["transitions"].as_i64().unwrap_or(0),
         c.d.net["arcs"].as_i64().unwrap_or(0),
     )
-}
-
-/// The Connect-4 net at its own coordinates, scaled into `r`.
-fn draw_c4_net(c: &mut Ctx, r: Rect) {
-    let Some(doc) = &c.d.c4 else { return };
-    let xs = doc
-        .places
-        .iter()
-        .map(|p| p.x)
-        .chain(doc.transitions.iter().map(|t| t.x));
-    let ys = doc
-        .places
-        .iter()
-        .map(|p| p.y)
-        .chain(doc.transitions.iter().map(|t| t.y));
-    let (x0, x1) = xs.fold((f64::MAX, f64::MIN), |(a, b), x| (a.min(x), b.max(x)));
-    let (y0, y1) = ys.fold((f64::MAX, f64::MIN), |(a, b), y| (a.min(y), b.max(y)));
-    let sc =
-        ((r.width() as f64) / (x1 - x0).max(1.0)).min((r.height() as f64) / (y1 - y0).max(1.0));
-    let at = |x: f64, y: f64| {
-        Pos2::new(
-            r.left() + ((x - x0) * sc) as f32,
-            r.top() + ((y - y0) * sc) as f32,
-        )
-    };
-    let pos: BTreeMap<&str, Pos2> = doc
-        .places
-        .iter()
-        .map(|p| (p.id.as_str(), at(p.x, p.y)))
-        .chain(
-            doc.transitions
-                .iter()
-                .map(|t| (t.id.as_str(), at(t.x, t.y))),
-        )
-        .collect();
-    for a in &doc.arcs {
-        if let (Some(p), Some(q)) = (pos.get(a.source.as_str()), pos.get(a.target.as_str())) {
-            c.line(*p, *q, Color32::from_gray(205), 0.5);
-        }
-    }
-    for p in &doc.places {
-        c.p.circle_filled(pos[p.id.as_str()], 2.2, Color32::from_rgb(0x8a, 0x93, 0xa0));
-    }
-    for t in &doc.transitions {
-        c.p.rect_filled(
-            Rect::from_center_size(pos[t.id.as_str()], Vec2::splat(3.0)),
-            0.0,
-            TRANS,
-        );
-    }
 }
 
 fn plan_lists(c: &Ctx) -> (Value, Vec<String>, Vec<Value>, Vec<String>, Vec<String>) {
