@@ -25,6 +25,8 @@ use pflow_native_core::{composition as comp, lens, search_plan as sp, Document, 
 use serde_json::{json, Map, Value};
 
 mod a_draw;
+mod a_operad_c4;
+mod a_operad_theme;
 mod boundaries_view;
 mod cospan_view;
 mod flat_view;
