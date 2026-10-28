@@ -221,10 +221,6 @@ impl<'a> Ctx<'a> {
         }
     }
 
-    pub fn pointer_in(&self, r: Rect) -> bool {
-        self.pointer.is_some_and(|p| r.contains(p))
-    }
-
     /// Whether the click this frame landed in `r`.
     pub fn click_in(&self, r: Rect) -> bool {
         self.clicked && self.pointer_in(r)

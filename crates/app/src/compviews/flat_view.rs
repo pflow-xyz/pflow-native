@@ -5,6 +5,7 @@
 //! prototype's `js/views/flat.js`.
 
 use super::d_draw::*;
+use super::d_draw::{ARC, PAPER};
 use super::d_flat_layout::{self as lay, Anchor, Lay, Node};
 use super::pflow_rs_cites::pflow_rs;
 use super::*;
