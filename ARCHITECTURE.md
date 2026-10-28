@@ -104,6 +104,7 @@ CommandSpec {
 | `view.*`, `tool.*` | zoom/pan/fit/tool selection, open/close views (1) |
 | `sim.*` | token game: enabled/fire/reset/step/auto (1); ODE (1); SSA, scenarios, compare, equilibrium, crosscheck, dataset (3) |
 | `analysis.*` | reachability graph, invariants, incidence, verify, validate, diagnose, sensitivity, siphons/traps (4) |
+| `game.*` | a net as a two-sided game: exact value and a best move of the current position, by a pflow-metamodel `SearchPlan` |
 | `data.*` | event logs, conformance, conformance stream, calibrate, mining (5) |
 | `opt.*` | param heatmap, optimize/Pareto, fit (3, 5) |
 | `compose.*` | components, compose, extend, diff, bind, systems, pipelines (6) |

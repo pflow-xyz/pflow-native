@@ -20,6 +20,7 @@ pub mod edit;
 pub mod export;
 pub mod file;
 pub mod fileio;
+pub mod game;
 pub mod job;
 pub mod learn;
 pub mod macros;
@@ -66,6 +67,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     settings::SET,
     data::SET,
     learn::SET,
+    game::SET,
     #[cfg(feature = "rnn")]
     rnn::SET,
     conformance::SET,

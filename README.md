@@ -83,6 +83,7 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 | Structure | `analysis.incidence`, `analysis.invariants` (P/T, highlighted on the net), `analysis.siphons` (siphons/traps, Commoner, deadlock witnesses), `analysis.validate`, `analysis.canonical` / `analysis.classify` (symmetry orbits, identical to sim.pflow.xyz on the bundled examples) |
 | State space | `analysis.reachability` (graph; click a state to load it), `analysis.verify` (counterexamples become traces you can step through), `analysis.reach` (shortest witness or invariant certificate), `analysis.diagnose` (tornado) |
 | Event logs | `data.load_log` (CSV/JSONL), `data.generate` (seeded synthetic logs), `data.conformance` (fitness/precision/…, residual on the net), `data.replay` (first divergence + repair), `data.discover` (alpha/heuristic mining → new net) |
+| Games | `game.value` (the exact value of the current position, from `sides`, `reward` and `auto` as the `rnn.*` commands take them), `game.move` (a best move there, not fired); both run a pflow-metamodel `SearchPlan` under a node budget, so a result is the same on any machine |
 | Learning | `data.calibrate` (rates from a log), `opt.fit` (ODE rates to observed series), `opt.distill` (game scorer vs exact minimax). With `apply`, the learned rates are one undo step |
 | Views | `view.string_diagram` (pflow.xyz's string diagram), `net.layout {algorithm: "string"}` |
 
@@ -181,7 +182,7 @@ The last row held on all 4 seeds tried, so a trained MLP is minimax-equivalent o
 
 Undertrained models only slip as O, in 2–3 of about 450 positions. Those moves give up value against perfect play but don't change a result, because O loses with best play anyway. On 14 cores a `[256, 128]` run takes 2–5 minutes.
 
-`examples/connect-4.json` is Connect Four: 131 places, 222 transitions, about 4.5 trillion positions. That is far past the teacher's 200,000-position cap, so `rnn.verify` and `rnn.imitate` take `games` and sample instead. Positions come from random-play games, at least `min_moves` (default 14) moves in, and every legal move at each is valued by an exact alpha-beta search over the firing rule (`budget` nodes per move; positions past it are skipped and counted, never guessed). `labels` keeps those values in a JSONL file, so later runs only search new positions. On the default sample (250 games, seed 13: 1,819 positions, 123 skipped):
+`examples/connect-4.json` is Connect Four: 131 places, 222 transitions, about 4.5 trillion positions. That is far past the teacher's 200,000-position cap, so `rnn.verify` and `rnn.imitate` take `games` and sample instead. Positions come from random-play games, at least `min_moves` (default 14) moves in, and every legal move at each is valued by an exact alpha-beta search over the firing rule (`budget` nodes per move; positions past it are skipped and counted, never guessed). `labels` keeps those values in a JSONL file, so later runs only search new positions. On the default sample (250 games, seed 13: 1,819 positions, 123 skipped; measured before the pflow-rs `9ce3d43` pin, whose search skips fewer at the same budget, with the same values):
 
 | player | X game-losing | O game-losing |
 |---|---|---|
