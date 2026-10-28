@@ -66,13 +66,9 @@ fn strict_no_boundary_and_backward_maps_do_not_fire_together() {
     let l = comp::default_links();
     let a = lens::analyse(&refs, &l, &flat(&refs, &l));
     assert!(!a.holds);
-    // go-pflow (and the prototype) count 0 token links: every place-port
-    // pair fails E_SCHEMA_MISMATCH or E_PORT_DIRECTION, checks pflow-compose
-    // lacks at the pin (tests/views_compose.rs, pflow_rs_gap_at_the_pin).
-    // Change 52 to 0 when the pin has them.
     assert_eq!(
         json!(a.legal),
-        json!({"data": 0, "event": 72, "guard": 66, "token": 52})
+        json!({"data": 0, "event": 72, "guard": 66, "token": 0})
     );
     assert_eq!(a.glued, 0);
     let first = &a.steps[0];

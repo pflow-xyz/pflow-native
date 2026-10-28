@@ -13,22 +13,22 @@ homepage = "https://pflow.xyz"
 [workspace.dependencies]
 # pflow-rs, pinned. To build against a sibling checkout instead, see
 # .cargo/config.toml.example.
-pflow-core = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-parser = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-metamodel = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-solver = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-verify = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-validation = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-eventlog = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-mining = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-learn = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-compose = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
+pflow-core = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-parser = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-metamodel = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-solver = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-verify = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-validation = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-eventlog = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-mining = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-learn = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-compose = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
 # Zero-knowledge proofs of firings (feature `zk` on pflow-native-core).
-pflow-zk = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
-pflow-zk-arkworks = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad" }
+pflow-zk = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
+pflow-zk-arkworks = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a" }
 # Experimental RNN policies (feature `rnn` on pflow-native-core). Without its
 # default `pflow` feature it has no dependencies.
-pflow-tropical = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "a0a2bbc30fdada08f7443f9bd4d9b99dda0e47ad", default-features = false }
+pflow-tropical = { git = "https://github.com/pflow-xyz/pflow-rs", rev = "9f8c36e53d35e66a0423e424d3feb9580191836a", default-features = false }
 serde = { version = "1", features = ["derive"] }
 serde_json = { version = "1", features = ["preserve_order"] }
 thiserror = "2"

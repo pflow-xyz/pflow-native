@@ -2,20 +2,10 @@
 //! prototype's receipt `tests/fixtures/views/gopflow.json` (go-pflow
 //! c802f34 via pflow-views-prototype tools/gocheck; see the README there).
 //!
-//! The pin is pflow-rs a0a2bbc (branch feat/saga, pflow-rs#11: 29e6a34
-//! plus pflow-compose's port of go-pflow's saga), so every receipt case
-//! is compared, the saga instances included. One known gap, with its
-//! counts asserted so it cannot grow silently:
-//!
-//! - pflow-compose's `validate` lacks go-pflow's `E_SCHEMA_MISMATCH` and
-//!   `E_PORT_DIRECTION` checks, and writes `E_ENDPOINT_KIND`'s link kind
-//!   with `{:?}` ("a Token link"). The fix is upstream work (pflow-rs branch
-//!   `fix/validate-link-go-parity`, with which all 968 queue and pool verdicts match
-//!   the receipt exactly); until the pin has it, the receipt's rows are
-//!   compared with those two codes taken out and the kind's case changed.
-//!   [`pflow_rs_gap_at_the_pin`] holds the gap itself, and fails when the
-//!   pin moves past it. The flatten config "rejected" (refused by go-pflow
-//!   with E_PORT_DIRECTION) is excluded for the same reason.
+//! The pin is pflow-rs 9f8c36e (branch feat/saga, pflow-rs#11: pflow-compose's
+//! saga and its validateLink checks brought level with go-pflow), so every
+//! receipt case is compared exactly: the six subnets, all 5,576 verdicts, the
+//! eleven flattens and the four scenario runs.
 
 use std::collections::BTreeMap;
 
@@ -31,46 +21,6 @@ fn receipt() -> Value {
     ))
     .unwrap();
     serde_json::from_str(&text).unwrap()
-}
-
-/// The codes pflow-compose does not check at the pin.
-const GAP_CODES: [&str; 2] = ["E_SCHEMA_MISMATCH", "E_PORT_DIRECTION"];
-
-/// go-pflow's row as pflow-compose at the pin gives it: without the
-/// [`GAP_CODES`] (and their messages), the kind in E_ENDPOINT_KIND as
-/// `{:?}` writes it. Returns (ok, codes, messages, changed).
-fn at_the_pin(w: &Value) -> (bool, Vec<String>, Vec<String>, bool) {
-    let codes: Vec<String> = w["codes"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|c| c.as_str().unwrap().to_string())
-        .collect();
-    let msgs: Vec<String> = w["messages"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|m| m.as_str().unwrap().to_string())
-        .collect();
-    // Errors' messages come first, one per code; then the warnings'.
-    let (err_msgs, warn_msgs) = msgs.split_at(codes.len());
-    let mut kept_codes = vec![];
-    let mut kept = vec![];
-    for (c, m) in codes.iter().zip(err_msgs) {
-        if !GAP_CODES.contains(&c.as_str()) {
-            kept_codes.push(c.clone());
-            kept.push(
-                m.replace(
-                    "a token link connects places",
-                    "a Token link connects places",
-                )
-                .replace("a data link connects places", "a Data link connects places"),
-            );
-        }
-    }
-    kept.extend(warn_msgs.iter().cloned());
-    let changed = kept_codes != codes || kept != msgs;
-    (kept_codes.is_empty(), kept_codes, kept, changed)
 }
 
 fn built(ids: &[&str]) -> Vec<pflow_compose::Subnet> {
@@ -124,62 +74,16 @@ fn verdicts_match_go_pflow_validate() {
     let got = comp::all_verdicts(&refs);
     assert_eq!(got.len(), want.len());
     assert_eq!(got.len(), 5576, "6 instances' ordered port pairs × 4 kinds");
-    let (mut gap_rows, mut flipped, mut reworded) = (0, 0, 0);
     for (g, w) in got.iter().zip(&want) {
         let label = format!("{} {} -> {}", g.kind, g.from, g.to);
         assert_eq!(g.kind, w["kind"].as_str().unwrap(), "{label}");
         assert_eq!(g.from, w["from"].as_str().unwrap(), "{label}");
         assert_eq!(g.to, w["to"].as_str().unwrap(), "{label}");
-        let (ok, codes, msgs, changed) = at_the_pin(w);
-        let gap = w["codes"]
-            .as_array()
-            .unwrap()
-            .iter()
-            .any(|c| GAP_CODES.contains(&c.as_str().unwrap()));
-        gap_rows += usize::from(gap);
-        flipped += usize::from(json!(ok) != w["ok"]);
-        reworded += usize::from(changed && !gap);
-        assert_eq!(g.ok, ok, "{label}");
-        assert_eq!(g.codes, codes, "{label}");
+        assert_eq!(json!(g.ok), w["ok"], "{label}");
+        assert_eq!(json!(g.codes), w["codes"], "{label}");
         assert_eq!(json!(g.warnings), w["warnings"], "{label}");
-        assert_eq!(g.messages, msgs, "{label}");
+        assert_eq!(json!(g.messages), w["messages"], "{label}");
     }
-    // The gap, pinned: rows with a check pflow-compose lacks, of which
-    // these are legal at the pin and refused by go-pflow; and the
-    // E_ENDPOINT_KIND rows worded "a Token link".
-    assert_eq!((gap_rows, flipped, reworded), (470, 246, 2256));
-}
-
-#[test]
-fn pflow_rs_gap_at_the_pin() {
-    // When this fails, the pin has pflow-compose's schema and port-direction
-    // checks: drop GAP_CODES / at_the_pin and this test, and compare the
-    // receipt rows (and the "rejected" flatten) as they are.
-    let subs = built(&["orders", "orders2", "workers"]);
-    let refs: Vec<&pflow_compose::Subnet> = subs.iter().collect();
-    let v = |k, a: &str, b: &str| {
-        comp::validate_link(
-            &refs,
-            &comp::link(
-                k,
-                comp::parse_endpoint(&json!(a)).unwrap(),
-                comp::parse_endpoint(&json!(b)).unwrap(),
-            ),
-        )
-    };
-    use pflow_compose::LinkKind::*;
-    assert!(
-        v(Token, "orders:in", "orders2:in").ok,
-        "go-pflow: E_PORT_DIRECTION"
-    );
-    assert!(
-        v(Token, "orders:out", "workers:available").ok,
-        "go-pflow: E_SCHEMA_MISMATCH"
-    );
-    assert_eq!(
-        v(Token, "orders:dequeue", "orders2:in").errors[0].message,
-        "links[0]: a Token link connects places, but an endpoint names a transition"
-    );
 }
 
 fn flat_compare(got: &Value, want: &Value, id: &str) {
@@ -230,7 +134,6 @@ fn flat_compare(got: &Value, want: &Value, id: &str) {
 fn flattens_match_go_pflow_flatten_with_map() {
     let r = receipt();
     let mut compared = vec![];
-    let mut excluded = vec![];
     for cfg in r["flatten"].as_array().unwrap() {
         let id = cfg["id"].as_str().unwrap();
         let ids: Vec<&str> = cfg["subnets"]
@@ -239,13 +142,6 @@ fn flattens_match_go_pflow_flatten_with_map() {
             .iter()
             .map(|s| s.as_str().unwrap())
             .collect();
-        if id == "rejected" {
-            // go-pflow refuses its token link with E_PORT_DIRECTION, which
-            // pflow-compose does not check at the pin (see the module doc):
-            // it flattens. Excluded until the pin has the check.
-            excluded.push(id.to_string());
-            continue;
-        }
         let mut b = Bundle::new("composition");
         for s in built(&ids) {
             b.add_subnet(s);
@@ -269,13 +165,9 @@ fn flattens_match_go_pflow_flatten_with_map() {
             "guard-alone",
             "pool-share",
             "merge-sum",
-            "identity"
+            "identity",
+            "rejected"
         ]
-    );
-    assert_eq!(
-        excluded,
-        ["rejected"],
-        "until the pin checks port direction"
     );
 }
 
@@ -334,6 +226,17 @@ fn add_link_validates_first_and_refuses_with_go_pflow_codes() {
     assert_eq!(st["links"].as_array().unwrap().len(), 1);
     assert_eq!(st["links"][0]["idiom"], "idiom-queue-dequeue-pool-acquire");
 
+    let err = s
+        .execute(
+            "bundle.add_link",
+            json!({"kind": "token", "from": "orders:in", "to": "orders2:in"}),
+        )
+        .unwrap_err()
+        .to_string();
+    assert_eq!(
+        err,
+        "[E_PORT_DIRECTION] links[0]: token link's from port \"in\" is an in-port"
+    );
     let err = s
         .execute(
             "bundle.add_link",
@@ -460,11 +363,9 @@ fn candidates_light_what_validate_allows() {
     assert_eq!(same["code"], "PAGE_SAME_SUBNET");
     assert_eq!(same["rule"], "page");
 
-    // A place port with token preferred. go-pflow lights only the second
-    // queue's in-port (the pools' schema differs, and out/depth face the
-    // wrong way); pflow-compose at the pin lacks those two checks (see the
-    // module doc), so the pools' place ports and the queue's other two
-    // light too.
+    // A place port with token preferred: the pools' schema differs and
+    // orders2:out is an out-port (E_PORT_DIRECTION); the in-port and the
+    // observe port light, as go-pflow's verdicts have it.
     let c = s
         .execute(
             "bundle.candidates",
@@ -478,18 +379,7 @@ fn candidates_light_what_validate_allows() {
         .filter(|x| x["ok"] == json!(true))
         .map(|x| x["key"].as_str().unwrap())
         .collect();
-    assert_eq!(
-        lit,
-        [
-            "workers:available",
-            "workers:in_use",
-            "orders2:in",
-            "orders2:out",
-            "orders2:depth",
-            "workers2:available",
-            "workers2:in_use"
-        ]
-    );
+    assert_eq!(lit, ["orders2:in", "orders2:depth"]);
     let pool = &by_key["workers:available"];
     assert_eq!(pool["link"]["kind"], "guard");
     assert_eq!(pool["link"]["from"]["port"], "dequeue");
