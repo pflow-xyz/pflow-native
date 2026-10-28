@@ -191,6 +191,13 @@ pub struct CompositionView {
     /// top of the window, in diagram-viewer.js's own y.
     #[serde(default)]
     pub lens_y: f64,
+    /// The Laws view's step of that rewrite whose rule match is
+    /// highlighted (0-based; `None`: the first step).
+    #[serde(default)]
+    pub step: Option<usize>,
+    /// The Process view's scenario (`None`: refund).
+    #[serde(default)]
+    pub scenario: Option<String>,
 }
 
 fn default_level() -> String {
@@ -207,6 +214,8 @@ impl Default for CompositionView {
             rewrite: None,
             level: default_level(),
             lens_y: 0.0,
+            step: None,
+            scenario: None,
         }
     }
 }

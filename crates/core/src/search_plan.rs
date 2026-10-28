@@ -108,6 +108,7 @@ pub fn opening_json() -> Value {
     };
     let mut mk = m.initial_marking();
     let mut steps = vec![];
+    let mut markings = vec![marking_json(m, &mk)];
     let mut fired = 0;
     for t in OPENING {
         match m.enabled_why_not(t, &mk) {
@@ -115,6 +116,7 @@ pub fn opening_json() -> Value {
                 mk = m.fire(t, &mk);
                 fired += 1;
                 steps.push(json!({"transition": t, "enabled": true, "why": ""}));
+                markings.push(marking_json(m, &mk));
             }
             Err(e) => {
                 steps.push(json!({"transition": t, "enabled": false, "why": e.to_string()}));
@@ -122,7 +124,30 @@ pub fn opening_json() -> Value {
             }
         }
     }
-    json!({"ok": true, "id": "opening", "steps": steps, "fired": fired})
+    json!({"ok": true, "id": "opening", "steps": steps, "fired": fired, "markings": markings})
+}
+
+/// One marking of the opening: its non-zero places, and what is enabled
+/// there (`moves`; `autos`: the transitions whose name contains "win", which
+/// the pflow-rs tests read as automatic: `tests/common/mod.rs`).
+fn marking_json(m: &pflow_metamodel::Model, mk: &pflow_metamodel::Marking) -> Value {
+    let mut at: std::collections::BTreeMap<&str, i64> = Default::default();
+    for (p, n) in mk {
+        if *n != 0 {
+            at.insert(p.as_str(), *n);
+        }
+    }
+    let (mut moves, mut autos) = (vec![], vec![]);
+    for t in &m.transitions {
+        if m.enabled_why_not(&t.id, mk).is_ok() {
+            if t.id.contains("win") {
+                autos.push(t.id.clone());
+            } else {
+                moves.push(t.id.clone());
+            }
+        }
+    }
+    json!({"marking": at, "moves": moves, "autos": autos})
 }
 
 /// `plan.net`'s result: the Connect-4 net's size.

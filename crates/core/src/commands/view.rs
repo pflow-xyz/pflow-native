@@ -39,7 +39,9 @@ pub const SET: &[CommandSpec] = &[
             opt("view", Str, "view id"),
             opt("example", Str, "orders or connect4"),
             opt("lens", Str, "strict or assume"),
-            opt("rewrite", Str, "the Laws view's rewrite (\"\" for the default)"),
+            opt("rewrite", Str, "the Laws view's rewrite, or rule (\"\" for the default)"),
+            opt("step", Int, "the Laws view's step of that rewrite whose rule match is highlighted (0-based; -1 for the default)"),
+            opt("scenario", Str, "the Process view's scenario (\"\" for the default)"),
             opt("level", Str, "the string view's level: pattern or transition"),
             opt("lens_y", Num, "the transition level's lens position on the Connect-4 net"),
         ],
@@ -329,6 +331,14 @@ fn composition(sess: &mut Session, a: &Value) -> Result<Value> {
     }
     if let Some(r) = s(a, "rewrite") {
         cv.rewrite = (!r.is_empty()).then(|| r.to_string());
+        // a new rewrite starts at its first step
+        cv.step = None;
+    }
+    if let Some(k) = a.get("step").and_then(Value::as_i64) {
+        cv.step = usize::try_from(k).ok();
+    }
+    if let Some(sc) = s(a, "scenario") {
+        cv.scenario = (!sc.is_empty()).then(|| sc.to_string());
     }
     cv.open = crate::registry::b(a, "open").unwrap_or(true);
     let opening = cv.open && !sess.composition_view.open;
