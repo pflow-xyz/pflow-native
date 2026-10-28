@@ -44,7 +44,12 @@ fn tic_tac_toe_is_a_draw_and_its_best_move_keeps_it() {
     assert_eq!(v["mover"], json!(1.0));
     assert_eq!(v["moves"], 9);
     assert!(v["nodes"].as_u64().unwrap() > 0, "{v}");
+    // The result is kept as a Report.
+    let art = v["artifact"].as_str().expect("an artifact");
+    let stored = s.artifacts.iter().find(|x| x.id == art).expect("stored");
+    assert_eq!(stored.source.command, "game.value");
     let m = run(&mut s, "game.move", rules());
+    assert!(m["artifact"].is_string(), "{m}");
     assert_eq!(m["value"], v["value"], "{m}");
     assert_eq!(m["exact"], true);
     let t = m["transition"].as_str().expect("a move").to_string();
@@ -115,9 +120,12 @@ fn a_tiny_budget_gives_up_or_guesses() {
     let v = run(&mut s, "game.value", tiny.clone());
     assert_eq!(v["value"], Value::Null, "{v}");
     assert_eq!(v["exact"], false);
+    // The node that stopped the search is not counted past the budget.
+    assert_eq!(v["nodes"], 10, "{v}");
     let m = run(&mut s, "game.move", tiny.clone());
     assert_eq!(m["transition"], Value::Null, "{m}");
     assert_eq!(m["exact"], false);
+    assert_eq!(m["nodes"], 10, "{m}");
     assert!(m["reason"].as_str().unwrap().contains("past the budget"));
     let play = with(tiny, json!({"plan": {"mode": "play"}}));
     let g = run(&mut s, "game.move", play);
@@ -187,6 +195,33 @@ fn a_book_keeps_the_value_and_saves_nodes() {
     let other = json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1}, "auto": ["x_win_", "o_win_"], "book": book});
     let e = refused(&mut s, "game.value", other);
     assert!(e.contains("book"), "{e}");
+}
+
+#[test]
+fn a_book_line_for_a_final_position_is_refused() {
+    let mut s = ttt();
+    let st = Structure::new(&s.doc, &s.marking).expect("structure");
+    let d = Dense::new(&st, &game_rules(&st, &rules()).expect("rules")).expect("dense");
+    let r = &d.rules;
+    let mut mk = d.settled(&st, &s.marking).expect("settle");
+    for t in [
+        "x_play_00",
+        "o_play_10",
+        "x_play_01",
+        "o_play_11",
+        "x_play_02",
+    ] {
+        let i = r.ix.transitions.iter().position(|u| u == t).expect(t);
+        mk = r.play(&mk, i).expect("play");
+    }
+    assert!(r.moves(&mk).is_empty(), "x has won");
+    let book = [
+        d.label_header(usize::MAX).to_string(),
+        json!({"mk": mk, "vals": []}).to_string(),
+    ]
+    .join("\n");
+    let e = refused(&mut s, "game.value", with(rules(), json!({ "book": book })));
+    assert!(e.contains("book line 2") && e.contains("no values"), "{e}");
 }
 
 #[test]

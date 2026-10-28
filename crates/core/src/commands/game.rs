@@ -2,15 +2,17 @@
 //! position and a best move there, by pflow-metamodel's alpha-beta search
 //! run as a [`SearchPlan`] names it. The game is read from the `sides`,
 //! `reward` and `auto` arguments ([`crate::game`]); the search fires through
-//! the metamodel's firing rule and changes nothing in the session.
+//! the metamodel's firing rule and changes neither the net nor the marking.
+//! Each result is also stored as a Report artifact.
 
 use pflow_metamodel::{Book, SearchPlan};
 use serde_json::{json, Value};
 
 use crate::analysis::Structure;
+use crate::artifact::ArtifactData;
 use crate::game::{game_rules, Dense};
 use crate::registry::{always, arg, n, opt, s, ArgSpec, ArgType::*, CommandSpec};
-use crate::session::Session;
+use crate::session::{Session, Step};
 use crate::{Error, Result};
 
 const MENU: &str = "Analyze";
@@ -32,7 +34,7 @@ const ARGS: &[ArgSpec] = &[
     arg("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
     arg("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
     opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled, before anyone chooses (e.g. [\"x_win_\", \"o_win_\"]: win claims)"),
-    opt("plan", Json, "a SearchPlan (pflow-metamodel), or a JSON string of one: {mode, order, filters, root, drivers, memo}; default {}. A time budget (budget.ms) is refused"),
+    opt("plan", Json, "a SearchPlan (pflow-metamodel), or a JSON string of one: {mode, order, filters, root, drivers, memo}; default {}. A time budget (budget.ms) is refused. Root estimate \"ode\" solves the mass-action ODE with every transition at rate 1, not the session's rates"),
     opt("nodes", Int, "the node budget when the plan's drivers set none (default 1,000,000; at most 100,000,000)"),
     opt("book", Str, "an opening book: the text of a label cache as the experimental rnn commands write it to `labels` (JSONL, a header line naming the net and rules, then one position per line); its positions are pinned in the table, exact"),
 ];
@@ -44,9 +46,12 @@ pub const SET: &[CommandSpec] = &[
         help: "The exact value of the current position, from the +1 side's view, with both sides playing perfectly: \
                pflow-metamodel's alpha-beta search over the firing rule, run as `plan` names it. The game is the net read \
                through `sides` (who owns each transition), `reward` (read off the final marking) and `auto` (transitions \
-               nobody chooses, fired first). The value is null when the search runs past its node budget, and the same \
-               for a given plan and budget on any machine. Root estimate \"ode\" solves the mass-action ODE with every \
-               transition at rate 1, not the session's rates. Read-only.",
+               nobody chooses, fired first). The value is null when the search runs past its node budget (`nodes` then \
+               reports the budget). A plan and budget give the same result on every machine, except with the \"ode\" \
+               root estimate: it solves the mass-action ODE with every transition at rate 1, not the session's rates, \
+               and its step control uses the platform's floating-point `powf`, so the native and browser builds can \
+               search different numbers of nodes, and near the budget one can finish where the other does not. \
+               Changes neither the net nor the marking; the result is stored as a Report.",
         menu: MENU,
         shortcut: None,
         args: ARGS,
@@ -60,8 +65,12 @@ pub const SET: &[CommandSpec] = &[
         help: "A best move at the current position and its exact value (pflow-metamodel's Solver::choose, run as `plan` \
                names it; the game as for game.value). It is a best move: another plan may pick another, equally good one. \
                Past the node budget there is no move (transition null, reason \"past the budget\"), unless the plan's \
-               mode is \"play\", where the move is a guess (exact false). The same for a given plan and budget on any \
-               machine. The move is not fired: sim.fire it.",
+               mode is \"play\", where the move is a guess (exact false): the table's best move at the position if it \
+               has one, else the first the plan's root pieces rank, which is the net's first enabled move when the root \
+               names none, so give a root order (e.g. [\"ode\"]) for a guess worth playing. Deterministic as \
+               game.value is: the \"ode\" estimate runs every transition at rate 1, not the session's rates, and can \
+               search a different number of nodes in the browser build than natively. The move is not fired: sim.fire \
+               it. The result is stored as a Report.",
         menu: MENU,
         shortcut: None,
         args: ARGS,
@@ -174,9 +183,7 @@ impl Search {
         let rules = game_rules(&st, a)?;
         let (plan, budget) = plan(a)?;
         let d = Dense::new(&st, &rules)?;
-        let book = s(a, "book")
-            .map(|text| Book::from_labels(&d.rules, text))
-            .transpose()?;
+        let book = s(a, "book").map(|text| book(&d, text)).transpose()?;
         let mk = d.settled(&st, &sess.marking)?;
         let moves = d.rules.moves(&mk);
         Ok(Self {
@@ -200,6 +207,12 @@ impl Search {
         })
     }
 
+    /// The nodes `solver` searched. Past the budget it counts the node that
+    /// stopped it, one more than the budget: that one is not reported.
+    fn nodes(&self, solver: &pflow_metamodel::game::Solver<'_>) -> usize {
+        solver.nodes().min(self.budget)
+    }
+
     fn transition(&self, t: usize) -> &str {
         &self.st.transitions[self.d.to_view[t]]
     }
@@ -213,6 +226,37 @@ impl Search {
     }
 }
 
+/// The book a label cache `text` holds for `d`. A line with no values (a
+/// final position) is refused here: pflow-metamodel's reader panics on one.
+fn book(d: &Dense, text: &str) -> Result<Book> {
+    for (n, line) in text.lines().enumerate().skip(1) {
+        let Ok(x) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        if x.get("vals")
+            .and_then(Value::as_array)
+            .is_some_and(Vec::is_empty)
+        {
+            return Err(Error::BadArgs(format!(
+                "book line {}: no values; a label line values the moves of a position that has some",
+                n + 1
+            )));
+        }
+    }
+    Ok(Book::from_labels(&d.rules, text)?)
+}
+
+/// `out` stored as a Report artifact, its id added.
+fn stored(sess: &mut Session, id: &str, title: &str, a: &Value, mut out: Value) -> Value {
+    let source = Step {
+        command: id.into(),
+        args: a.clone(),
+    };
+    let art = sess.add_artifact(title.into(), source, ArtifactData::Report(out.clone()));
+    out["artifact"] = json!(art);
+    out
+}
+
 fn merge(mut out: Value, more: Value) -> Value {
     if let (Some(o), Value::Object(m)) = (out.as_object_mut(), more) {
         o.extend(m);
@@ -224,41 +268,44 @@ fn value(sess: &mut Session, a: &Value) -> Result<Value> {
     let x = Search::new(sess, a)?;
     if x.moves.is_empty() {
         let score = x.d.rules.score(&x.mk)?;
-        return Ok(merge(
+        let out = merge(
             json!({"value": score, "exact": true, "nodes": 0, "mover": null, "moves": 0}),
             x.common(),
-        ));
+        );
+        return Ok(stored(sess, "game.value", "Game value", a, out));
     }
     let mover = x.d.mover(&x.moves)?;
     let mut solver = x.solver()?;
     let v = solver.value(&x.mk)?;
-    Ok(merge(
+    let out = merge(
         json!({
-            "value": v, "exact": v.is_some(), "nodes": solver.nodes(), "mover": mover,
+            "value": v, "exact": v.is_some(), "nodes": x.nodes(&solver), "mover": mover,
             "moves": x.moves.len(),
         }),
         x.common(),
-    ))
+    );
+    Ok(stored(sess, "game.value", "Game value", a, out))
 }
 
 fn choose(sess: &mut Session, a: &Value) -> Result<Value> {
     let x = Search::new(sess, a)?;
     if x.moves.is_empty() {
         let score = x.d.rules.score(&x.mk)?;
-        return Ok(merge(
+        let out = merge(
             json!({
                 "transition": null, "value": score, "exact": true, "nodes": 0,
                 "reason": "no move: the position is final",
             }),
             x.common(),
-        ));
+        );
+        return Ok(stored(sess, "game.move", "Best move", a, out));
     }
     x.d.mover(&x.moves)?;
     let mut solver = x.solver()?;
     let out = match solver.choose(&x.mk)? {
         Some(c) => {
             let mut out = json!({
-                "transition": x.transition(c.t), "value": c.value, "exact": c.exact, "nodes": solver.nodes(),
+                "transition": x.transition(c.t), "value": c.value, "exact": c.exact, "nodes": x.nodes(&solver),
             });
             if !c.exact {
                 out["reason"] = json!("past the budget: a guess (mode \"play\"), not proven best");
@@ -266,9 +313,10 @@ fn choose(sess: &mut Session, a: &Value) -> Result<Value> {
             out
         }
         None => json!({
-            "transition": null, "value": null, "exact": false, "nodes": solver.nodes(),
+            "transition": null, "value": null, "exact": false, "nodes": x.nodes(&solver),
             "reason": "past the budget: no move was proven best within it (mode \"play\" guesses one)",
         }),
     };
-    Ok(merge(out, x.common()))
+    let out = merge(out, x.common());
+    Ok(stored(sess, "game.move", "Best move", a, out))
 }
