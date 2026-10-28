@@ -129,6 +129,9 @@ pub struct Data {
     /// slides the boxes a new event link fused from where they were).
     pub prev_flat: Option<Value>,
     pub incidence: Option<Value>,
+    /// The flat net and its incidence as of the previous revision (the
+    /// state before the change that just happened), for merge animations.
+    pub prev: Option<(Value, Value)>,
     /// The token game on the flat net (`bundle.game`).
     pub game: Option<Value>,
     /// The event classes as boundaries (`bundle.boundaries`).
@@ -153,6 +156,7 @@ impl Default for Data {
             flat: None,
             prev_flat: None,
             incidence: None,
+            prev: None,
             game: None,
             boundaries: None,
             c4game: None,
@@ -227,6 +231,7 @@ impl Data {
             return;
         }
         self.rev = Some(sess.revision);
+        self.prev = self.flat.clone().zip(self.incidence.clone());
         match &sess.composition {
             Some(c) => {
                 self.state = Some(c.to_json());

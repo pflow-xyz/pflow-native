@@ -71,7 +71,6 @@ pub struct PortPos {
 
 #[derive(Clone)]
 pub struct Row {
-    pub sid: String,
     pub tid: String,
     pub member: String,
     pub cy: f32,
@@ -194,7 +193,6 @@ pub fn layout(inp: &Input) -> Lay {
             let member = format!("{sid}/{tid}");
             let cls = class_of.get(member.as_str()).map(|x| x.to_string());
             let mut row = Row {
-                sid: sid.clone(),
                 tid: tid.clone(),
                 member: member.clone(),
                 cy,

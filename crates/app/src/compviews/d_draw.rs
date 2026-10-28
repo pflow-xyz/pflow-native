@@ -8,7 +8,6 @@ pub const PAPER: Color32 = Color32::from_rgb(0xfa, 0xfa, 0xfa);
 pub const ARC: Color32 = Color32::from_rgb(0x86, 0x8d, 0x97);
 pub const EN: Color32 = Color32::from_rgb(0x1e, 0x7a, 0x46);
 pub const EN_FILL: Color32 = Color32::from_rgb(0xe6, 0xf4, 0xea);
-pub const FIRE: Color32 = Color32::from_rgb(0xc4, 0x7a, 0x12);
 pub const READ: Color32 = Color32::from_rgb(0x33, 0x66, 0xaa);
 pub const INHIB: Color32 = Color32::from_rgb(0xaa, 0x33, 0x33);
 pub const PRE: Color32 = Color32::from_rgb(0x2f, 0x6f, 0xb3);
@@ -51,16 +50,6 @@ pub fn go(path: &str, from: u32, to: u32, note: &str) -> String {
         from.to_string()
     };
     format!("go-pflow {path}:{lines} @{rev} ({note})")
-}
-
-/// A pflow-rs cite at the pinned revision (`aacb7eb`), lines re-checked there.
-pub fn rs(path: &str, from: u32, to: u32, note: &str) -> String {
-    let lines = if to != from {
-        format!("{from}-{to}")
-    } else {
-        from.to_string()
-    };
-    format!("pflow-rs {path}:{lines} @{} ({note})", sp::PLAN_RS_REV)
 }
 
 /// An ontology cite (`ns/patterns.ttl`, ROADMAP.md) at its recorded revision.
@@ -276,7 +265,7 @@ impl<'a> Ctx<'a> {
                 self.p.text(
                     at,
                     Align2::CENTER_CENTER,
-                    &n.to_string(),
+                    n.to_string(),
                     FontId::proportional((r * 0.85).max(9.0)),
                     INK,
                 );

@@ -7,6 +7,7 @@
 
 use super::d_bnd_layout::{self as bl, *};
 use super::d_draw::*;
+use super::pflow_rs_cites::pflow_rs;
 use super::*;
 
 fn c_rendezvous() -> String {
@@ -132,12 +133,7 @@ fn c_road_guard() -> String {
     )
 }
 fn c_fixture() -> String {
-    rs(
-        "crates/pflow-metamodel/tests/fixtures/connect-4.json",
-        0,
-        0,
-        "the Connect-4 net (byte-identical to examples/connect-4.json): no ports",
-    )
+    pflow_rs("boundaries.fixture")
 }
 
 const PAPER_DEF: &str = "Def. 3.1 / 4.1: a net with boundaries N : m → n wires each transition to ports on the left boundary m and the right boundary n";
@@ -2007,7 +2003,7 @@ pub(super) fn boundaries_c4(c: &mut Ctx, area: Rect) {
         .fact("what it is", "SearchPlan JSON, checked by plan.rs SearchPlan::check: order pieces, drivers, filters, heuristics and memo go into slots. No piece is a transition, and no slot is a boundary port.")
         .fact("plan", plan_json.clone())
         .fact("check", err.unwrap_or_else(|| "accepted".into()))
-        .cite(rs("crates/pflow-metamodel/src/plan.rs", 1, 1, "SearchPlan")));
+        .cite(pflow_rs("plan.connect4Exact")));
     // pointers to the views that draw the plan
     for (x, view, label, sub) in [
         (

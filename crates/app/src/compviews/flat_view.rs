@@ -6,6 +6,7 @@
 
 use super::d_draw::*;
 use super::d_flat_layout::{self as lay, Anchor, Lay, Node};
+use super::pflow_rs_cites::pflow_rs;
 use super::*;
 
 fn flatten_cites() -> Vec<String> {
@@ -1771,34 +1772,11 @@ pub(super) fn flat_orders(c: &mut Ctx, area: Rect) {
 }
 
 fn c4_cites(is_place: bool) -> Vec<String> {
-    let mut v = vec![
-        rs(
-            "crates/pflow-metamodel/tests/fixtures/connect-4.json",
-            20457,
-            20457,
-            "the fixture's description (byte-identical to examples/connect-4.json)",
-        ),
-        rs(
-            "crates/pflow-metamodel/tests/common/mod.rs",
-            28,
-            35,
-            "auto = name contains \"win\"; sign +1 for x_, -1 otherwise; reward win_x +1, win_o -1",
-        ),
-    ];
+    let mut v = vec![pflow_rs("flat.c4fixture"), pflow_rs("flat.c4decl")];
     if !is_place {
-        v.push(rs(
-            "crates/pflow-metamodel/src/game.rs",
-            4,
-            11,
-            "auto transitions fire as soon as enabled; every other transition is a move",
-        ));
-        v.push(rs(
-            "crates/pflow-metamodel/src/game.rs",
-            277,
-            288,
-            "settle: fire automatic transitions, lowest index first, until none is enabled",
-        ));
-        v.push(rs("crates/pflow-parser/src/lib.rs", 129, 131, "model_from_json sorts the transition IDs, so a transition's index is its place in ID order"));
+        v.push(pflow_rs("flat.gameDoc"));
+        v.push(pflow_rs("flat.settle"));
+        v.push(pflow_rs("flat.idOrder"));
     }
     v.push(c_why_not());
     v
@@ -1971,9 +1949,9 @@ pub(super) fn flat_c4(c: &mut Ctx, area: Rect) {
             r,
             info(format!("{name}: {} places of the fixture", ids.len()))
                 .fact("tokens now", n_tok.to_string())
-                .note("A group by name only. The fixture's description says each column is an open-slot chain with row 0 at the bottom; the page draws the places where the fixture puts them. The grouping is the page's; the library reads no names (tests/common/mod.rs:6-8).")
+                .note("A group by name only. The fixture's description says each column is an open-slot chain with row 0 at the bottom; the page draws the places where the fixture puts them. The grouping is the page's; the library reads no names (tests/common/mod.rs:5-8).")
                 .cite(c4_cites(true)[0].clone())
-                .cite(rs("crates/pflow-metamodel/tests/common/mod.rs", 6, 8, "the fixtures name their parts by convention; this file declares sides, auto and rewards")),
+                .cite(pflow_rs("flat.c4names")),
         );
     }
     let t_groups: [(&str, &str, &str); 4] = [
@@ -2103,12 +2081,7 @@ pub(super) fn flat_c4(c: &mut Ctx, area: Rect) {
             }
             let mut cs = c4_cites(true);
             if p.id.starts_with("win_") {
-                cs.push(rs(
-                    "crates/pflow-metamodel/src/game.rs",
-                    311,
-                    314,
-                    "score: the reward of a final marking",
-                ));
+                cs.push(pflow_rs("flat.score"));
             }
             c.hover(
                 Rect::from_center_size(at, Vec2::splat(r * 2.0)),
@@ -2199,7 +2172,7 @@ fn pl_arcs(d: &Document) -> String {
     let s = n.to_string();
     let mut out = String::new();
     for (i, ch) in s.chars().enumerate() {
-        if i > 0 && (s.len() - i) % 3 == 0 {
+        if i > 0 && (s.len() - i).is_multiple_of(3) {
             out.push(',');
         }
         out.push(ch);

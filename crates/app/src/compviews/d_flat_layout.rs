@@ -4,6 +4,10 @@
 //! place's label takes the free one of eight positions. A pure function of the
 //! flat net and the subnets, in the prototype's design coordinates.
 
+// The loops index `nodes` while reading other entries of it, which an
+// iterator over `nodes` cannot do.
+#![allow(clippy::needless_range_loop)]
+
 use super::*;
 
 pub const PR: f32 = 16.0;
