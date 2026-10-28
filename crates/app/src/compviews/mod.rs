@@ -33,6 +33,8 @@ mod b_orders;
 mod b_transition;
 mod boundaries_view;
 mod cospan_view;
+mod d_draw;
+mod d_flat_layout;
 mod flat_view;
 mod incidence_view;
 mod laws_view;
@@ -126,6 +128,8 @@ pub struct Data {
     /// slides the boxes a new event link fused from where they were).
     pub prev_flat: Option<Value>,
     pub incidence: Option<Value>,
+    /// The token game on the flat net (`bundle.game`).
+    pub game: Option<Value>,
     pub lens: Option<Value>,
     pub runs: Vec<Value>,
     pub plan: Option<Value>,
@@ -144,6 +148,7 @@ impl Default for Data {
             flat: None,
             prev_flat: None,
             incidence: None,
+            game: None,
             lens: None,
             runs: vec![],
             plan: None,
@@ -221,6 +226,7 @@ impl Data {
                 self.prev_flat = self.flat.take();
                 self.flat = Some(comp::flatten_json(&c.bundle));
                 self.incidence = Some(comp::incidence_json(&c.bundle));
+                self.game = Some(comp::game::game_json(&c.bundle, &c.game));
                 self.lens = Some(lens::report(c, true));
                 self.runs = match comp::flatten(&c.bundle) {
                     Ok(f) => comp::scenarios()
@@ -234,6 +240,7 @@ impl Data {
                 self.state = None;
                 self.flat = None;
                 self.incidence = None;
+                self.game = None;
                 self.lens = None;
                 self.runs = vec![];
             }
