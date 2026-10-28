@@ -21,10 +21,34 @@ fn need(sess: &Session) -> std::result::Result<(), String> {
 
 pub const SET: &[CommandSpec] = &[
     CommandSpec {
+        id: "plan.net",
+        label: "Plan Net",
+        help: "The Connect-4 net the plan is for (pflow-rs's fixture): its id and place, transition and arc counts.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: always,
+        run: net,
+        journal: false,
+    },
+    CommandSpec {
+        id: "plan.opening",
+        label: "Plan Opening",
+        help: "A fixed four-drop opening on the Connect-4 net (x_play_3_0, o_play_3_1, x_play_2_0, o_play_4_0), \
+               fired from the initial marking through pflow-metamodel's enabled/fire: {id, steps: [{transition, \
+               enabled, why}], fired}.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: always,
+        run: opening,
+        journal: false,
+    },
+    CommandSpec {
         id: "plan.pieces",
         label: "Plan Pieces",
         help: "The piece palette (name, kind, status built/reserved/proposed, contract, doc, args, \
-               needs_goals) and the solver template's slots (drivers, order, filters, heuristics, \
+               needs_goals, decisive, reads) and the solver template's slots (drivers, order, filters, heuristics, \
                memo; bounds and engine are designed, never fillable).",
         menu: "",
         shortcut: None,
@@ -156,6 +180,14 @@ pub const SET: &[CommandSpec] = &[
         journal: true,
     },
 ];
+
+fn net(_: &mut Session, _: &Value) -> Result<Value> {
+    Ok(sp::net_json())
+}
+
+fn opening(_: &mut Session, _: &Value) -> Result<Value> {
+    Ok(sp::opening_json())
+}
 
 fn pieces(_: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({

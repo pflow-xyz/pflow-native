@@ -543,3 +543,21 @@ pub fn try_fixes(
     }
     out
 }
+
+/// `bundle.lens`'s result for a composition: `{analysis, fixes}`.
+pub fn report(c: &comp::Composition, fixes: bool) -> serde_json::Value {
+    let subnets = c.subnets();
+    let flat = comp::flatten(&c.bundle);
+    let analysis = analyse(&subnets, &c.bundle.links, &flat);
+    let fixes = if fixes {
+        let patterns: Vec<(&str, &str)> = c
+            .specs
+            .iter()
+            .map(|s| (s.id.as_str(), s.pattern.as_str()))
+            .collect();
+        try_fixes(&subnets, &patterns, &c.bundle.links, &analysis)
+    } else {
+        vec![]
+    };
+    serde_json::json!({ "analysis": analysis, "fixes": fixes })
+}

@@ -1400,3 +1400,79 @@ pub fn run_scenario(flat: &Flat, sc: &Scenario) -> Run {
     let script: Vec<String> = sc.script.iter().map(|s| s.to_string()).collect();
     run(flat, sc.id, sc.title, &script, &sc.expect)
 }
+
+// ------------------------------------------------------------ incidence
+
+/// The incidence matrix C = post − pre of a model (rows: places, columns:
+/// transitions, in model order). Read and inhibitor arcs move nothing.
+pub fn incidence(m: &Model) -> Vec<Vec<i64>> {
+    let mut c = vec![vec![0i64; m.transitions.len()]; m.places.len()];
+    let pi = |id: &str| m.places.iter().position(|p| p.id == id);
+    let ti = |id: &str| m.transitions.iter().position(|t| t.id == id);
+    for a in &m.arcs {
+        if a.is_read_only() {
+            continue;
+        }
+        if let (Some(p), Some(t)) = (pi(&a.from), ti(&a.to)) {
+            c[p][t] -= a.weight;
+        } else if let (Some(t), Some(p)) = (ti(&a.from), pi(&a.to)) {
+            c[p][t] += a.weight;
+        }
+    }
+    c
+}
+
+/// A declared constraint read as a P-invariant: `tokens("a") + … == n`
+/// gives y (1 on each named place); it holds when y·C = 0 and y·M₀ = n
+/// (together they prove it for every reachable marking: the prototype's
+/// incidence.js check). `None` when the expression is not a plain sum of
+/// tokens(…) equal to an integer.
+pub fn invariant_holds(m: &Model, c: &[Vec<i64>], expr: &str) -> Option<bool> {
+    let (lhs, rhs) = expr.rsplit_once(" == ")?;
+    let n: i64 = rhs.trim().parse().ok()?;
+    let mut y = vec![0i64; m.places.len()];
+    for term in lhs.split(" + ") {
+        let p = term.trim().strip_prefix("tokens(\"")?.strip_suffix("\")")?;
+        y[m.places.iter().position(|q| q.id == p)?] += 1;
+    }
+    let y_m0: i64 = m.places.iter().zip(&y).map(|(p, k)| k * p.initial).sum();
+    let y_c =
+        (0..m.transitions.len()).all(|t| (0..y.len()).map(|p| y[p] * c[p][t]).sum::<i64>() == 0);
+    Some(y_c && y_m0 == n)
+}
+
+/// `bundle.incidence`'s result: the flat net's matrix, each subnet's own
+/// block, and each declared constraint checked as y·C = 0.
+pub fn incidence_json(b: &Bundle) -> Value {
+    let flat = match flatten(b) {
+        Ok(f) => f,
+        Err(e) => return json!({"ok": false, "error": e}),
+    };
+    let c = incidence(&flat.model);
+    let blocks: Vec<Value> = b
+        .subnets
+        .iter()
+        .map(|s| {
+            json!({
+                "subnet": s.id,
+                "rows": s.model.places.iter().map(|p| p.id.clone()).collect::<Vec<_>>(),
+                "cols": s.model.transitions.iter().map(|t| t.id.clone()).collect::<Vec<_>>(),
+                "matrix": incidence(&s.model),
+            })
+        })
+        .collect();
+    let invariants: Vec<Value> = flat
+        .model
+        .constraints
+        .iter()
+        .map(|k| json!({"id": k.id, "expr": k.expr, "holds": invariant_holds(&flat.model, &c, &k.expr)}))
+        .collect();
+    json!({
+        "ok": true,
+        "rows": flat.model.places.iter().map(|p| p.id.clone()).collect::<Vec<_>>(),
+        "cols": flat.model.transitions.iter().map(|t| t.id.clone()).collect::<Vec<_>>(),
+        "matrix": c,
+        "blocks": blocks,
+        "invariants": invariants,
+    })
+}

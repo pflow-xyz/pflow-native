@@ -79,6 +79,62 @@ pub fn connect4() -> Result<&'static Game, String> {
     .map_err(Clone::clone)
 }
 
+/// The Connect-4 net as pflow-metamodel reads it.
+pub fn connect4_model() -> Result<&'static pflow_metamodel::Model, String> {
+    static M: OnceLock<Result<pflow_metamodel::Model, String>> = OnceLock::new();
+    M.get_or_init(|| {
+        pflow_parser::model_from_json(CONNECT4_JSON.as_bytes())
+            .map(|(m, _)| m)
+            .map_err(|e| e.to_string())
+    })
+    .as_ref()
+    .map_err(Clone::clone)
+}
+
+/// The prototype's fixed opening (process view): both sides into the centre
+/// column, then its neighbours.
+pub const OPENING: [&str; 4] = ["x_play_3_0", "o_play_3_1", "x_play_2_0", "o_play_4_0"];
+
+/// `plan.opening`'s result: the opening fired from the initial marking
+/// through pflow-metamodel's enabled_why_not / fire, stopping at the first
+/// drop that cannot fire.
+pub fn opening_json() -> Value {
+    let m = match connect4_model() {
+        Ok(m) => m,
+        Err(e) => return json!({"ok": false, "error": e}),
+    };
+    let mut mk = m.initial_marking();
+    let mut steps = vec![];
+    let mut fired = 0;
+    for t in OPENING {
+        match m.enabled_why_not(t, &mk) {
+            Ok(()) => {
+                mk = m.fire(t, &mk);
+                fired += 1;
+                steps.push(json!({"transition": t, "enabled": true, "why": ""}));
+            }
+            Err(e) => {
+                steps.push(json!({"transition": t, "enabled": false, "why": e.to_string()}));
+                break;
+            }
+        }
+    }
+    json!({"ok": true, "id": "opening", "steps": steps, "fired": fired})
+}
+
+/// `plan.net`'s result: the Connect-4 net's size.
+pub fn net_json() -> Value {
+    match connect4_model() {
+        Ok(m) => json!({
+            "id": "connect-4",
+            "places": m.places.len(),
+            "transitions": m.transitions.len(),
+            "arcs": m.arcs.len(),
+        }),
+        Err(e) => json!({"error": e}),
+    }
+}
+
 /// pflow-rs's verdict on a plan.
 #[derive(Debug, Clone, PartialEq, Serialize)]
 pub struct Check {
@@ -144,6 +200,11 @@ pub struct PieceInfo {
     #[serde(skip_serializing_if = "Value::is_null")]
     pub args: Value,
     pub needs_goals: bool,
+    /// An order piece whose key puts moves in a top tier (order.rs:
+    /// decisive pieces are compared first); the prototype's brackets.
+    pub decisive: bool,
+    /// What an order piece reads (the prototype's `reads`), or "".
+    pub reads: &'static str,
 }
 
 fn piece(
@@ -160,6 +221,8 @@ fn piece(
         doc,
         args: Value::Null,
         needs_goals: false,
+        decisive: false,
+        reads: "",
     }
 }
 
@@ -190,6 +253,14 @@ pub fn pieces() -> &'static [PieceInfo] {
             piece("futility", "Filter", "value-changing", "Futility pruning, play mode only (approved candidate). Not built."),
         ];
         for p in &mut v {
+            (p.decisive, p.reads) = match p.name {
+                "tt_best" => (true, "memo (Entry.best)"),
+                "immediate_win" => (true, "the next position"),
+                "history" => (false, "history counts, written by cutoff"),
+                "centrality" => (false, "Game::centrality"),
+                "threats" => (false, "Game::fed, deficit()"),
+                _ => (false, ""),
+            };
             p.status = if Piece::NAMES.contains(&p.name)
                 || Filter::NAMES.contains(&p.name)
                 || DRIVERS.contains(&p.name)

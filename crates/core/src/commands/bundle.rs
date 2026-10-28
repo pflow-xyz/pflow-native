@@ -245,6 +245,19 @@ pub const SET: &[CommandSpec] = &[
         journal: false,
     },
     CommandSpec {
+        id: "bundle.incidence",
+        label: "Composition Incidence",
+        help: "The flat net's incidence matrix C = post − pre (rows: flat places, cols: flat transitions), each \
+               subnet's own block, and each declared constraint read as a P-invariant y (1 on each place it \
+               names) with holds = (y·C = 0 and y·M₀ = n), or null when it is not a plain sum of tokens(…) == n.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: need,
+        run: incidence,
+        journal: false,
+    },
+    CommandSpec {
         id: "bundle.run",
         label: "Run Scenario…",
         help: "Fire a scenario (bundle.scenarios) or a `script` of members \"<subnet>/<transition>\" on \
@@ -597,6 +610,10 @@ fn flatten(sess: &mut Session, a: &Value) -> Result<Value> {
     Ok(out)
 }
 
+fn incidence(sess: &mut Session, _: &Value) -> Result<Value> {
+    Ok(comp::incidence_json(&comp_ref(sess)?.bundle))
+}
+
 fn run_cmd(sess: &mut Session, a: &Value) -> Result<Value> {
     let c = comp_ref(sess)?;
     let flat = comp::flatten(&c.bundle).map_err(Error::Invalid)?;
@@ -622,21 +639,7 @@ fn run_cmd(sess: &mut Session, a: &Value) -> Result<Value> {
 }
 
 fn lens_cmd(sess: &mut Session, a: &Value) -> Result<Value> {
-    let c = comp_ref(sess)?;
-    let subnets = c.subnets();
-    let flat = comp::flatten(&c.bundle);
-    let analysis = lens::analyse(&subnets, &c.bundle.links, &flat);
-    let fixes = if b(a, "fixes").unwrap_or(true) {
-        let patterns: Vec<(&str, &str)> = c
-            .specs
-            .iter()
-            .map(|s| (s.id.as_str(), s.pattern.as_str()))
-            .collect();
-        lens::try_fixes(&subnets, &patterns, &c.bundle.links, &analysis)
-    } else {
-        vec![]
-    };
-    let mut out = json!({ "analysis": analysis, "fixes": fixes });
+    let mut out = lens::report(comp_ref(sess)?, b(a, "fixes").unwrap_or(true));
     let id = sess.add_artifact(
         "Lens test".into(),
         source("bundle.lens", a),

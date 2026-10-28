@@ -7,7 +7,42 @@ use crate::{Error, Result};
 pub const ZOOM_MIN: f64 = 0.1;
 pub const ZOOM_MAX: f64 = 8.0;
 
+/// The ten composition views, in the prototype's tab order.
+pub const COMPOSITION_VIEWS: [&str; 10] = [
+    "cospan",
+    "spiders",
+    "operad",
+    "string",
+    "flat",
+    "boundaries",
+    "lens",
+    "incidence",
+    "process",
+    "laws",
+];
+
 pub const SET: &[CommandSpec] = &[
+    CommandSpec {
+        id: "view.composition",
+        label: "Composition Views",
+        help: "Show or hide the composition views and pick what they draw: `view` (cospan, spiders, operad, string, \
+               flat, boundaries, lens, incidence, process, laws), `example` (orders: the open composition; connect4: \
+               the open search plan), `lens` (strict: the lens test as composed; assume: the fallback that assumes a \
+               backward pass where one is found mechanically). Opening the views opens the default composition and \
+               plan if none is open. Returns the view state.",
+        menu: "View",
+        shortcut: None,
+        args: &[
+            opt("open", Bool, "show the views (default true when other fields are given)"),
+            opt("view", Str, "view id"),
+            opt("example", Str, "orders or connect4"),
+            opt("lens", Str, "strict or assume"),
+            opt("rewrite", Str, "the Laws view's rewrite (\"\" for the default)"),
+        ],
+        enabled: always,
+        run: composition,
+        journal: false,
+    },
     CommandSpec {
         id: "tool.set",
         label: "Set Tool",
@@ -249,6 +284,49 @@ fn resize(sess: &mut Session, a: &Value) -> Result<Value> {
     sess.view.width = n(a, "width").unwrap().max(1.0);
     sess.view.height = n(a, "height").unwrap().max(1.0);
     Ok(json!(sess.view))
+}
+
+fn composition(sess: &mut Session, a: &Value) -> Result<Value> {
+    let mut cv = sess.composition_view.clone();
+    if let Some(v) = s(a, "view") {
+        if !COMPOSITION_VIEWS.contains(&v) {
+            return Err(Error::BadArgs(format!(
+                "no composition view {v:?}; the views are {COMPOSITION_VIEWS:?}"
+            )));
+        }
+        cv.view = v.into();
+    }
+    if let Some(e) = s(a, "example") {
+        if e != "orders" && e != "connect4" {
+            return Err(Error::BadArgs(format!(
+                "example is \"orders\" or \"connect4\", not {e:?}"
+            )));
+        }
+        cv.example = e.into();
+    }
+    if let Some(l) = s(a, "lens") {
+        if l != "strict" && l != "assume" {
+            return Err(Error::BadArgs(format!(
+                "lens is \"strict\" or \"assume\", not {l:?}"
+            )));
+        }
+        cv.lens = l.into();
+    }
+    if let Some(r) = s(a, "rewrite") {
+        cv.rewrite = (!r.is_empty()).then(|| r.to_string());
+    }
+    cv.open = crate::registry::b(a, "open").unwrap_or(true);
+    let opening = cv.open && !sess.composition_view.open;
+    sess.composition_view = cv;
+    if opening {
+        if sess.composition.is_none() {
+            sess.execute_unjournaled("bundle.open", Value::Null)?;
+        }
+        if sess.search_plan.is_none() {
+            sess.execute_unjournaled("plan.open", Value::Null)?;
+        }
+    }
+    Ok(json!(sess.composition_view))
 }
 
 fn get(sess: &mut Session, _: &Value) -> Result<Value> {

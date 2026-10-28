@@ -51,7 +51,8 @@ pub use artifact::{Artifact, ArtifactData};
 pub use doc::{Arc, Document, NodeKind, Place, Transition};
 pub use registry::{ArgSpec, ArgType, CommandSpec, Registry};
 pub use session::{
-    Focus, Highlight, Note, NoteTarget, Session, Settings, Step, Theme, Tool, UiRequest, View,
+    CompositionView, Focus, Highlight, Note, NoteTarget, Session, Settings, Step, Theme, Tool,
+    UiRequest, View,
 };
 pub use sim::{Marking, OdeResult};
 
