@@ -34,7 +34,7 @@ const ARGS: &[ArgSpec] = &[
     arg("sides", Json, "{transition-id prefix: sign}: who moves, e.g. {\"x_\": 1, \"o_\": -1} (+1 maximizes the reward)"),
     arg("reward", Json, "{place: weight} read from the final marking, from the +1 side's view, e.g. {\"win_x\": 1, \"win_o\": -1}"),
     opt("auto", StrList, "transition-id prefixes that fire as soon as they are enabled, before anyone chooses (e.g. [\"x_win_\", \"o_win_\"]: win claims)"),
-    opt("plan", Json, "a SearchPlan (pflow-metamodel), or a JSON string of one: {mode, order, filters, root, drivers, memo}; default {}. A time budget (budget.ms) is refused. Root estimate \"ode\" solves the mass-action ODE with every transition at rate 1, not the session's rates"),
+    opt("plan", Json, "a SearchPlan (pflow-metamodel), or a JSON string of one: {mode, order, filters, root, drivers, memo}; default {}. drivers: \"null_window\" (default), \"mtd_f\" (not together with null_window), {\"budget\": {\"nodes\": n}}. A time budget (budget.ms) is refused. Root estimate \"ode\" solves the mass-action ODE with every transition at rate 1, not the session's rates"),
     opt("nodes", Int, "the node budget when the plan's drivers set none (default 1,000,000; at most 100,000,000)"),
     opt("book", Str, "an opening book: the text of a label cache as the experimental rnn commands write it to `labels` (JSONL, a header line naming the net and rules, then one position per line); its positions are pinned in the table, exact"),
 ];

@@ -62,6 +62,24 @@ fn tic_tac_toe_is_a_draw_and_its_best_move_keeps_it() {
 }
 
 #[test]
+fn the_mtd_f_driver_finds_the_same_value() {
+    let mut s = ttt();
+    let base = run(&mut s, "game.value", rules());
+    let plan = json!({"drivers": ["mtd_f"]});
+    let v = run(&mut s, "game.value", with(rules(), json!({ "plan": plan })));
+    assert_eq!(v["value"], base["value"], "{v}");
+    assert_eq!(v["exact"], true);
+    // With a budget beside it, as null_window takes one.
+    let plan = json!({"drivers": ["mtd_f", {"budget": {"nodes": 500_000}}]});
+    let b = run(&mut s, "game.value", with(rules(), json!({ "plan": plan })));
+    assert_eq!(b["value"], base["value"], "{b}");
+    // Not together with null_window.
+    let both = json!({"drivers": ["null_window", "mtd_f"]});
+    let e = refused(&mut s, "game.value", with(rules(), json!({ "plan": both })));
+    assert!(e.contains("mtd_f"), "{e}");
+}
+
+#[test]
 fn an_ode_ordered_root_finds_the_same_value() {
     let mut s = ttt();
     let plan = json!({"root": {"order": ["ode", "non_losing"]}});
