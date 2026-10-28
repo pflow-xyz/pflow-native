@@ -4,3 +4,4 @@ dist/
 *.png
 !docs/*.png
 .playwright-mcp/
+!docs/composition-views/*.png
