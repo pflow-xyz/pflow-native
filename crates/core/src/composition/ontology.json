@@ -1017,9 +1017,9 @@
   },
   "pflowRs": {
    "name": "pflow-rs",
-   "rev": "c396d46",
-   "url": "https://github.com/pflow-xyz/pflow-rs/blob/c396d46/",
-   "note": "main at c396d46 (search slice 1, PR #7)"
+   "rev": "aacb7eb",
+   "url": "https://github.com/pflow-xyz/pflow-rs/blob/aacb7eb/",
+   "note": "the pin (Cargo.toml); the prototype read c396d46, its cites are re-checked in pflow_rs_cites.json"
   },
   "pflowXyz": {
    "name": "pflow-xyz",

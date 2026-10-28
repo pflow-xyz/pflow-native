@@ -34,6 +34,8 @@ mod incidence_view;
 mod laws_view;
 mod lens_view;
 mod operad_view;
+#[allow(dead_code)]
+mod pflow_rs_cites;
 mod process_view;
 mod spiders_view;
 mod string_view;

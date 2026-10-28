@@ -48,9 +48,10 @@ pub const SET: &[CommandSpec] = &[
         id: "plan.pieces",
         label: "Plan Pieces",
         help: "The piece palette (name, kind, status built/reserved/proposed, contract, doc, args, \
-               needs_goals, decisive, reads) and the solver template's slots (drivers, order, filters, root, heuristics, \
+               needs_goals, decisive, reads, cites) and the solver template's slots (drivers, order, filters, root, heuristics, \
                memo; bounds and engine are designed, never fillable). The root slot takes the `ode` estimate and \
-               `non_losing` (pflow-rs's root field).",
+               `non_losing` (pflow-rs's root field). Each piece and slot carries `cites`: its pflow-rs line \
+               cites at the pinned rev, from `pflow_rs_cites.json` (label, path, from, to, note, status).",
         menu: "",
         shortcut: None,
         args: &[],
@@ -192,8 +193,8 @@ fn opening(_: &mut Session, _: &Value) -> Result<Value> {
 
 fn pieces(_: &mut Session, _: &Value) -> Result<Value> {
     Ok(json!({
-        "pieces": sp::pieces(),
-        "slots": sp::SLOTS,
+        "pieces": sp::pieces_json(),
+        "slots": sp::slots_json(),
         "plan_rs": sp::PLAN_RS_REV,
         "default_plan": sp::connect4_exact(),
     }))

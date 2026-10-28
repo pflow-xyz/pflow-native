@@ -370,6 +370,163 @@ pub fn slot(id: &str) -> Option<&'static Slot> {
     SLOTS.iter().find(|s| s.id == id)
 }
 
+// ------------------------------------------------------------ cites
+
+/// The pflow-rs line cites of the composition views, re-checked against
+/// the pinned revision ([`PLAN_RS_REV`]): one table for every view and the
+/// web page. See `docs/cv-notes/e.md` for what changed since the
+/// prototype's `c396d46`.
+pub const PFLOW_RS_CITES_JSON: &str = include_str!("composition/pflow_rs_cites.json");
+
+/// [`PFLOW_RS_CITES_JSON`] parsed: an object keyed `<prototype-file>.<name>`
+/// (`lens.value`, `plan.driversFlags`, `spiders.ttDefault`), `piece.<name>`
+/// or `slot.<id>` (a second cite of the same piece or slot is
+/// `piece.<name>.2`, a third `.3`), each
+/// `{path, from, to, note, status, was: {path, from, to}, needle}`.
+///
+/// `status` is `same` (the lines are where the prototype put them and
+/// still say it), `moved` (the same thing, other lines), `rewritten` (the
+/// code changed so the note's claim was reworded or the cite re-aimed),
+/// `gone` (what the prototype cited no longer exists at the pin; the entry
+/// points at what replaced it) or `new` (not in the prototype). `needle`
+/// is a substring that must be in lines `from..=to` of `path` at the pin
+/// (the whole file when `from` is 0): the core test checks it when a
+/// pflow-rs tree is at hand.
+pub fn pflow_rs_cites() -> &'static Value {
+    static C: OnceLock<Value> = OnceLock::new();
+    C.get_or_init(|| {
+        serde_json::from_str(PFLOW_RS_CITES_JSON).expect("pflow_rs_cites.json is JSON")
+    })
+}
+
+/// One cite into pflow-rs at [`PLAN_RS_REV`].
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct Cite {
+    pub key: String,
+    /// The ontology's repo key (`repos.pflowRs`).
+    pub repo: &'static str,
+    pub rev: &'static str,
+    pub path: String,
+    /// First and last line; 0 for the whole file.
+    pub from: u32,
+    pub to: u32,
+    pub note: String,
+    /// `same`, `moved`, `rewritten`, `gone` or `new`.
+    pub status: String,
+    /// Where the prototype put it at c396d46 (none for a new cite).
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub was: Option<CiteWas>,
+    /// The label views show, [`Cite::label`].
+    pub label: String,
+    #[serde(skip)]
+    pub needle: String,
+}
+
+/// Where a cite was in the prototype (pflow-rs `c396d46`).
+#[derive(Debug, Clone, PartialEq, Serialize)]
+pub struct CiteWas {
+    pub path: String,
+    pub from: u32,
+    pub to: u32,
+}
+
+impl Cite {
+    /// `pflow-rs crates/pflow-metamodel/src/game.rs:1046-1179 @aacb7eb
+    /// (Solver::search: ...)`, the format of the app's `cite_label`.
+    pub fn label(&self) -> String {
+        let lines = match (self.from, self.to) {
+            (0, _) => String::new(),
+            (f, t) if t != 0 && t != f => format!(":{f}-{t}"),
+            (f, _) => format!(":{f}"),
+        };
+        let note = if self.note.is_empty() {
+            String::new()
+        } else {
+            format!(" ({})", self.note)
+        };
+        format!("pflow-rs {}{lines} @{}{note}", self.path, self.rev)
+    }
+}
+
+fn cite_of(key: &str, v: &Value) -> Option<Cite> {
+    let u = |x: &Value| x.as_u64().map(|n| n as u32);
+    let mut c = Cite {
+        key: key.into(),
+        repo: "pflowRs",
+        rev: PLAN_RS_REV,
+        path: v["path"].as_str()?.into(),
+        from: u(&v["from"])?,
+        to: u(&v["to"])?,
+        note: v["note"].as_str().unwrap_or("").into(),
+        status: v["status"].as_str()?.into(),
+        was: v.get("was").filter(|w| w.is_object()).and_then(|w| {
+            Some(CiteWas {
+                path: w["path"].as_str()?.into(),
+                from: u(&w["from"])?,
+                to: u(&w["to"])?,
+            })
+        }),
+        label: String::new(),
+        needle: v["needle"].as_str().unwrap_or("").into(),
+    };
+    c.label = c.label();
+    Some(c)
+}
+
+/// The cite called `key` (see [`pflow_rs_cites`]).
+pub fn pflow_rs_cite(key: &str) -> Option<Cite> {
+    cite_of(key, pflow_rs_cites().get(key)?)
+}
+
+/// `base`, then `base.2`, `base.3`, ... : a piece's or slot's cites in order.
+fn cites_numbered(base: &str) -> Vec<Cite> {
+    let mut out: Vec<Cite> = pflow_rs_cite(base).into_iter().collect();
+    let mut n = 2;
+    while let Some(c) = pflow_rs_cite(&format!("{base}.{n}")) {
+        out.push(c);
+        n += 1;
+    }
+    out
+}
+
+/// The cites of palette piece `name`, in the table's order.
+pub fn piece_cites(name: &str) -> Vec<Cite> {
+    cites_numbered(&format!("piece.{name}"))
+}
+
+/// The cites of solver-template slot `id`, in the table's order.
+pub fn slot_cites(id: &str) -> Vec<Cite> {
+    cites_numbered(&format!("slot.{id}"))
+}
+
+/// The palette for `plan.pieces`: [`pieces`] with each piece's `cites`.
+pub fn pieces_json() -> Value {
+    Value::Array(
+        pieces()
+            .iter()
+            .map(|p| {
+                let mut v = json!(p);
+                v["cites"] = json!(piece_cites(p.name));
+                v
+            })
+            .collect(),
+    )
+}
+
+/// The slots for `plan.pieces`: [`SLOTS`] with each slot's `cites`.
+pub fn slots_json() -> Value {
+    Value::Array(
+        SLOTS
+            .iter()
+            .map(|s| {
+                let mut v = json!(s);
+                v["cites"] = json!(slot_cites(s.id));
+                v
+            })
+            .collect(),
+    )
+}
+
 // ------------------------------------------------------------ edits
 
 /// The plan's JSON with keys in plan.rs's field order. `filters` is kept

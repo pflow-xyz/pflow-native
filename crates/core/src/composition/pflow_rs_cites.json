@@ -1,0 +1,2496 @@
+{
+ "plan.connect4Exact": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 6,
+  "to": 13,
+  "note": "the module-doc example; at the pin it also lists filters, a root and the aspiration driver (connect4_exact() here is the smaller, older form)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 6,
+   "to": 11
+  },
+  "needle": "\"mode\": \"exact\""
+ },
+ "piece.tt_best": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 40,
+  "to": 58,
+  "note": "TtBest",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 40,
+   "to": 58
+  },
+  "needle": "pub struct TtBest"
+ },
+ "piece.immediate_win": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 44,
+  "to": 66,
+  "note": "ImmediateWin",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 44,
+   "to": 66
+  },
+  "needle": "pub struct ImmediateWin"
+ },
+ "piece.history": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 48,
+  "to": 76,
+  "note": "History",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 48,
+   "to": 76
+  },
+  "needle": "pub struct History"
+ },
+ "piece.centrality": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 78,
+  "to": 94,
+  "note": "Centrality",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 78,
+   "to": 93
+  },
+  "needle": "pub struct Centrality"
+ },
+ "piece.threats": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 83,
+  "to": 103,
+  "note": "Threats",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 83,
+   "to": 104
+  },
+  "needle": "pub struct Threats"
+ },
+ "piece.null_window": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 29,
+  "to": 30,
+  "note": "null_window: finds a value by yes/no searches (on by default, off when drivers is given without it)",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 17,
+   "to": 19
+  },
+  "needle": "finds a value by yes/no searches"
+ },
+ "piece.null_window.2": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 937,
+  "to": 996,
+  "note": "Solver::solve",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 556,
+   "to": 588
+  },
+  "needle": "fn solve<W: Walk>"
+ },
+ "piece.budget": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 35,
+  "to": 37,
+  "note": "budget: {\"budget\": {\"nodes\": N, \"ms\": T}} gives a value up past N nodes or T milliseconds (either or both)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 18,
+   "to": 19
+  },
+  "needle": "\"ms\": T"
+ },
+ "piece.budget.2": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1057,
+  "to": 1064,
+  "note": "search: nodes > budget, or the clock ran out (every 1,024 nodes): give up (None)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 593,
+   "to": 597
+  },
+  "needle": "self.nodes > self.budget"
+ },
+ "piece.memo": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 39,
+  "to": 40,
+  "note": "memo: {\"entries\": N} keeps the transposition table to N entries",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 20,
+   "to": 20
+  },
+  "needle": "{\"entries\": N}"
+ },
+ "piece.memo.2": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 634,
+  "to": 641,
+  "note": "with_memo: a fresh table bounded to `entries`, inside a search and across calls; a full table replaces its weakest entries (there is no table/cap pair)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 495,
+   "to": 505
+  },
+  "needle": "self.tt = Self::table(self.g, entries)"
+ },
+ "piece.beam": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 105,
+  "to": 106,
+  "note": "UNSOUND",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 70,
+   "to": 71
+  },
+  "needle": "UNSOUND"
+ },
+ "piece.static_eval": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 105,
+  "to": 106,
+  "note": "UNSOUND",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 70,
+   "to": 71
+  },
+  "needle": "UNSOUND"
+ },
+ "slot.drivers": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 205,
+  "to": 281,
+  "note": "drivers()",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 146,
+   "to": 193
+  },
+  "needle": "fn drivers(&self)"
+ },
+ "slot.order": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 283,
+  "to": 298,
+  "note": "chain()",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 196,
+   "to": 210
+  },
+  "needle": "fn chain(&self)"
+ },
+ "slot.order.2": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 1,
+  "to": 2,
+  "note": "a chain of pieces, compared one after the other",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 1,
+   "to": 13
+  },
+  "needle": "compared one after the other"
+ },
+ "slot.filters": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 341,
+  "to": 358,
+  "note": "filters(): the Filter names (must_win, non_losing; absent means Filter::DEFAULT = [must_win], [] runs none); a name listed twice is refused",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 222,
+   "to": 236
+  },
+  "needle": "fn filters(&self)"
+ },
+ "slot.heuristics": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 378,
+  "to": 393,
+  "note": "check(): heuristics are read as heuristics; the reserved static_eval (and beam, a filter) is refused: exact mode \"can change the value\", play mode \"is not built\"",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 222,
+   "to": 236
+  },
+  "needle": "which exact mode does not allow"
+ },
+ "slot.memo": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 148,
+  "to": 153,
+  "note": "Memo",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 107,
+   "to": 112
+  },
+  "needle": "pub struct Memo"
+ },
+ "slot.memo.2": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 374,
+  "to": 376,
+  "note": "check(): memo entries must be at least 1",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 219,
+   "to": 221
+  },
+  "needle": "memo: entries must be at least 1"
+ },
+ "plan.value": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 902,
+  "to": 935,
+  "note": "Solver::value calls run(): nodes reset to 0 (bit engine, then again by counts if it spilled), then solve",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 526,
+   "to": 554
+  },
+  "needle": "fn run(&mut self"
+ },
+ "plan.solve": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 937,
+  "to": 996,
+  "note": "Solver::solve: yes/no searches, one per gap between rewards",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 556,
+   "to": 588
+  },
+  "needle": "fn solve<W: Walk>"
+ },
+ "plan.search": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1046,
+  "to": 1179,
+  "note": "Solver::search: fail-soft alpha-beta with the transposition table",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 590,
+   "to": 693
+  },
+  "needle": "fn search<W: Walk>("
+ },
+ "plan.budget": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1057,
+  "to": 1060,
+  "note": "nodes > budget: give up (None)",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 594,
+   "to": 597
+  },
+  "needle": "self.nodes > self.budget"
+ },
+ "plan.ttRead": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1067,
+  "to": 1079,
+  "note": "tt.get: bounds and the remembered best move",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 599,
+   "to": 611
+  },
+  "needle": "self.tt.get(&k, W::COUNTS)"
+ },
+ "plan.cutoff": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1164,
+  "to": 1164,
+  "note": "chain.cutoff: a cutoff is reported back to the pieces",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 666,
+   "to": 666
+  },
+  "needle": "self.chain.cutoff(&mut self.history, *t)"
+ },
+ "plan.store": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1181,
+  "to": 1185,
+  "note": "store: remember what a search found; the table (memo.rs) merges it with what it knew and, once full, replaces its weakest entry (there is no cap check)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 514,
+   "to": 519
+  },
+  "needle": "fn store<W: Walk>"
+ },
+ "plan.chainKey": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 197,
+  "to": 282,
+  "note": "Chain: keys compared piece by piece, decisive pieces form a top tier",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 197,
+   "to": 272
+  },
+  "needle": "pub struct Chain"
+ },
+ "plan.orderOnly": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 1,
+  "to": 7,
+  "note": "Order never changes a value, only how soon a cutoff comes",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 1,
+   "to": 7
+  },
+  "needle": "Order never changes a value"
+ },
+ "plan.driversFlags": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 205,
+  "to": 281,
+  "note": "drivers are read into flags: their order in the JSON does not change the nesting",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 146,
+   "to": 193
+  },
+  "needle": "fn drivers(&self)"
+ },
+ "spiders.ttShared": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 23,
+  "to": 28,
+  "note": "the yes/no searches share one transposition table, which persists across calls",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 23,
+   "to": 28
+  },
+  "needle": "They share one transposition table"
+ },
+ "spiders.entry": {
+  "path": "crates/pflow-metamodel/src/memo.rs",
+  "from": 53,
+  "to": 60,
+  "note": "Entry { lo, hi, best } (now in memo.rs)",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 440,
+   "to": 444
+  },
+  "needle": "pub(crate) struct Entry"
+ },
+ "spiders.fields": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 566,
+  "to": 567,
+  "note": "Solver.tt (a memo::Table) and Solver.history",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 454,
+   "to": 455
+  },
+  "needle": "history: Vec<u32>"
+ },
+ "spiders.tableDefault": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 589,
+  "to": 594,
+  "note": "there is no TABLE const: the default is Solver::MEMO = 2^23 entries, and a full table replaces its weakest entries instead of being cleared",
+  "status": "gone",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 469,
+   "to": 470
+  },
+  "needle": "pub const MEMO: usize"
+ },
+ "spiders.histInit": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 619,
+  "to": 619,
+  "note": "history: one counter per transition",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 485,
+   "to": 485
+  },
+  "needle": "history: vec![0; g.ix.transitions.len()]"
+ },
+ "spiders.capDefault": {
+  "path": "crates/pflow-metamodel/src/memo.rs",
+  "from": 15,
+  "to": 24,
+  "note": "there is no cap field: the table is bounded inside a search too (a new key takes an empty slot of its two buckets, else the weakest; the table never grows past its entries)",
+  "status": "gone",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 489,
+   "to": 490
+  },
+  "needle": "never grows past them"
+ },
+ "spiders.withMemo": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 634,
+  "to": 641,
+  "note": "with_memo: a fresh table bounded to `entries`, inside a search and across calls; a full table replaces its weakest entries (there is no table/cap pair)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 495,
+   "to": 505
+  },
+  "needle": "self.tt = Self::table(self.g, entries)"
+ },
+ "spiders.store": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1181,
+  "to": 1185,
+  "note": "store: remember what a search found; the table (memo.rs) merges it with what it knew and, once full, replaces its weakest entry (there is no cap check)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 514,
+   "to": 519
+  },
+  "needle": "fn store<W: Walk>"
+ },
+ "spiders.clear": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 895,
+  "to": 900,
+  "note": "there is no clearing: start() ages the table (a new generation), and entries of earlier calls are the first replaced once the table is full",
+  "status": "gone",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 529,
+   "to": 531
+  },
+  "needle": "self.tt.age()"
+ },
+ "spiders.solveOne": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 947,
+  "to": 959,
+  "note": "solve: with null_window and mtd_f both off (or fewer than 3 rewards), one search over the whole reward range (after one over a window around the root's guess, when aspiration gives one)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 564,
+   "to": 566
+  },
+  "needle": "!(self.null_window || self.mtd_f)"
+ },
+ "spiders.ttRead": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1069,
+  "to": 1079,
+  "note": "tt.get: bounds lo/hi and the remembered best move (first = e.best)",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 601,
+   "to": 611
+  },
+  "needle": "self.tt.get(&k, W::COUNTS)"
+ },
+ "spiders.storeLeaf": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1082,
+  "to": 1086,
+  "note": "store at a final position",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 616,
+   "to": 623
+  },
+  "needle": "self.store::<W>(&k, x, x, NO_MOVE, 1)"
+ },
+ "spiders.ctxBuild": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1090,
+  "to": 1095,
+  "note": "Ctx { first, history: &self.history }",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 628,
+   "to": 633
+  },
+  "needle": "let cx = Ctx {"
+ },
+ "spiders.cutoff": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1164,
+  "to": 1164,
+  "note": "chain.cutoff(&mut self.history, t): a cutoff is reported to the pieces",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 666,
+   "to": 666
+  },
+  "needle": "self.chain.cutoff(&mut self.history, *t)"
+ },
+ "spiders.storeAfter": {
+  "path": "crates/pflow-metamodel/src/memo.rs",
+  "from": 289,
+  "to": 292,
+  "note": "the merge with the old entry is Table::keep's (lo = max, hi = min); the search only calls store",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 679,
+   "to": 691
+  },
+  "needle": "e.lo = e.lo.max(old.lo)"
+ },
+ "spiders.search": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1046,
+  "to": 1179,
+  "note": "Solver::search: fail-soft alpha-beta",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 590,
+   "to": 693
+  },
+  "needle": "fn search<W: Walk>("
+ },
+ "spiders.ctxDoc": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 15,
+  "to": 24,
+  "note": "Ctx: what a piece may read (first, history)",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 15,
+   "to": 24
+  },
+  "needle": "pub(crate) struct Ctx"
+ },
+ "spiders.cutoffDefault": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 36,
+  "to": 37,
+  "note": "Orderer::cutoff: a no-op unless a piece overrides it",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 36,
+   "to": 37
+  },
+  "needle": "fn cutoff(&self, _history"
+ },
+ "spiders.ttBestKey": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 52,
+  "to": 58,
+  "note": "TtBest::key: t == cx.first",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 52,
+   "to": 58
+  },
+  "needle": "(t as u32 == cx.first)"
+ },
+ "spiders.histKey": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 68,
+  "to": 71,
+  "note": "History::key reads cx.history[t]",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 68,
+   "to": 71
+  },
+  "needle": "cx.history[t]"
+ },
+ "spiders.histCutoff": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 73,
+  "to": 75,
+  "note": "History::cutoff: history[t] += 1, the only writer",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 73,
+   "to": 75
+  },
+  "needle": "history[t] += 1"
+ },
+ "spiders.chainCutoff": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 277,
+  "to": 281,
+  "note": "Chain::cutoff calls every piece's cutoff",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 267,
+   "to": 271
+  },
+  "needle": "pub(crate) fn cutoff(&self, history"
+ },
+ "spiders.chainTies": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 197,
+  "to": 199,
+  "note": "ties keep the net's own order of the moves",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 197,
+   "to": 199
+  },
+  "needle": "ties keep the net's own order"
+ },
+ "spiders.chainDefault": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 205,
+  "to": 216,
+  "note": "Chain::default: tt_best, immediate_win, history",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 205,
+   "to": 216
+  },
+  "needle": "impl Default for Chain"
+ },
+ "spiders.planFixed": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 3,
+  "to": 4,
+  "note": "the search is fixed; a plan chooses what swaps in",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 3,
+   "to": 4
+  },
+  "needle": "The search is fixed"
+ },
+ "spiders.planDrivers": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 29,
+  "to": 30,
+  "note": "null_window on by default, off when drivers is given without it",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 17,
+   "to": 19
+  },
+  "needle": "off when `drivers` is given without it"
+ },
+ "spiders.planMemo": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 425,
+  "to": 427,
+  "note": "solver(): with_memo when the plan has a memo",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 247,
+   "to": 249
+  },
+  "needle": "s.with_memo(m.entries)"
+ },
+ "spiders.planCheck": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 378,
+  "to": 393,
+  "note": "check: exact mode refuses only the reserved beam and static_eval; the filters must_win and non_losing are built and legal in either mode",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 216,
+   "to": 238
+  },
+  "needle": "UNSOUND.iter().any"
+ },
+ "laws.orderKey": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 259,
+  "to": 275,
+  "note": "key(): one slot per piece in list order; before(): arrays compared lexicographically (orderer-monoid.chyp reads this as concatenation)",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 250,
+   "to": 265
+  },
+  "needle": "pub(crate) fn before"
+ },
+ "laws.planChain": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 283,
+  "to": 298,
+  "note": "chain(): absent \"order\" is Chain::default(); a repeated piece is refused",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 196,
+   "to": 210
+  },
+  "needle": "fn chain(&self)"
+ },
+ "laws.planDrivers": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 205,
+  "to": 281,
+  "note": "drivers(): the list is read into flags (null_window, mtd_f, aspiration) and a budget (nodes, ms) (driver-wrap.chyp reads the nesting), each at most once",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 146,
+   "to": 194
+  },
+  "needle": "fn drivers(&self)"
+ },
+ "laws.planFilters": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 377,
+  "to": 393,
+  "note": "check(): the filters are built (must_win, non_losing: legal in either mode); only the reserved beam and static_eval are refused",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 222,
+   "to": 235
+  },
+  "needle": "self.filters()?;"
+ },
+ "flat.c4fixture": {
+  "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+  "from": 20457,
+  "to": 20457,
+  "note": "the fixture's description (byte-identical to data/connect-4.json)",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+   "from": 20457,
+   "to": 20457
+  },
+  "needle": "Connect Four with gravity"
+ },
+ "flat.c4names": {
+  "path": "crates/pflow-metamodel/tests/common/mod.rs",
+  "from": 5,
+  "to": 8,
+  "note": "the fixtures name their parts by convention; this file declares sides, auto and rewards",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/common/mod.rs",
+   "from": 5,
+   "to": 8
+  },
+  "needle": "name their parts by convention"
+ },
+ "flat.c4decl": {
+  "path": "crates/pflow-metamodel/tests/common/mod.rs",
+  "from": 28,
+  "to": 35,
+  "note": "auto = name contains \"win\"; sign +1 for x_, -1 otherwise; reward win_x +1, win_o -1",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/common/mod.rs",
+   "from": 23,
+   "to": 30
+  },
+  "needle": "t.starts_with(\"x_\")"
+ },
+ "flat.gameDoc": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 4,
+  "to": 11,
+  "note": "auto transitions fire as soon as enabled; every other transition is a move",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 4,
+   "to": 11
+  },
+  "needle": "transitions fire as soon as"
+ },
+ "flat.settle": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 277,
+  "to": 288,
+  "note": "settle: fire automatic transitions, lowest index first, until none is enabled",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 221,
+   "to": 232
+  },
+  "needle": "pub fn settle"
+ },
+ "flat.idOrder": {
+  "path": "crates/pflow-parser/src/lib.rs",
+  "from": 129,
+  "to": 131,
+  "note": "model_from_json sorts the transition IDs, so a transition's index is its place in ID order",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-parser/src/lib.rs",
+   "from": 129,
+   "to": 131
+  },
+  "needle": "trans_ids.sort()"
+ },
+ "flat.score": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 311,
+  "to": 314,
+  "note": "score: the reward of a final marking",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 239,
+   "to": 242
+  },
+  "needle": "pub fn score"
+ },
+ "lens.value": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 902,
+  "to": 935,
+  "note": "Solver::value calls run(): nodes reset to 0 (bit engine, then again by counts if it spilled), then solve",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 526,
+   "to": 554
+  },
+  "needle": "fn run(&mut self"
+ },
+ "lens.engine": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 918,
+  "to": 934,
+  "note": "run() (called by value()): the bit engine when the marking fits, else counts",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 533,
+   "to": 553
+  },
+  "needle": "let fits = g.bits.set_words() <= INLINE;"
+ },
+ "lens.budgetCount": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1057,
+  "to": 1060,
+  "note": "search: nodes += 1; past the budget, None",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 593,
+   "to": 597
+  },
+  "needle": "self.nodes += 1"
+ },
+ "lens.upSolve": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 982,
+  "to": 984,
+  "note": "solve: a None from a search is returned at once",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 578,
+   "to": 580
+  },
+  "needle": "let Some(v) = self.search(w, a, b, true)?"
+ },
+ "lens.upSearch": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1152,
+  "to": 1154,
+  "note": "search: a None from a child is returned at once",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 654,
+   "to": 656
+  },
+  "needle": "self.search(next, a, b, false)"
+ },
+ "lens.budgetDefault": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 415,
+  "to": 415,
+  "note": "no budget: usize::MAX",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 245,
+   "to": 245
+  },
+  "needle": "d.budget.unwrap_or(usize::MAX)"
+ },
+ "lens.driversDoc": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 29,
+  "to": 37,
+  "note": "drivers: null_window on by default (off when drivers is given without it); budget gives a value up past N nodes or T milliseconds",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 17,
+   "to": 19
+  },
+  "needle": "milliseconds"
+ },
+ "lens.solve": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 937,
+  "to": 996,
+  "note": "Solver::solve: yes/no searches, one per gap between adjacent rewards",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 556,
+   "to": 588
+  },
+  "needle": "fn solve<W: Walk>"
+ },
+ "lens.window": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 970,
+  "to": 981,
+  "note": "the value is one of vals[i..=j]; the first window is (vals[k], vals[k+1]) of the mover's worst gap (or of the gap nearest the root's guess, under aspiration)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 573,
+   "to": 577
+  },
+  "needle": "// The value is one of vals[i..=j]."
+ },
+ "lens.narrow": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 985,
+  "to": 993,
+  "note": "v > (a+b)/2: i = k+1, else j = k; returns vals[i]",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 578,
+   "to": 587
+  },
+  "needle": "let up = v > (a + b) / 2.0"
+ },
+ "lens.fullRange": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 947,
+  "to": 959,
+  "note": "solve: with null_window and mtd_f both off (or fewer than 3 rewards), one search over the whole reward range (after one over a window around the root's guess, when aspiration gives one)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 564,
+   "to": 566
+  },
+  "needle": "!(self.null_window || self.mtd_f)"
+ },
+ "lens.nwDefault": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 205,
+  "to": 232,
+  "note": "drivers(): null_window on when drivers is absent, off when drivers is given without it",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 146,
+   "to": 162
+  },
+  "needle": "null_window: false,"
+ },
+ "lens.rewards": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 121,
+  "to": 138,
+  "note": "rewards(): the distinct sums of the reward weights",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 105,
+   "to": 122
+  },
+  "needle": "fn rewards(weights"
+ },
+ "lens.c4reward": {
+  "path": "crates/pflow-metamodel/tests/common/mod.rs",
+  "from": 35,
+  "to": 35,
+  "note": "Connect-4 rewards: win_x +1, win_o -1",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/common/mod.rs",
+   "from": 30,
+   "to": 30
+  },
+  "needle": "at(\"win_o\"), -1.0"
+ },
+ "lens.search": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1046,
+  "to": 1179,
+  "note": "Solver::search: fail-soft alpha-beta",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 590,
+   "to": 693
+  },
+  "needle": "fn search<W: Walk>("
+ },
+ "lens.ttGet": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1067,
+  "to": 1079,
+  "note": "tt.get: a settled entry returns at once; else (a, b) narrowed and first = best",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 599,
+   "to": 611
+  },
+  "needle": "self.tt.get(&k, W::COUNTS)"
+ },
+ "lens.leaf": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1080,
+  "to": 1086,
+  "note": "no moves: the score, stored as exact",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 612,
+   "to": 625
+  },
+  "needle": "if moves.is_empty()"
+ },
+ "lens.children": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1087,
+  "to": 1141,
+  "note": "children keyed by the chain (after must_win and non_losing drop what they can, and the root's pieces rank the root's moves), sorted best first",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 626,
+   "to": 643
+  },
+  "needle": "kids.sort_by(|x, y| self.chain.before"
+ },
+ "lens.loop": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1151,
+  "to": 1167,
+  "note": "each child searched with (a, b); max/min; a >= b: chain.cutoff, break",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 653,
+   "to": 669
+  },
+  "needle": "for (_, t, next) in &kids"
+ },
+ "lens.recurse": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1152,
+  "to": 1152,
+  "note": "self.search(next, a, b, false): the core again, one level down (root = false: the root's pieces run only at the position searched)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 654,
+   "to": 654
+  },
+  "needle": "self.search(next, a, b, false)"
+ },
+ "lens.cutoff": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1163,
+  "to": 1166,
+  "note": "a >= b: self.chain.cutoff(&mut self.history, t); break",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 665,
+   "to": 668
+  },
+  "needle": "self.chain.cutoff(&mut self.history, *t)"
+ },
+ "lens.boundsStore": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1168,
+  "to": 1177,
+  "note": "the result as [lo, hi], stored; the table merges it with the old entry (memo.rs, Table::keep)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 670,
+   "to": 691
+  },
+  "needle": "let (lo, hi) = if v <= a0"
+ },
+ "lens.store": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1181,
+  "to": 1185,
+  "note": "store: remember what a search found; the table (memo.rs) merges it with what it knew and, once full, replaces its weakest entry (there is no cap check)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 514,
+   "to": 519
+  },
+  "needle": "fn store<W: Walk>"
+ },
+ "lens.withMemo": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 634,
+  "to": 641,
+  "note": "with_memo: a fresh table bounded to `entries`, inside a search and across calls; a full table replaces its weakest entries (there is no table/cap pair)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 495,
+   "to": 505
+  },
+  "needle": "self.tt = Self::table(self.g, entries)"
+ },
+ "lens.tableDefault": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 589,
+  "to": 594,
+  "note": "there is no TABLE const: the default is Solver::MEMO = 2^23 entries, and a full table replaces its weakest entries instead of being cleared",
+  "status": "gone",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 469,
+   "to": 470
+  },
+  "needle": "pub const MEMO: usize"
+ },
+ "lens.capDefault": {
+  "path": "crates/pflow-metamodel/src/memo.rs",
+  "from": 15,
+  "to": 24,
+  "note": "there is no cap field: the table is bounded inside a search too (a new key takes an empty slot of its two buckets, else the weakest; the table never grows past its entries)",
+  "status": "gone",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 489,
+   "to": 490
+  },
+  "needle": "never grows past them"
+ },
+ "lens.clear": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 895,
+  "to": 900,
+  "note": "there is no clearing: start() ages the table (a new generation), and entries of earlier calls are the first replaced once the table is full",
+  "status": "gone",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 529,
+   "to": 531
+  },
+  "needle": "self.tt.age()"
+ },
+ "lens.orderOnly": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 1,
+  "to": 7,
+  "note": "order never changes a value, only how soon a cutoff comes",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 1,
+   "to": 7
+  },
+  "needle": "Order never changes a value"
+ },
+ "lens.ctxRead": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 15,
+  "to": 24,
+  "note": "Ctx: what a piece may read (first, history)",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 15,
+   "to": 24
+  },
+  "needle": "pub(crate) struct Ctx"
+ },
+ "lens.cutoffNoop": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 36,
+  "to": 37,
+  "note": "Orderer::cutoff: a no-op unless a piece overrides it",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 36,
+   "to": 37
+  },
+  "needle": "fn cutoff(&self, _history"
+ },
+ "lens.ttBest": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 52,
+  "to": 58,
+  "note": "TtBest: key 1 for cx.first; DECISIVE",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 52,
+   "to": 58
+  },
+  "needle": "const DECISIVE: bool = true"
+ },
+ "lens.immWin": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 60,
+  "to": 66,
+  "note": "ImmediateWin: key 1 when next is over and the mover wins; DECISIVE",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 60,
+   "to": 66
+  },
+  "needle": "const DECISIVE: bool = true"
+ },
+ "lens.histKey": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 68,
+  "to": 71,
+  "note": "History: key = history[t]",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 68,
+   "to": 71
+  },
+  "needle": "cx.history[t]"
+ },
+ "lens.histCut": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 73,
+  "to": 75,
+  "note": "History::cutoff: history[t] += 1",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 73,
+   "to": 75
+  },
+  "needle": "history[t] += 1"
+ },
+ "lens.centrality": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 90,
+  "to": 94,
+  "note": "Centrality: key = centrality[t]",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 90,
+   "to": 94
+  },
+  "needle": "cx.g.centrality[t]"
+ },
+ "lens.threats": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 96,
+  "to": 103,
+  "note": "Threats: goals t feeds one token short after t",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 96,
+   "to": 103
+  },
+  "needle": "next.deficit"
+ },
+ "lens.chainKey": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 259,
+  "to": 269,
+  "note": "Chain::key: piece by piece, stopping at a decisive piece's nonzero key",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 249,
+   "to": 259
+  },
+  "needle": "pub(crate) fn key<W: Walk>(&self, cx: &Ctx"
+ },
+ "lens.chainBefore": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 271,
+  "to": 275,
+  "note": "Chain::before: the first key to differ decides",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 261,
+   "to": 265
+  },
+  "needle": "pub(crate) fn before"
+ },
+ "lens.chainCutoff": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 277,
+  "to": 281,
+  "note": "Chain::cutoff: every piece's cutoff",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 267,
+   "to": 271
+  },
+  "needle": "pub(crate) fn cutoff(&self, history"
+ },
+ "lens.chainDefault": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 205,
+  "to": 216,
+  "note": "Chain::default: tt_best, immediate_win, history",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 205,
+   "to": 216
+  },
+  "needle": "impl Default for Chain"
+ },
+ "lens.planChain": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 283,
+  "to": 298,
+  "note": "chain(): no order gives Chain::default",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 195,
+   "to": 210
+  },
+  "needle": "fn chain(&self)"
+ },
+ "lens.solver": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 407,
+  "to": 440,
+  "note": "solver_with(): budget (nodes, ms), chain, null_window, mtd_f, filters, the root's non_losing, aspiration, play (the mode is read), memo; the root's estimate is given by the caller",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 240,
+   "to": 251
+  },
+  "needle": "pub fn solver_with"
+ },
+ "lens.modeCheck": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 385,
+  "to": 392,
+  "note": "filters / heuristics: only the reserved names (beam, static_eval) are refused: exact mode \"can change the value\", play mode \"is not built\"; must_win and non_losing are built",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 222,
+   "to": 236
+  },
+  "needle": "is not built in this release"
+ },
+ "lens.driversFlags": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 205,
+  "to": 281,
+  "note": "drivers(): read into flags, so their JSON order does not change the nesting",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 146,
+   "to": 193
+  },
+  "needle": "fn drivers(&self)"
+ },
+ "lens.spill": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 929,
+  "to": 934,
+  "note": "a run the bit engine cannot finish is redone over counts, nodes reset again",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 544,
+   "to": 553
+  },
+  "needle": "if !self.spilled"
+ },
+ "lens.valueErr": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 117,
+  "to": 119,
+  "note": "an Err, e.g. automatic transitions that never stop",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 101,
+   "to": 103
+  },
+  "needle": "fn endless()"
+ },
+ "lens.L606": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 41,
+  "to": 47,
+  "note": "filters: must_win and non_losing drop moves only where the value is already known, so they are legal in either mode (absent means must_win, [] runs none); heuristics, and the reserved beam, can change the value: none is built",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 21,
+   "to": 23
+  },
+  "needle": "Filter::DEFAULT"
+ },
+ "lens.L709a": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 41,
+  "to": 47,
+  "note": "filters: must_win and non_losing drop moves only where the value is already known, so they are legal in either mode (absent means must_win, [] runs none); heuristics, and the reserved beam, can change the value: none is built",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 21,
+   "to": 23
+  },
+  "needle": "Filter::DEFAULT"
+ },
+ "lens.L709b": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 105,
+  "to": 106,
+  "note": "UNSOUND: beam, static_eval",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 70,
+   "to": 71
+  },
+  "needle": "UNSOUND"
+ },
+ "boundaries.fixture": {
+  "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+  "from": 0,
+  "to": 0,
+  "note": "the Connect-4 net (byte-identical to data/connect-4.json): no ports",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+   "from": 0,
+   "to": 0
+  },
+  "needle": "Connect Four with gravity"
+ },
+ "string.value": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 902,
+  "to": 935,
+  "note": "Solver::value calls run(): nodes reset, then solve (by bits, or again by counts)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 526,
+   "to": 554
+  },
+  "needle": "fn run(&mut self"
+ },
+ "string.solve": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 937,
+  "to": 996,
+  "note": "Solver::solve: yes/no searches, one per gap between adjacent rewards",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 556,
+   "to": 588
+  },
+  "needle": "fn solve<W: Walk>"
+ },
+ "string.search": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1046,
+  "to": 1179,
+  "note": "Solver::search: fail-soft alpha-beta with the transposition table",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 590,
+   "to": 693
+  },
+  "needle": "fn search<W: Walk>("
+ },
+ "string.ttRead": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1069,
+  "to": 1079,
+  "note": "tt.get: an exact entry or a bound outside the window returns; else the window narrows",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 601,
+   "to": 611
+  },
+  "needle": "self.tt.get(&k, W::COUNTS)"
+ },
+ "string.chain": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 259,
+  "to": 275,
+  "note": "Chain::key and before: keys compared piece by piece, the first to differ decides",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 249,
+   "to": 265
+  },
+  "needle": "pub(crate) fn before"
+ },
+ "string.decisive": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 26,
+  "to": 31,
+  "note": "DECISIVE: a nonzero key settles the rank, a top tier of its own",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 26,
+   "to": 31
+  },
+  "needle": "const DECISIVE: bool = false"
+ },
+ "string.L1159": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 926,
+  "to": 934,
+  "note": "run() (called by value()): nodes = 0 before the bit-engine run, and again before the retry by counts",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 541,
+   "to": 548
+  },
+  "needle": "self.nodes = 0;"
+ },
+ "string.L1220a": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 292,
+  "to": 294,
+  "note": "a piece listed twice is refused",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 204,
+   "to": 206
+  },
+  "needle": "is listed twice"
+ },
+ "string.L1220b": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 220,
+  "to": 230,
+  "note": "Chain::new: at most 8 pieces",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 220,
+   "to": 230
+  },
+  "needle": "an order chain holds at most"
+ },
+ "string.L1231": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1080,
+  "to": 1141,
+  "note": "moves, keyed by the chain (after the filters), sorted",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 612,
+   "to": 643
+  },
+  "needle": "kids.sort_by(|x, y| self.chain.before"
+ },
+ "string.L1278a": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 13,
+  "to": 21,
+  "note": "BitModel or IndexedModel, chosen by value()",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 13,
+   "to": 21
+  },
+  "needle": "[`BitModel`]"
+ },
+ "string.L1278b": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 918,
+  "to": 934,
+  "note": "run() (called by value()): the bit engine when the marking fits, else counts",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 533,
+   "to": 553
+  },
+  "needle": "let fits = g.bits.set_words() <= INLINE;"
+ },
+ "string.L1300a": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 559,
+  "to": 586,
+  "note": "Solver: tt (a bounded memo::Table) and history; there are no table/cap fields",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 448,
+   "to": 466
+  },
+  "needle": "tt: Table,"
+ },
+ "string.L1300b": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 589,
+  "to": 594,
+  "note": "there is no TABLE const: the default is Solver::MEMO = 2^23 entries, and a full table replaces its weakest entries instead of being cleared",
+  "status": "gone",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 469,
+   "to": 470
+  },
+  "needle": "pub const MEMO: usize"
+ },
+ "string.L1300c": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 634,
+  "to": 641,
+  "note": "with_memo: a fresh table bounded to `entries`, inside a search and across calls; a full table replaces its weakest entries (there is no table/cap pair)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 495,
+   "to": 505
+  },
+  "needle": "self.tt = Self::table(self.g, entries)"
+ },
+ "string.L1326": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1151,
+  "to": 1167,
+  "note": "the child loop",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 653,
+   "to": 669
+  },
+  "needle": "for (_, t, next) in &kids"
+ },
+ "string.L1329": {
+  "path": "crates/pflow-metamodel/src/memo.rs",
+  "from": 289,
+  "to": 292,
+  "note": "merge with what was known, then store: the merge is Table::keep's (lo = max, hi = min)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 678,
+   "to": 691
+  },
+  "needle": "e.lo = e.lo.max(old.lo)"
+ },
+ "string.L1335a": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 277,
+  "to": 281,
+  "note": "Chain::cutoff",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 267,
+   "to": 271
+  },
+  "needle": "pub(crate) fn cutoff(&self, history"
+ },
+ "string.L1335b": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 68,
+  "to": 76,
+  "note": "History",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 68,
+   "to": 76
+  },
+  "needle": "cx.history[t]"
+ },
+ "cospan.autoWin": {
+  "path": "crates/pflow-metamodel/tests/common/mod.rs",
+  "from": 28,
+  "to": 28,
+  "note": "the test game declares every transition whose name contains \"win\" automatic",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/common/mod.rs",
+   "from": 23,
+   "to": 23
+  },
+  "needle": "contains(\"win\")"
+ },
+ "cospan.fixture": {
+  "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+  "from": 0,
+  "to": 0,
+  "note": "the Connect-4 net (data/connect-4.json is byte-identical at c396d46)",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+   "from": 0,
+   "to": 0
+  },
+  "needle": "Connect Four with gravity"
+ },
+ "cospan.solver": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 397,
+  "to": 402,
+  "note": "SearchPlan::solver(&self, g: &Game): the plan builds a solver over a game; it is not glued to the net",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 240,
+   "to": 252
+  },
+  "needle": "pub fn solver<'a>"
+ },
+ "cospan.game": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 52,
+  "to": 55,
+  "note": "Game: a two-sided game on a net",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 42,
+   "to": 45
+  },
+  "needle": "pub struct Game"
+ },
+ "operad.planDoc": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 6,
+  "to": 13,
+  "note": "the module-doc example; at the pin it also lists filters, a root and the aspiration driver (connect4_exact() here is the smaller, older form)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 6,
+   "to": 11
+  },
+  "needle": "\"mode\": \"exact\""
+ },
+ "operad.driversAbsent": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 206,
+  "to": 214,
+  "note": "drivers absent: null_window on, no budget",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 147,
+   "to": 152
+  },
+  "needle": "null_window: true,"
+ },
+ "operad.driversFlags": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 184,
+  "to": 191,
+  "note": "Drivers: flags null_window, mtd_f, aspiration, plus the budget (nodes) and ms: still flags and a budget, not a list",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 134,
+   "to": 138
+  },
+  "needle": "struct Drivers"
+ },
+ "operad.drivers": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 205,
+  "to": 281,
+  "note": "drivers(): the list is read into flags (null_window, mtd_f, aspiration) and a budget (nodes, ms), each at most once",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 146,
+   "to": 194
+  },
+  "needle": "fn drivers(&self)"
+ },
+ "operad.chain": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 283,
+  "to": 298,
+  "note": "chain(): absent means Chain::default; a name listed twice is refused",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 196,
+   "to": 210
+  },
+  "needle": "fn chain(&self)"
+ },
+ "operad.check": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 364,
+  "to": 395,
+  "note": "check(): every name in its place; aspiration needs a root estimate; exact mode refuses only the reserved names (beam, static_eval), not the built filters",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 216,
+   "to": 238
+  },
+  "needle": "pub fn check(&self)"
+ },
+ "operad.exactRefuses": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 385,
+  "to": 392,
+  "note": "a reserved filter or heuristic (beam, static_eval): refused in exact mode, not built in play mode",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 229,
+   "to": 234
+  },
+  "needle": "is not built in this release"
+ },
+ "operad.solver": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 407,
+  "to": 440,
+  "note": "solver_with(): budget (nodes, ms), chain, null_window, mtd_f, filters, the root's non_losing, aspiration, play (set by mode), memo; the root's estimate is given by the caller, not built",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 240,
+   "to": 251
+  },
+  "needle": "pub fn solver_with"
+ },
+ "operad.noBudget": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 415,
+  "to": 415,
+  "note": "d.budget.unwrap_or(usize::MAX)",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 245,
+   "to": 245
+  },
+  "needle": "d.budget.unwrap_or(usize::MAX)"
+ },
+ "operad.mode": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 65,
+  "to": 74,
+  "note": "Mode: Exact (default) or Play",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 36,
+   "to": 45
+  },
+  "needle": "pub enum Mode"
+ },
+ "operad.orderOnly": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 1,
+  "to": 7,
+  "note": "order never changes a value, only how soon a cutoff comes",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 1,
+   "to": 7
+  },
+  "needle": "Order never changes a value"
+ },
+ "operad.decisive": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 26,
+  "to": 31,
+  "note": "DECISIVE: a nonzero key settles the rank",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 26,
+   "to": 31
+  },
+  "needle": "const DECISIVE: bool = false"
+ },
+ "operad.chainNew": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 194,
+  "to": 230,
+  "note": "Chain, Chain::default, Chain::new (at most 8 pieces)",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 194,
+   "to": 230
+  },
+  "needle": "pub fn new(pieces"
+ },
+ "operad.chainDefault": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 205,
+  "to": 216,
+  "note": "Chain::default: tt_best, immediate_win, history",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 205,
+   "to": 216
+  },
+  "needle": "impl Default for Chain"
+ },
+ "operad.chainKey": {
+  "path": "crates/pflow-metamodel/src/order.rs",
+  "from": 259,
+  "to": 275,
+  "note": "keys compared piece by piece; a decisive nonzero key stops the comparison",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/order.rs",
+   "from": 249,
+   "to": 265
+  },
+  "needle": "pub(crate) fn before"
+ },
+ "operad.memo": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 634,
+  "to": 641,
+  "note": "with_memo: kept to N entries",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 495,
+   "to": 505
+  },
+  "needle": "self.tt = Self::table(self.g, entries)"
+ },
+ "operad.nullWin": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 660,
+  "to": 665,
+  "note": "with_null_window",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 507,
+   "to": 512
+  },
+  "needle": "pub fn with_null_window"
+ },
+ "operad.value": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 902,
+  "to": 935,
+  "note": "run() (under value): nodes reset once per call (twice when the bit engine spills and the run is redone by counts)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 526,
+   "to": 554
+  },
+  "needle": "fn run(&mut self"
+ },
+ "operad.run": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 926,
+  "to": 934,
+  "note": "run(): nodes reset once per call (and again before a retry by counts); search counts them, so one node count covers the whole null-window run",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 526,
+   "to": 597
+  },
+  "needle": "self.nodes = 0;"
+ },
+ "operad.solve": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 937,
+  "to": 996,
+  "note": "solve: one yes/no search per gap between adjacent rewards",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 556,
+   "to": 588
+  },
+  "needle": "fn solve<W: Walk>"
+ },
+ "operad.fullWindow": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 947,
+  "to": 959,
+  "note": "solve: with null_window and mtd_f both off (or fewer than 3 rewards), one search over the whole reward range (after one over a window around the root's guess, when aspiration gives one)",
+  "status": "rewritten",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 564,
+   "to": 565
+  },
+  "needle": "!(self.null_window || self.mtd_f)"
+ },
+ "operad.core": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1046,
+  "to": 1179,
+  "note": "Solver::search: fail-soft alpha-beta with the transposition table",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 590,
+   "to": 693
+  },
+  "needle": "fn search<W: Walk>("
+ },
+ "operad.budgetCheck": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1057,
+  "to": 1060,
+  "note": "search: nodes > budget gives up (None)",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 593,
+   "to": 597
+  },
+  "needle": "self.nodes > self.budget"
+ },
+ "operad.L383": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 1,
+  "to": 4,
+  "note": "the search is fixed; a plan chooses what swaps in",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/plan.rs",
+   "from": 1,
+   "to": 4
+  },
+  "needle": "The search is fixed"
+ },
+ "incidence.weightRs": {
+  "path": "crates/pflow-core/src/net.rs",
+  "from": 100,
+  "to": 107,
+  "note": "weight_sum: the same for a Shape A arc",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-core/src/net.rs",
+   "from": 100,
+   "to": 107
+  },
+  "needle": "pub fn weight_sum"
+ },
+ "incidence.incRs": {
+  "path": "crates/pflow-reachability/src/invariants.rs",
+  "from": 142,
+  "to": 184,
+  "note": "incidence_matrix: output − input; read and inhibitor arcs excluded",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-reachability/src/invariants.rs",
+   "from": 142,
+   "to": 184
+  },
+  "needle": "pub fn incidence_matrix"
+ },
+ "incidence.inhibRs": {
+  "path": "crates/pflow-reachability/src/invariants.rs",
+  "from": 497,
+  "to": 516,
+  "note": "test: inhibitor arcs do not enter the incidence matrix",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-reachability/src/invariants.rs",
+   "from": 497,
+   "to": 516
+  },
+  "needle": "fn inhibitor_arcs_do_not_enter_the_incidence_matrix"
+ },
+ "incidence.rawArc": {
+  "path": "crates/pflow-core/src/json.rs",
+  "from": 119,
+  "to": 131,
+  "note": "RawArc: weight per token color, inhibitTransition",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-core/src/json.rs",
+   "from": 119,
+   "to": 131
+  },
+  "needle": "pub struct RawArc"
+ },
+ "incidence.rawWeight": {
+  "path": "crates/pflow-core/src/json.rs",
+  "from": 186,
+  "to": 191,
+  "note": "an absent weight is [1]",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-core/src/json.rs",
+   "from": 186,
+   "to": 191
+  },
+  "needle": "None => vec![1.0]"
+ },
+ "incidence.fixture": {
+  "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+  "from": 0,
+  "to": 0,
+  "note": "the Connect-4 net; byte-identical to data/connect-4.json",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/fixtures/connect-4.json",
+   "from": 0,
+   "to": 0
+  },
+  "needle": "Connect Four with gravity"
+ },
+ "process.auto": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 4,
+  "to": 11,
+  "note": "automatic transitions fire as soon as enabled; every other transition is a move",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 4,
+   "to": 11
+  },
+  "needle": "transitions fire as soon as"
+ },
+ "process.settle": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 277,
+  "to": 288,
+  "note": "settle: automatic transitions, lowest index first, until none is enabled",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/src/game.rs",
+   "from": 221,
+   "to": 232
+  },
+  "needle": "pub fn settle"
+ },
+ "process.byName": {
+  "path": "crates/pflow-metamodel/tests/common/mod.rs",
+  "from": 5,
+  "to": 8,
+  "note": "the fixtures name their parts by convention; the tests declare them",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/common/mod.rs",
+   "from": 5,
+   "to": 8
+  },
+  "needle": "name their parts by convention"
+ },
+ "process.game": {
+  "path": "crates/pflow-metamodel/tests/common/mod.rs",
+  "from": 18,
+  "to": 40,
+  "note": "game(): auto = name contains \"win\", x_ moves are +1, reward win_x - win_o, settled start",
+  "status": "moved",
+  "was": {
+   "path": "crates/pflow-metamodel/tests/common/mod.rs",
+   "from": 17,
+   "to": 35
+  },
+  "needle": "pub fn game(name: &str)"
+ },
+ "process.inhibit": {
+  "path": "crates/pflow-parser/src/lib.rs",
+  "from": 84,
+  "to": 88,
+  "note": "inhibitTransition: input side is an inhibitor arc, output side a read arc",
+  "status": "same",
+  "was": {
+   "path": "crates/pflow-parser/src/lib.rs",
+   "from": 84,
+   "to": 88
+  },
+  "needle": "inhibitTransition"
+ },
+ "piece.must_win": {
+  "path": "crates/pflow-metamodel/src/filter.rs",
+  "from": 9,
+  "to": 11,
+  "note": "must_win: a move that ends the game at the mover's best bound is the value; the position is settled as soon as one is found",
+  "status": "new",
+  "was": null,
+  "needle": "`must_win`"
+ },
+ "piece.must_win.2": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1103,
+  "to": 1109,
+  "note": "search: the cutoff the winning move would have made, stored as exact",
+  "status": "new",
+  "was": null,
+  "needle": "f.must_win && f.best(g, s, &next)?"
+ },
+ "piece.non_losing": {
+  "path": "crates/pflow-metamodel/src/filter.rs",
+  "from": 12,
+  "to": 15,
+  "note": "non_losing: a move after which the other side has a reply that ends the game at the mover's worst bound is dropped; if every move is dropped the position is worth that bound",
+  "status": "new",
+  "was": null,
+  "needle": "`non_losing`"
+ },
+ "piece.non_losing.2": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 1112,
+  "to": 1130,
+  "note": "search: non_losing drops the kids whose reply wins at once, checking replies at every node (costly: meant for a few positions, not a whole search)",
+  "status": "new",
+  "was": null,
+  "needle": "if f.non_losing {"
+ },
+ "piece.non_losing_root": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 690,
+  "to": 695,
+  "note": "with_root_non_losing: drops the root's moves that leave the other side a win at once, at the root only",
+  "status": "new",
+  "was": null,
+  "needle": "pub fn with_root_non_losing"
+ },
+ "piece.non_losing_root.2": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 318,
+  "to": 318,
+  "note": "roots(): \"non_losing\" in root.order turns the root filter on",
+  "status": "new",
+  "was": null,
+  "needle": "r.non_losing = true"
+ },
+ "piece.non_losing_root.3": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 773,
+  "to": 780,
+  "note": "rank(): non_losing at the root drops a move whose reply wins at once, before the estimate ranks the rest",
+  "status": "new",
+  "was": null,
+  "needle": "if self.root.non_losing {"
+ },
+ "piece.ode": {
+  "path": "crates/pflow-solver/src/game.rs",
+  "from": 156,
+  "to": 165,
+  "note": "ode: the mass-action ODE of the net from the position, the reward read off where the tokens end up (OdeEstimate, pflow-solver)",
+  "status": "new",
+  "was": null,
+  "needle": "fn name(&self) -> &'static str"
+ },
+ "piece.ode.2": {
+  "path": "crates/pflow-metamodel/src/root.rs",
+  "from": 28,
+  "to": 37,
+  "note": "Estimate: a guess at a position's value; it breaks the order chain's ties among the root's moves and aims the aspiration driver; it never changes a value",
+  "status": "new",
+  "was": null,
+  "needle": "pub trait Estimate"
+ },
+ "piece.ode.3": {
+  "path": "crates/pflow-solver/src/game.rs",
+  "from": 167,
+  "to": 174,
+  "note": "pflow_solver::game::solver: SearchPlan::solver_with, given the OdeEstimate when the plan's root names ode",
+  "status": "new",
+  "was": null,
+  "needle": "pub fn solver<"
+ },
+ "piece.ode.4": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 753,
+  "to": 802,
+  "note": "rank(): the root's pieces at a position: non_losing drops moves, the estimate ranks the rest (solved once per move)",
+  "status": "new",
+  "was": null,
+  "needle": "fn rank(&mut self"
+ },
+ "piece.mtd_f": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 667,
+  "to": 681,
+  "note": "with_mtd_f: yes/no searches that follow the bounds the last one proved; not together with null_window",
+  "status": "new",
+  "was": null,
+  "needle": "pub fn with_mtd_f"
+ },
+ "piece.mtd_f.2": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 998,
+  "to": 1044,
+  "note": "mtd_f_run: MTD(f) over the gaps between adjacent rewards",
+  "status": "new",
+  "was": null,
+  "needle": "fn mtd_f_run"
+ },
+ "piece.aspiration": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 697,
+  "to": 706,
+  "note": "with_aspiration: starts from the root's estimate (needs one)",
+  "status": "new",
+  "was": null,
+  "needle": "pub fn with_aspiration"
+ },
+ "piece.aspiration.2": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 368,
+  "to": 373,
+  "note": "check(): the aspiration driver needs a root estimate (name one in root.order)",
+  "status": "new",
+  "was": null,
+  "needle": "starts from the root's estimate"
+ },
+ "slot.root": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 300,
+  "to": 333,
+  "note": "roots(): root.order names at most one estimate (ode) and \"non_losing\", each once; a repeated or unknown piece is refused",
+  "status": "new",
+  "was": null,
+  "needle": "fn roots(&self)"
+ },
+ "slot.root.2": {
+  "path": "crates/pflow-metamodel/src/plan.rs",
+  "from": 155,
+  "to": 160,
+  "note": "RootPlan: {\"order\": [...]}, the root's pieces",
+  "status": "new",
+  "was": null,
+  "needle": "pub struct RootPlan"
+ },
+ "slot.root.3": {
+  "path": "crates/pflow-metamodel/src/root.rs",
+  "from": 1,
+  "to": 21,
+  "note": "root.rs: pieces that run once per position searched (an estimate; non_losing at the root); neither changes a value",
+  "status": "new",
+  "was": null,
+  "needle": "run once per position searched"
+ },
+ "slot.engine": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 13,
+  "to": 21,
+  "note": "there is no engine choice in a plan: game.rs picks BitModel or IndexedModel itself",
+  "status": "new",
+  "was": null,
+  "needle": "[`BitModel`]"
+ },
+ "slot.engine.2": {
+  "path": "crates/pflow-metamodel/src/game.rs",
+  "from": 918,
+  "to": 934,
+  "note": "run(): the bit engine when the marking fits, else counts",
+  "status": "new",
+  "was": null,
+  "needle": "let fits = g.bits.set_words() <= INLINE;"
+ }
+}
