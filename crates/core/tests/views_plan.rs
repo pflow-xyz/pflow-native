@@ -383,6 +383,7 @@ fn palette_status_is_read_off_pflow_rs() {
             "memo",
             "must_win",
             "non_losing",
+            "ode",
             "mtd_f",
             "aspiration"
         ]
@@ -504,6 +505,103 @@ fn plan_commands_edit_with_pflow_rs_verdicts() {
         .starts_with("search plan: unknown field `ordr`"));
 
     let pieces = s.execute("plan.pieces", Value::Null).unwrap();
-    assert_eq!(pieces["slots"].as_array().unwrap().len(), 7);
+    assert_eq!(pieces["slots"].as_array().unwrap().len(), 8);
     assert_eq!(pieces["plan_rs"], sp::PLAN_RS_REV);
+}
+
+/// pflow-rs aacb7eb's `root` field (7532a79): `{"order": ["ode", "non_losing"]}`,
+/// an estimate (at most one) and the root's `non_losing`. A root slot takes
+/// both; every verdict is pflow-rs's own message.
+#[test]
+fn the_root_slot_takes_ode_and_non_losing_with_pflow_rs_verdicts() {
+    let mut s = Session::default();
+    s.execute("plan.open", json!({})).unwrap();
+    let cands = |s: &mut Session, name: &str| {
+        s.execute("plan.slot_candidates", json!({"piece": name}))
+            .unwrap()["slots"]
+            .clone()
+    };
+    let slot = |c: &Value, id: &str| {
+        c.as_array()
+            .unwrap()
+            .iter()
+            .find(|x| x["slot"] == id)
+            .unwrap()
+            .clone()
+    };
+
+    // ode: legal at the root, refused elsewhere by pflow-rs.
+    let c = cands(&mut s, "ode");
+    assert_eq!(slot(&c, "root")["ok"], true, "{c}");
+    let in_order = slot(&c, "order");
+    assert_eq!(in_order["ok"], false);
+    assert!(
+        in_order["why"]
+            .as_str()
+            .unwrap()
+            .contains("is a estimate, not a order piece"),
+        "{in_order}"
+    );
+    // Something that is not a root piece is the page's refusal, not pflow-rs's.
+    let c = cands(&mut s, "history");
+    let r = slot(&c, "root");
+    assert_eq!(
+        (r["ok"].clone(), r["rule"].clone()),
+        (json!(false), json!("page"))
+    );
+
+    s.execute("plan.add_piece", json!({"piece": "ode", "slot": "root"}))
+        .unwrap();
+    assert_eq!(
+        s.execute("plan.state", Value::Null).unwrap()["plan"]["root"],
+        json!({"order": ["ode"]})
+    );
+    // The check ran the solver with pflow-solver's ode estimate.
+    assert_eq!(s.execute("plan.check", Value::Null).unwrap()["ok"], true);
+    s.execute(
+        "plan.add_piece",
+        json!({"piece": "non_losing", "slot": "root"}),
+    )
+    .unwrap();
+    s.execute(
+        "plan.move_piece",
+        json!({"slot": "root", "from": 1, "to": 0}),
+    )
+    .unwrap();
+    assert_eq!(
+        s.execute("plan.state", Value::Null).unwrap()["plan"]["root"],
+        json!({"order": ["non_losing", "ode"]})
+    );
+    // A second estimate is pflow-rs's refusal (only one exists, so: twice).
+    let e = s
+        .execute("plan.add_piece", json!({"piece": "ode", "slot": "root"}))
+        .unwrap_err();
+    assert!(
+        e.to_string().contains("listed twice") || e.to_string().contains("second estimate"),
+        "{e}"
+    );
+
+    // aspiration needs the estimate: refused without it, accepted with it.
+    s.execute(
+        "plan.add_piece",
+        json!({"piece": "aspiration", "slot": "drivers"}),
+    )
+    .unwrap();
+    s.execute("plan.remove_piece", json!({"slot": "root", "index": 1}))
+        .unwrap();
+    let c = s.execute("plan.check", Value::Null).unwrap();
+    assert_eq!(c["ok"], false, "{c}");
+    assert!(
+        c["error"]
+            .as_str()
+            .unwrap()
+            .contains("starts from the root's estimate"),
+        "{c}"
+    );
+    // Removing the last root piece drops the field, as absent is the same.
+    s.execute("plan.remove_piece", json!({"slot": "root", "index": 0}))
+        .unwrap();
+    assert!(s.execute("plan.state", Value::Null).unwrap()["plan"]
+        .get("root")
+        .is_none());
 }

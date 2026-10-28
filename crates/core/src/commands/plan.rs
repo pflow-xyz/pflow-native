@@ -48,8 +48,9 @@ pub const SET: &[CommandSpec] = &[
         id: "plan.pieces",
         label: "Plan Pieces",
         help: "The piece palette (name, kind, status built/reserved/proposed, contract, doc, args, \
-               needs_goals, decisive, reads) and the solver template's slots (drivers, order, filters, heuristics, \
-               memo; bounds and engine are designed, never fillable).",
+               needs_goals, decisive, reads) and the solver template's slots (drivers, order, filters, root, heuristics, \
+               memo; bounds and engine are designed, never fillable). The root slot takes the `ode` estimate and \
+               `non_losing` (pflow-rs's root field).",
         menu: "",
         shortcut: None,
         args: &[],
@@ -128,7 +129,7 @@ pub const SET: &[CommandSpec] = &[
         shortcut: None,
         args: &[
             arg("piece", Str, "a palette name"),
-            arg("slot", Str, "drivers, order, filters, heuristics or memo"),
+            arg("slot", Str, "drivers, order, filters, root, heuristics or memo"),
             opt("index", Int, "position in the slot's list (default: the end)"),
         ],
         enabled: need,
@@ -144,7 +145,7 @@ pub const SET: &[CommandSpec] = &[
         menu: "Compose",
         shortcut: None,
         args: &[
-            arg("slot", Str, "drivers, order, filters, heuristics or memo"),
+            arg("slot", Str, "drivers, order, filters, root, heuristics or memo"),
             opt("index", Int, "entry to remove (default 0)"),
         ],
         enabled: need,
@@ -159,7 +160,7 @@ pub const SET: &[CommandSpec] = &[
         menu: "Compose",
         shortcut: None,
         args: &[
-            arg("slot", Str, "drivers, order, filters or heuristics"),
+            arg("slot", Str, "drivers, order, filters, root or heuristics"),
             arg("from", Int, "index to move"),
             arg("to", Int, "index to move it to"),
         ],

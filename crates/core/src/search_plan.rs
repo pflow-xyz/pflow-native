@@ -160,7 +160,9 @@ pub fn check_text(text: &str, g: &Game) -> Check {
     if let Err(e) = plan.check() {
         return refuse("check", e);
     }
-    if let Err(e) = plan.solver(g) {
+    // pflow_solver::game::solver is plan.solver(g) plus the `ode` estimate
+    // a root may name (pflow-metamodel builds none).
+    if let Err(e) = pflow_solver::game::solver(&plan, g) {
         return refuse("solver", e);
     }
     Check {
@@ -229,6 +231,14 @@ fn piece(
 /// The drivers plan.rs takes (its private `DRIVERS`).
 pub const DRIVERS: [&str; 4] = ["null_window", "mtd_f", "aspiration", "budget"];
 
+/// The estimates plan.rs knows (its private `ESTIMATES`); pflow-solver
+/// supplies `ode`.
+pub const ESTIMATES: [&str; 1] = ["ode"];
+
+/// What a root's `order` takes besides an estimate: the `non_losing`
+/// filter, run once at the position searched.
+pub const ROOT_FILTER: &str = "non_losing";
+
 /// The palette, in the prototype's order (`PIECES`), with each status
 /// read off pflow-rs where it can be (`Piece::NAMES`, `Filter::NAMES`).
 pub fn pieces() -> &'static [PieceInfo] {
@@ -247,8 +257,9 @@ pub fn pieces() -> &'static [PieceInfo] {
             piece("non_losing", "Filter", "sound-pruning", "Drops moves that lose at once, checking replies at every node: for a few positions, not a whole search."),
             piece("beam", "Filter", "value-changing", "Reserved name. Can change the value; refused in exact mode, and not built in play mode."),
             piece("static_eval", "Heuristic", "value-changing", "Reserved name. Can change the value; refused in exact mode, and not built in play mode."),
+            piece("ode", "Estimate", "order-only", "The root's best guess: the mass-action ODE of the net from the position searched (pflow_solver::game::OdeEstimate). It orders the root's moves, best guess first, and the aspiration driver starts where it points; it never changes a value. At most one estimate in root.order."),
             piece("mtd_f", "Driver", "value-preserving", "Finds the value by yes/no searches, choosing each next one from the bound the last proved (Solver::with_mtd_f). Not together with null_window."),
-            piece("aspiration", "Driver", "value-preserving", "Starts the search from the root's estimate, which root.order must name (Solver::with_aspiration). No estimate is built into pflow-metamodel; root is not a slot here yet."),
+            piece("aspiration", "Driver", "value-preserving", "Starts the search from the root's estimate, which root.order must name (Solver::with_aspiration): drop ode in the root slot first, or the check refuses it."),
             piece("forced_moves", "Filter", "sound-pruning", "Falls out of non_losing (approved candidate). Not built."),
             piece("lmr", "Heuristic", "value-changing", "Late move reductions, play mode only (approved candidate). Not built."),
             piece("futility", "Filter", "value-changing", "Futility pruning, play mode only (approved candidate). Not built."),
@@ -265,6 +276,7 @@ pub fn pieces() -> &'static [PieceInfo] {
             p.status = if Piece::NAMES.contains(&p.name)
                 || Filter::NAMES.contains(&p.name)
                 || DRIVERS.contains(&p.name)
+                || ESTIMATES.contains(&p.name)
                 || p.name == "memo"
             {
                 "built"
@@ -295,7 +307,7 @@ pub struct Slot {
     pub designed: bool,
 }
 
-pub const SLOTS: [Slot; 7] = [
+pub const SLOTS: [Slot; 8] = [
     Slot {
         id: "drivers",
         accepts: "Driver",
@@ -315,6 +327,13 @@ pub const SLOTS: [Slot; 7] = [
         accepts: "Filter",
         field: Some("filters"),
         label: "filters",
+        designed: false,
+    },
+    Slot {
+        id: "root",
+        accepts: "Root",
+        field: Some("root"),
+        label: "root",
         designed: false,
     },
     Slot {
@@ -389,6 +408,13 @@ pub fn field_or_default(plan: &Value, field: &str) -> Vec<Value> {
     if let Some(a) = plan.get(field).and_then(Value::as_array) {
         return a.clone();
     }
+    if field == "root" {
+        return plan
+            .pointer("/root/order")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default();
+    }
     match field {
         "order" => Chain::default()
             .pieces()
@@ -429,8 +455,25 @@ pub fn with_piece(plan: &Value, name: &str, slot_id: &str, index: Option<usize>)
         Some(i) if i <= list.len() => list.insert(i, entry),
         _ => list.push(entry),
     }
-    p[field] = Value::Array(list);
+    set_list(&mut p, field, list);
     Some(p)
+}
+
+/// Writes a slot's list back: `root` holds it as `{"order": [...]}` (and
+/// is dropped when empty, which is the same as absent); the others as the
+/// array itself.
+fn set_list(p: &mut Value, field: &str, list: Vec<Value>) {
+    if field == "root" {
+        if list.is_empty() {
+            if let Some(o) = p.as_object_mut() {
+                o.remove("root");
+            }
+        } else {
+            p["root"] = json!({ "order": list });
+        }
+    } else {
+        p[field] = Value::Array(list);
+    }
 }
 
 /// The plan with entry `index` of `slot` removed (`memo`: the memo).
@@ -459,8 +502,8 @@ pub fn without_piece(plan: &Value, slot_id: &str, index: usize) -> Result<Value,
     list.remove(index);
     // An empty list stays explicit: an empty chain is the order monoid's
     // identity, `"drivers": []` turns null_window off and `"filters": []`
-    // runs none; none of these is the default.
-    p[field] = Value::Array(list);
+    // runs none; none of these is the default. (An empty root is no root.)
+    set_list(&mut p, field, list);
     Ok(p)
 }
 
@@ -482,7 +525,7 @@ pub fn move_piece(plan: &Value, slot_id: &str, from: usize, to: usize) -> Result
     let x = list.remove(from);
     list.insert(to, x);
     let mut p = plan.clone();
-    p[field] = Value::Array(list);
+    set_list(&mut p, field, list);
     Ok(p)
 }
 
@@ -507,6 +550,12 @@ pub fn slot_candidates(plan: &Value, name: &str) -> Vec<Value> {
                 if plan.get("memo").is_some_and(|m| !m.is_null()) {
                     return no("the plan already has a memo".into());
                 }
+            }
+            if s.field == Some("root") && !ESTIMATES.contains(&name) && name != ROOT_FILTER {
+                return no(format!(
+                    "the root takes an estimate ({}) or {ROOT_FILTER:?}, not {name:?}",
+                    ESTIMATES.join(", ")
+                ));
             }
             if name == "memo" && s.field != Some("memo") {
                 return no(format!("memo is not a {} entry", s.label));
