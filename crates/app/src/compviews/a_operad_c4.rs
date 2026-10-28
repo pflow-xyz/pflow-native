@@ -305,6 +305,12 @@ fn own_error(mode: &str, field: &str, value: &Value) -> Option<String> {
     if let Some(r) = OWN.with(|m| m.borrow().get(&key).cloned()) {
         return r;
     }
+    // `root` holds its list as {"order": [...]}
+    let value = if field == "root" {
+        json!({ "order": value })
+    } else {
+        value.clone()
+    };
     let r = sp::check(&json!({"mode": mode, field: value})).error;
     OWN.with(|m| m.borrow_mut().insert(key, r.clone()));
     r
@@ -1560,7 +1566,11 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
             "heuristics" => pv.heur.clone(),
             _ => {
                 let plan = c.d.plan.as_ref().map_or(Value::Null, |p| p["plan"].clone());
-                arr(&plan[field]).iter().map(|x| s(x).to_string()).collect()
+                // `root` is `{"order": [...]}`; field_or_default reads both shapes
+                sp::field_or_default(&plan, field)
+                    .iter()
+                    .map(|x| s(x).to_string())
+                    .collect()
             }
         };
         let is_default = sl.id == "filters" && pv.filters_default;
@@ -1581,6 +1591,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
                     match sl.id {
                         "filters" => "must_win and non_losing: they drop moves only where the value is already known, so either mode takes them; beam is reserved and refused in exact mode",
                         "heuristics" => "none: the one name known, static_eval, can change the value (refused in exact mode, not built in play mode)",
+                        "root" => "the ode estimate (at most one; it orders the root's moves and sets the aspiration driver's start) and non_losing at the root: neither changes a value, so either mode takes them (pflow-rs plan.rs, root.rs)",
                         _ => "",
                     },
                 )
@@ -1702,6 +1713,8 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
                 )
             } else if is_default {
                 "default (absent): sound-pruning, drops moves only where the value is already known (plan.rs:341-358)".to_string()
+            } else if sl.id == "root" {
+                "run once at the position searched: ode orders the root's moves, non_losing drops those that lose at once; neither changes a value".to_string()
             } else {
                 "sound-pruning: drops moves only where the value is already known, so legal in either mode (plan.rs:41-43)".to_string()
             };
