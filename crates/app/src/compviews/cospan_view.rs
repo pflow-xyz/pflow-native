@@ -40,26 +40,6 @@ fn frame_fill(pattern: &str) -> Color32 {
     }
 }
 
-/// The prototype's wire-type colours (`js/theme.js` `SCHEMA_COLOR`).
-pub(super) fn proto_schema_color(schema: &str) -> Color32 {
-    match schema {
-        "queue:items" => hex("#2f6fb3"),
-        "queue:payload" => hex("#6b7f99"),
-        "resource" => hex("#c47a12"),
-        "account" => hex("#7b4cc2"),
-        "saga:outcome" => hex("#178f7f"),
-        _ => hex("#777777"),
-    }
-}
-
-pub(super) fn proto_port_color(port: &Value) -> Color32 {
-    if s(&port["target"]) == "transition" {
-        NODE
-    } else {
-        proto_schema_color(s(&port["schema"]))
-    }
-}
-
 /// The prototype's side(s) of a port: X (left foot), Y (right foot), top
 /// (observe tap) or bottom (transition port).
 fn port_sides(port: &Value) -> Vec<&'static str> {
@@ -3680,16 +3660,4 @@ pub(super) fn cospan_c4(c: &mut Ctx, area: Rect) {
     c.scene.emit("note", "closed", json!({}));
     plan_warn(c);
     c.note("na", "Does not apply as drawn: a SearchPlan is not an open net. It composes searches by chaining order pieces, wrapping drivers around the search and filling slots, and there is no place on its boundary to glue. The nearest honest picture is the operad view (tab 3). The plan runs over this closed net (SearchPlan::solver takes the game), it does not compose with it: below, the net is drawn as ∅ → N ← ∅ with the plan beside it.");
-}
-
-/// The prototype's piece-kind colours (`PIECE_KIND_COLOR`).
-pub(super) fn proto_piece_color(kind: &str) -> Color32 {
-    match kind {
-        "Order" => hex("#c47a12"),
-        "Driver" => hex("#2f6fb3"),
-        "Memo" => hex("#178f7f"),
-        "Filter" => hex("#b0413e"),
-        "Heuristic" => hex("#a8457f"),
-        _ => hex("#888888"),
-    }
 }

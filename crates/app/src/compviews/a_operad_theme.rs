@@ -6,47 +6,6 @@
 
 use super::*;
 
-pub(super) fn proto_schema_color(schema: &str) -> Color32 {
-    match schema {
-        "queue:items" => hex("#2f6fb3"),
-        "queue:payload" => hex("#6b7f99"),
-        "resource" => hex("#c47a12"),
-        "account" => hex("#7b4cc2"),
-        "saga:outcome" => hex("#178f7f"),
-        _ => hex("#777777"),
-    }
-}
-
-/// A port's colour: schema for a place port, one neutral colour for a
-/// transition port.
-pub(super) fn proto_port_color(port: &Value) -> Color32 {
-    if s(&port["target"]) == "transition" {
-        hex("#3c4656")
-    } else {
-        proto_schema_color(s(&port["schema"]))
-    }
-}
-
-pub(super) fn proto_piece_color(kind: &str) -> Color32 {
-    match kind {
-        "Order" => hex("#c47a12"),
-        "Driver" => hex("#2f6fb3"),
-        "Memo" => hex("#178f7f"),
-        "Filter" => hex("#b0413e"),
-        "Heuristic" => hex("#a8457f"),
-        _ => hex("#888888"),
-    }
-}
-
-pub(super) fn proto_pattern_tint(pattern: &str) -> Color32 {
-    match pattern {
-        "queue" => hex("#e8f0fa"),
-        "resource-pool" => hex("#fbf0e0"),
-        "saga" => hex("#f1ebfa"),
-        _ => hex("#f4f5f7"),
-    }
-}
-
 pub(super) const FAINT: Color32 = Color32::from_rgb(0x9a, 0xa3, 0xad);
 pub(super) const SLATE: Color32 = Color32::from_rgb(0x3c, 0x46, 0x56);
 pub(super) const OP_MUTED: Color32 = Color32::from_rgb(0x6a, 0x71, 0x7c);

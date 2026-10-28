@@ -12,40 +12,6 @@ use super::*;
 
 // ------------------------------------------------------------ colours
 
-/// `js/theme.js` `SCHEMA_COLOR`.
-fn proto_schema_color(schema: &str) -> Color32 {
-    match schema {
-        "queue:items" => hex("#2f6fb3"),
-        "queue:payload" => hex("#6b7f99"),
-        "resource" => hex("#c47a12"),
-        "account" => hex("#7b4cc2"),
-        "saga:outcome" => hex("#178f7f"),
-        _ => hex("#777777"),
-    }
-}
-
-/// `js/theme.js` `PIECE_KIND_COLOR`.
-fn proto_piece_color(kind: &str) -> Color32 {
-    match kind {
-        "Order" => hex("#c47a12"),
-        "Driver" => hex("#2f6fb3"),
-        "Memo" => hex("#178f7f"),
-        "Filter" => hex("#b0413e"),
-        "Heuristic" => hex("#a8457f"),
-        _ => hex("#888888"),
-    }
-}
-
-/// `portColor`: the schema for a place port, one neutral colour for a
-/// transition port.
-fn proto_port_color(port: &Value) -> Color32 {
-    if s(&port["target"]) == "transition" {
-        hex("#3c4656")
-    } else {
-        proto_schema_color(s(&port["schema"]))
-    }
-}
-
 fn green() -> Color32 {
     kind_color("event")
 }
@@ -2464,7 +2430,7 @@ impl<'a> Ctx<'a> {
     /// A plan slot's drop target, drawing left to the caller: lit where
     /// `plan.slot_candidates` says the piece may go; the drop runs
     /// `plan.add_piece`. Returns whether it is lit.
-    fn slot_zone(&mut self, r: Rect, slot: &str, mut i: Info) -> bool {
+    fn slot_zone_info(&mut self, r: Rect, slot: &str, mut i: Info) -> bool {
         let mut lit = false;
         let mut v: Option<Value> = None;
         if let Some(Drag::Piece {
@@ -2762,7 +2728,7 @@ pub(super) fn spiders_c4(c: &mut Ctx, area: Rect) {
             "bounds" => ("bounds", "designed, not built".to_string()),
             _ => ("engine", "designed, not built".to_string()),
         };
-        let lit = c.slot_zone(xf.rect(r.x, r.y, r.w, r.h), slot.id, slot_info(slot.id));
+        let lit = c.slot_zone_info(xf.rect(r.x, r.y, r.w, r.h), slot.id, slot_info(slot.id));
         let (stroke, sw) = if lit {
             (LIT, 3.0)
         } else if slot.designed {

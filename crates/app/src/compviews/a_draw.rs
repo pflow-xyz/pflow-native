@@ -14,6 +14,50 @@ pub(super) const LEG: Color32 = Color32::from_rgb(0x8e, 0x97, 0xa2);
 pub(super) const ARC: Color32 = Color32::from_rgb(0x6d, 0x75, 0x80);
 pub(super) const NODE: Color32 = Color32::from_rgb(0x3c, 0x46, 0x56);
 
+/// The prototype's wire-type colours (`js/theme.js` `SCHEMA_COLOR`).
+pub(super) fn proto_schema_color(schema: &str) -> Color32 {
+    match schema {
+        "queue:items" => hex("#2f6fb3"),
+        "queue:payload" => hex("#6b7f99"),
+        "resource" => hex("#c47a12"),
+        "account" => hex("#7b4cc2"),
+        "saga:outcome" => hex("#178f7f"),
+        _ => hex("#777777"),
+    }
+}
+
+/// A port's colour: its schema for a place port, one neutral colour for a
+/// transition port.
+pub(super) fn proto_port_color(port: &Value) -> Color32 {
+    if s(&port["target"]) == "transition" {
+        NODE
+    } else {
+        proto_schema_color(s(&port["schema"]))
+    }
+}
+
+/// The prototype's piece-kind colours (`PIECE_KIND_COLOR`).
+pub(super) fn proto_piece_color(kind: &str) -> Color32 {
+    match kind {
+        "Order" => hex("#c47a12"),
+        "Driver" => hex("#2f6fb3"),
+        "Memo" => hex("#178f7f"),
+        "Filter" => hex("#b0413e"),
+        "Heuristic" => hex("#a8457f"),
+        _ => hex("#888888"),
+    }
+}
+
+/// The prototype's pattern tints (box headers, `PATTERN_TINT`).
+pub(super) fn proto_pattern_tint(pattern: &str) -> Color32 {
+    match pattern {
+        "queue" => hex("#e8f0fa"),
+        "resource-pool" => hex("#fbf0e0"),
+        "saga" => hex("#f1ebfa"),
+        _ => hex("#f4f5f7"),
+    }
+}
+
 /// The prototype's text-width estimate (`tw`): wide enough that layout
 /// never underestimates a label, and deterministic (no font metrics).
 pub(super) fn text_w(s: &str, size: f32) -> f32 {

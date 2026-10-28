@@ -886,6 +886,7 @@ pub fn draw(
 
 // ------------------------------------------------------------ shared layout (orders)
 
+#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 struct Laid {
     id: String,
     pattern: String,
@@ -925,6 +926,7 @@ fn side_of(kind: &str, target: &str) -> &'static str {
 
 /// Subnet boxes in a row across `area` (wrapping to two rows past four),
 /// each port anchored on its side.
+#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn lay_boxes(c: &Ctx, area: Rect, h: f32) -> Vec<Laid> {
     let subs = subnets(c);
     let n = subs.len().max(1);
@@ -991,6 +993,7 @@ fn subnet_info(sub: &Value) -> Info {
 }
 
 /// Draws the boxes and ports (registering both), returns the layout.
+#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn draw_boxes(c: &mut Ctx, area: Rect, h: f32, port_labels: bool) -> Vec<Laid> {
     let laid = lay_boxes(c, area, h);
     let subs = subnets(c);
@@ -1047,6 +1050,7 @@ fn draw_boxes(c: &mut Ctx, area: Rect, h: f32, port_labels: bool) -> Vec<Laid> {
     laid
 }
 
+#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn anchor(laid: &[Laid], end: &Value, toward: Pos2) -> Option<Pos2> {
     let l = laid.iter().find(|l| l.id == s(&end["subnet"]))?;
     let (_, a) = l.ports.iter().find(|(p, _)| p["id"] == end["port"])?;
@@ -1074,6 +1078,7 @@ fn link_info(l: &Value) -> Info {
 
 /// A link between two anchors, drawn in RenderDOT's style; a click on it
 /// removes it (`bundle.remove_link`).
+#[allow(dead_code)] // the shared box layout: no view of the three uses it now; the lead may delete it
 fn draw_link(c: &mut Ctx, laid: &[Laid], l: &Value) -> Option<Rect> {
     let a0 = anchor(laid, &l["from"], c.rect.center())?;
     let b = anchor(laid, &l["to"], a0)?;
