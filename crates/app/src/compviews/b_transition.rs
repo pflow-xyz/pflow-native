@@ -14,7 +14,7 @@ use std::sync::OnceLock;
 use pflow_native_core::string_diagram::{self as sd, Diagram};
 
 use super::b_draw::{dv, theme, *};
-use super::b_orders::{dv_cite, hover_path, snap_port, DV_REV};
+use super::b_orders::{dv_cite, go_cite, hover_path, snap_port, DV_REV};
 use super::*;
 
 const OX: f32 = 24.0;
@@ -346,7 +346,7 @@ fn flat_transition_info(t: &Value) -> Info {
         .fact("drawn by", "diagram-viewer.js's algorithm: a box (rx 6, white, #333), inputs on top, outputs below")
         .cite(dv_cite(1, 5, "transitions → boxes (morphisms), places → wire types (objects), arcs → typed ports and wires"))
         .cite(dv_cite(503, 526, "boxes: rx 6, white, #333 1.5; port dots r 4 #666"))
-        .cite("go-pflow metamodel/compose_flatten.go:72-80 (Flatten: transition classes by union-find)");
+        .cite(go_cite("metamodel/compose_flatten.go", 72, 80, "Flatten: transition classes by union-find"));
     if !s(&t["description"]).is_empty() {
         i = i.note(s(&t["description"]));
     }
@@ -764,7 +764,7 @@ pub(super) fn orders(c: &mut Ctx, area: Rect) {
             .cite(dv_cite(108, 128, "DFS cycle breaking: the back edges"))
             .cite(dv_cite(130, 169, "longest-path layering"))
             .cite(dv_cite(490, 501, "back edges: dashed #c44 (6,3), routed around the right side, arrowhead"))
-            .cite("go-pflow metamodel/compose_flatten.go:424-482 (applyGuardLinks: a guard link becomes a read arc)"),
+            .cite(go_cite("metamodel/compose_flatten.go", 424, 482, "applyGuardLinks: a guard link becomes a read arc")),
     );
     if reads > 0 {
         c.note("na", format!("{reads} read arc{} from guard links {} left out: diagram-viewer.js draws only input and output arcs, and would show a read as a consuming input.", if reads == 1 { "" } else { "s" }, if reads == 1 { "is" } else { "are" }));

@@ -25,6 +25,15 @@ pub(super) fn dv_cite(from: u32, to: u32, note: &str) -> String {
 /// The pflow-xyz commit diagram-viewer.js was last changed in (its line
 /// cites were re-checked against this revision's file).
 pub(super) const DV_REV: &str = "954b75c";
+/// "go-pflow metamodel/composedot.go:28-33 @69257b3 (note)": the lines were
+/// re-read at the revision the ontology records (`repos.goPflow`).
+pub(super) fn go_cite(path: &str, from: u32, to: u32, note: &str) -> String {
+    let r = &comp::ontology()["repos"]["goPflow"];
+    format!(
+        "go-pflow {path}:{from}-{to} @{} ({note})",
+        r["rev"].as_str().unwrap_or("")
+    )
+}
 pub(super) fn road_cite(from: u32, to: u32, note: &str) -> String {
     let r = &comp::ontology()["repos"]["ontologyRoadmap"];
     format!(
@@ -1368,7 +1377,7 @@ fn legend(c: &mut Ctx, d: &D, x0: f32, y0: f32, width: f32) {
             .cite(dv_cite(503, 526, "boxes: rx 6, white, #333 1.5; port dots r 4 #666"))
             .cite(dv_cite(470, 481, "wires: #888, 1.5px"))
             .cite(dv_cite(490, 501, "back edges: dashed #c44 (6,3), round the right side, arrowhead"))
-            .cite("go-pflow metamodel/composedot.go:28-33 (RenderDOT's link glyphs and colours)"),
+            .cite(go_cite("metamodel/composedot.go", 28, 33, "linkStyles: RenderDOT's color, style and glyph per link kind")),
     );
 }
 

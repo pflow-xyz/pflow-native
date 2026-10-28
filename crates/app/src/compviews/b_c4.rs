@@ -27,111 +27,25 @@ const COL_TOP: f32 = 244.0;
 const COL_BH: f32 = 25.0;
 const COL_GAP: f32 = 24.0;
 
-/// "pflow-rs crates/pflow-metamodel/src/game.rs:593-693 @aacb7eb (note)".
-fn rs(path: &str, from: u32, to: u32, note: &str) -> String {
-    format!(
-        "pflow-rs crates/pflow-metamodel/src/{path}:{from}-{to} @{} ({note})",
-        sp::PLAN_RS_REV
-    )
+/// A pflow-rs cite by its key in the one verified table
+/// (`pflow_rs_cites.json`, re-checked at the pinned rev by a core test).
+fn rk(key: &str) -> String {
+    super::pflow_rs_cites::pflow_rs(key)
 }
 
-mod cites {
-    // game.rs at aacb7eb
-    pub const VALUE: (u32, u32, &str) = (
-        809,
-        814,
-        "Solver::value: the exact value, or None past the budget",
-    );
-    pub const RUN: (u32, u32, &str) = (
-        902,
-        935,
-        "run: nodes reset, the bit engine, then again by counts when it spills",
-    );
-    pub const SOLVE: (u32, u32, &str) = (
-        936,
-        996,
-        "Solver::solve: yes/no searches, one per gap between adjacent rewards",
-    );
-    pub const SEARCH: (u32, u32, &str) = (
-        1046,
-        1179,
-        "Solver::search: fail-soft alpha-beta with the transposition table",
-    );
-    pub const TT_READ: (u32, u32, &str) = (1069, 1079, "tt.get: an exact entry or a bound outside the window returns; else the window narrows and best goes first");
-    pub const BUDGET: (u32, u32, &str) = (
-        1057,
-        1060,
-        "nodes += 1, past the budget (or the clock) the search returns None",
-    );
-    pub const CHILDREN: (u32, u32, &str) = (
-        1151,
-        1166,
-        "the child loop: v = search(next, a, b); the bound moves to v; a >= b is a cutoff",
-    );
-    pub const CUTOFF: (u32, u32, &str) =
-        (1163, 1166, "a >= b: chain.cutoff(history, t), then break");
-    pub const STORE: (u32, u32, &str) = (1181, 1185, "Solver::store: lo, hi, best into the table");
-    pub const STORE_CALLS: (u32, u32, &str) = (
-        1175,
-        1177,
-        "merged with what was known before the window narrowed, then stored",
-    );
-    pub const MEMO: (u32, u32, &str) = (
-        588,
-        598,
-        "Solver::MEMO = 2^23 entries; the table is bounded inside a search and across calls",
-    );
-    pub const WITH_MEMO: (u32, u32, &str) = (
-        635,
-        641,
-        "with_memo: at most `entries`; a weaker position is replaced",
-    );
-    pub const ENGINE: (u32, u32, &str) = (13, 21, "BitModel or IndexedModel, by the marking");
-    pub const CHAIN: (u32, u32, &str) = (
-        196,
-        281,
-        "Chain: keys compared piece by piece, a decisive piece's nonzero key settles the rank; cutoff reaches every piece",
-    );
-    pub const KEY: (u32, u32, &str) = (
-        260,
-        275,
-        "Chain::key and before: the first key to differ decides",
-    );
-    pub const DECISIVE: (u32, u32, &str) = (
-        26,
-        37,
-        "Orderer::DECISIVE (tt_best, immediate_win: true; history: false)",
-    );
-    pub const MAX8: (u32, u32, &str) = (220, 226, "Chain::new: at most 8 pieces");
-    pub const DEFAULT_CHAIN: (u32, u32, &str) =
-        (205, 216, "Chain::default: tt_best, immediate_win, history");
-    pub const HISTORY: (u32, u32, &str) = (68, 76, "History: key = the count, cutoff adds one");
-    pub const CHAIN_CUTOFF: (u32, u32, &str) = (277, 281, "Chain::cutoff: every piece is told");
-    // plan.rs at aacb7eb
-    pub const PLAN_DRIVERS: (u32, u32, &str) = (29, 38, "drivers: null_window (default on), mtd_f, aspiration, budget; each at most once; the search runs budget(null_window(core)) whatever the list's order");
-    pub const PLAN_FLAGS: (u32, u32, &str) = (
-        407,
-        427,
-        "solver_with: the plan's drivers become flags on the Solver",
-    );
-    pub const PLAN_FILTERS: (u32, u32, &str) = (41, 43, "filters: drop moves only where the value is known, legal in either mode; default Filter::DEFAULT");
-    pub const PLAN_MEMO: (u32, u32, &str) =
-        (39, 40, "memo: {entries: N} keeps the table to N entries");
-    pub const PLAN_ORDER_TWICE: (u32, u32, &str) =
-        (291, 295, "an order piece listed twice is refused");
-}
-
-fn c(x: (u32, u32, &str), path: &str) -> String {
-    rs(path, x.0, x.1, x.2)
-}
-fn g(x: (u32, u32, &str)) -> String {
-    c(x, "game.rs")
-}
-fn o(x: (u32, u32, &str)) -> String {
-    c(x, "order.rs")
-}
-fn p(x: (u32, u32, &str)) -> String {
-    c(x, "plan.rs")
+/// "game.rs:1046-1179", the short form drawn on the figure, from the same table.
+fn ln(key: &str) -> String {
+    match sp::pflow_rs_cite(key) {
+        Some(c) => {
+            let file = c.path.rsplit('/').next().unwrap_or("").to_string();
+            if c.to > c.from {
+                format!("{file}:{}-{}", c.from, c.to)
+            } else {
+                format!("{file}:{}", c.from)
+            }
+        }
+        None => format!("?{key}"),
+    }
 }
 
 fn wire_info(ty: &str, def: &str, cites: &[String], extra: &[(&str, &str)]) -> Info {
@@ -169,12 +83,15 @@ fn piece_info_b(name: &str) -> Info {
         .fact("status", status)
         .fact("contract (ROADMAP ct:*)", pi.contract)
         .note(format!("{} ns:SearchPiece and the ct:* contracts are PROPOSED vocabulary (ontology ROADMAP Phase 5); the names, kinds and refusals are plan.rs's.", pi.doc))
-        .cite(format!("pflow-rs crates/pflow-metamodel/src/plan.rs @{}", sp::PLAN_RS_REV));
+        ;
+    for cc in sp::piece_cites(name) {
+        i = i.cite(cc.label());
+    }
     if pi.kind == "Order" {
         i = i.fact(
             "decisive",
             if pi.decisive {
-                "yes: a nonzero key settles the rank (order.rs:26-37, 260-270)"
+                "yes: a nonzero key settles the rank"
             } else {
                 "no"
             },
@@ -387,8 +304,16 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         Align2::LEFT_BOTTOM,
         &format!(
             "mode {mode} · {} · {}",
-            if check_ok { "SearchPlan::check and solver(connect-4) accept it" } else { "refused by SearchPlan::check" },
-            if mode == "play" { "play lets choose guess when the budget runs out (plan.rs:15-19, 421); value() is the same search" } else { "drivers ∘ core[order chain, filters, bounds, memo] (ROADMAP Phase 6)" }
+            if check_ok {
+                "SearchPlan::check and solver(connect-4) accept it"
+            } else {
+                "refused by SearchPlan::check"
+            },
+            if mode == "play" {
+                "play lets choose guess when the budget runs out; value() is the same search"
+            } else {
+                "drivers ∘ core[order chain, filters, bounds, memo] (ROADMAP Phase 6)"
+            }
         ),
         11.0,
         theme::MUTED,
@@ -471,11 +396,11 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
             .fact("drawn as", if empty.is_some() { "an empty frame: no driver here" } else { "a functor box (frame) around the search (ROADMAP: drivers are endomorphisms on search)" })
             .fact("ROADMAP op", "op:wrap")
             .fact("nesting", "fixed by plan.rs/game.rs: the search runs budget(null_window(core)); the node count is reset in run() and checked at every node")
-            .cite(p(cites::PLAN_DRIVERS))
-            .cite(p(cites::PLAN_FLAGS))
-            .cite(g(cites::BUDGET))
-            .cite(g(cites::RUN))
-            .cite(g(cites::SOLVE));
+            .cite(rk("lens.driversDoc"))
+            .cite(rk("lens.solver"))
+            .cite(rk("plan.budget"))
+            .cite(rk("string.L1159"))
+            .cite(rk("string.solve"));
         let lit = snap_slot(c, tab, "drivers", i);
         if lit {
             lit_ring(&d, (tx, ty, tab_w, 22.0));
@@ -562,9 +487,9 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
             "drivers",
             "",
             Some(if budget.is_some() {
-                "null_window off: drivers given without it, so one full-window search (plan.rs:29-31, game.rs:947-959)"
+                "null_window off: drivers given without it, so one full-window search"
             } else {
-                "none: one full-window search, no budget (game.rs:947-959)"
+                "none: one full-window search, no budget"
             }),
             None,
             "",
@@ -594,7 +519,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
             true,
         );
         let r = d.rect_r(x, y, 90.0, 22.0);
-        c.hover(r, piece_info_b("aspiration").cite(p(cites::PLAN_DRIVERS)));
+        c.hover(r, piece_info_b("aspiration").cite(rk("lens.driversDoc")));
         remove_x(c, &d, (x + 82.0, y), "drivers", i, "remove aspiration");
     }
 
@@ -667,7 +592,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
     d.text(
         (cx + cw / 2.0, cy + 154.0 + 3.0),
         Align2::CENTER_BOTTOM,
-        "Solver::search (game.rs:1046-1179)",
+        &format!("Solver::search ({})", ln("string.search")),
         10.0,
         dv::LABEL_FILL,
         true,
@@ -736,13 +661,13 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         info("core: alpha-beta (Solver::search)")
             .fact("concept", "https://ontology.pflow.xyz/ns#Box (PROPOSED, ROADMAP Phase 6)")
             .fact("dom → cod", "Position → Value⊥ (ROADMAP Phase 6)")
-            .fact("⊥", "None: past the budget (game.rs:1057-1060), or the bit engine spilled (game.rs:1100, 1117) and run() retries by counts (game.rs:926-935)")
+            .fact("⊥", "None: past the budget , or the bit engine spilled and run() retries by counts")
             .fact("parameters", "the order chain (MoveList), the filters, the memo (Table)")
             .fact("ROADMAP op", "op:fill: core[order chain, filters, bounds, memo]")
-            .note("Fail-soft alpha-beta in the +1 side's view. Inside the bounds every result is a bound on the true value; with the window the whole range, it is the value. (game.rs:1046-1049)")
-            .cite(g(cites::SEARCH))
-            .cite(g(cites::VALUE))
-            .cite(g(cites::RUN))
+            .note("Fail-soft alpha-beta in the +1 side's view. Inside the bounds every result is a bound on the true value; with the window the whole range, it is the value.")
+            .cite(rk("string.search"))
+            .cite(rk("string.value"))
+            .cite(rk("string.L1159"))
             .cite(road_cite(418, 430, "search composition: core Position → Value⊥")),
     );
 
@@ -765,7 +690,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         dv::LABEL,
         dv::LABEL_FILL,
     );
-    hover_path(c, &d, &pos_pts, 6.0, wire_info("Position", "A settled marking of the game net: the position whose value is asked for (Solver::value).", &[g(cites::VALUE)], &[]));
+    hover_path(c, &d, &pos_pts, 6.0, wire_info("Position", "A settled marking of the game net: the position whose value is asked for (Solver::value).", &[rk("string.value")], &[]));
     let val_pts = [(pp("value").0, cb), (pp("value").0, H - 6.0)];
     d.path(&val_pts, dv::WIRE, 1.5, None);
     d.halo(
@@ -785,9 +710,9 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         6.0,
         wire_info(
             "Value⊥",
-            "The exact value (+1 side's view) of a settled position with both sides playing perfectly, or None past the budget (game.rs:809-810).",
-            &[g(cites::VALUE), g(cites::BUDGET)],
-            if null_window { &[("the dot", "each yes/no search's v also feeds the null-window loop (the dashed red back edge)")] } else { &[("one search", "no null_window: one search over the whole reward range gives the value (game.rs:947-959)")] },
+            "The exact value (+1 side's view) of a settled position with both sides playing perfectly, or None past the budget.",
+            &[rk("string.value"), rk("plan.budget")],
+            if null_window { &[("the dot", "each yes/no search's v also feeds the null-window loop (the dashed red back edge)")] } else { &[("one search", "no null_window: one search over the whole reward range gives the value")] },
         ),
     );
 
@@ -875,16 +800,21 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
     let mut si = slot_info_b("order")
         .fact("pieces", chain_pieces)
         .fact("law (ROADMAP)", "a monoid under chaining: [] is the identity (Chain::new(&[])), concatenation is associative (Chain::then), every composite stays ct:order-only")
-        .fact("partial in code (ROADMAP)", "a repeated piece is refused (plan.rs:291-295) and a chain holds at most 8 pieces (order.rs:220-226)")
-        .fact("in code", "one comparator over a key per piece, compared first-to-differ; a decisive piece's nonzero key settles the rank (order.rs:260-275)")
+        .fact("partial in code (ROADMAP)", "a repeated piece is refused and a chain holds at most 8 pieces")
+        .fact("in code", "one comparator over a key per piece, compared first-to-differ; a decisive piece's nonzero key settles the rank")
         .fact("ROADMAP op", "op:chain")
-        .cite(o(cites::CHAIN))
-        .cite(o(cites::KEY))
-        .cite(o(cites::DECISIVE))
-        .cite(o(cites::MAX8))
-        .cite(p(cites::PLAN_ORDER_TWICE));
+        .cite(rk("plan.chainKey"))
+        .cite(rk("string.chain"))
+        .cite(rk("string.decisive"))
+        .cite(rk("string.L1220b"))
+        .cite(rk("string.L1220a"));
     if is_default {
-        si = si.fact("default", "no \"order\" field: Chain::default, tt_best · immediate_win · history (order.rs:205-216)").cite(o(cites::DEFAULT_CHAIN));
+        si = si
+            .fact(
+                "default",
+                "no \"order\" field: Chain::default, tt_best · immediate_win · history",
+            )
+            .cite(rk("operad.chainDefault"));
     }
     let rr = d.rect_r(region.0, region.1, region.2, region.3);
     if snap_slot(c, rr, "order", si) {
@@ -935,7 +865,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         &d,
         &chain_wire,
         6.0,
-        wire_info("MoveList", "A node's moves, ranked by the chain's keys and tried best first (game.rs:1089-1150). Drawn as the core's parameter wire (ROADMAP Phase 6), not as a loop.", &[rs("game.rs", 1089, 1150, "moves, keyed by the chain, sorted")], &[]),
+        wire_info("MoveList", "A node's moves, ranked by the chain's keys and tried best first. Drawn as the core's parameter wire (ROADMAP Phase 6), not as a loop.", &[rk("string.L1231")], &[]),
     );
     for (i, name) in order.iter().enumerate() {
         let y = match (prev_idx[i], &added) {
@@ -996,7 +926,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
             .fact(
                 "place in the chain",
                 format!(
-                    "{} of {}: compared {} (highest priority first, plan.rs:15-16)",
+                    "{} of {}: compared {} (highest priority first)",
                     i + 1,
                     order.len(),
                     if i == 0 {
@@ -1010,7 +940,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
                 "drawn as",
                 "a box MoveList → MoveList on the core's parameter wire (ROADMAP Slice B)",
             )
-            .cite(o(cites::KEY));
+            .cite(rk("string.chain"));
         c.hover(d.rect_r(x, y, COL_W, COL_BH), pi);
         remove_x(
             c,
@@ -1087,12 +1017,9 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
                     "drawn as",
                     "a box MoveList → MoveList on the core's parameter wire, after the order chain",
                 )
-                .cite(p(cites::PLAN_FILTERS));
+                .cite(rk("lens.L606"));
             if !f_expl {
-                pi = pi.fact(
-                    "default",
-                    "no \"filters\" field: Filter::DEFAULT (plan.rs:41-43)",
-                );
+                pi = pi.fact("default", "no \"filters\" field: Filter::DEFAULT");
             }
             if snap_slot(c, r, "filters", pi) {
                 lit_ring(&d, (COL_X, y, COL_W, COL_BH));
@@ -1142,7 +1069,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         (COL_X, cb + 74.0, COL_W, 36.0),
         "engine",
         "designed: game.rs picks it itself",
-        &[g(cites::ENGINE), g(cites::RUN)],
+        &[rk("string.L1278a"), rk("string.L1159")],
     );
     let dotted = hex("#aab0b8");
     d.path(
@@ -1268,13 +1195,13 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
     };
     mi = mi
         .fact("drawn as", "a side wire (Table) into the core, outside both frames: the table persists across calls and is shared by every yes/no search")
-        .cite(g(cites::MEMO))
-        .cite(g(cites::WITH_MEMO))
-        .cite(p(cites::PLAN_MEMO));
+        .cite(rk("string.L1300b"))
+        .cite(rk("string.L1300c"))
+        .cite(rk("piece.memo"));
     mi = if has_memo {
-        mi.fact("bound", format!("{} entries: the table holds at most that many, inside a search and across calls; a weaker position is replaced (game.rs:635-641)", fmt_n(memo_n as f64)))
+        mi.fact("bound", format!("{} entries: the table holds at most that many, inside a search and across calls; a weaker position is replaced", fmt_n(memo_n as f64)))
     } else {
-        mi.fact("without a memo", "the solver's own table: Solver::MEMO = 2^23 entries, bounded inside a search and across calls (game.rs:588-598)")
+        mi.fact("without a memo", "the solver's own table: Solver::MEMO = 2^23 entries, bounded inside a search and across calls")
     };
     let mr = d.rect_r(mx, mmy, mw, mh);
     if snap_slot(c, mr, "memo", mi) {
@@ -1297,7 +1224,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         dv::LABEL,
         dv::LABEL_FILL,
     );
-    hover_path(c, &d, &table_pts, 6.0, wire_info("Table", "The transposition table read at every node: an exact entry or a bound outside the window returns at once, otherwise the window narrows and the remembered best move goes first (game.rs:1069-1079).", &[g(cites::TT_READ)], &[("side wire", "the memo is a parameter of the core, not inside the drivers (ROADMAP Slice B)")]));
+    hover_path(c, &d, &table_pts, 6.0, wire_info("Table", "The transposition table read at every node: an exact entry or a bound outside the window returns at once, otherwise the window narrows and the remembered best move goes first.", &[rk("string.ttRead")], &[("side wire", "the memo is a parameter of the core, not inside the drivers (ROADMAP Slice B)")]));
 
     // ------------------------------------------------ back edges (dashed red)
     let fade = if ev.is_some() {
@@ -1335,14 +1262,14 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         back(
             c,
             ortho(&[v_tap, (850.0, v_tap.1), (850.0, pp("window").1), (pp("window").0 + 2.0, pp("window").1)], 14.0),
-            &["null-window loop: each yes/no search", "narrows the window (game.rs:936-996)"],
+            &["null-window loop: each yes/no search", &format!("narrows the window ({})", ln("string.solve"))],
             (v_tap.0 + 14.0, v_tap.1 + 16.0),
             Align2::LEFT_BOTTOM,
             info("back edge: the null-window loop")
-                .note("The value as a run of yes/no searches, one per gap between adjacent rewards: if v > (a + b) / 2 then i = k + 1 else j = k, and the next search gets the window (vals[k], vals[k+1]) (game.rs:978-995).")
+                .note("The value as a run of yes/no searches, one per gap between adjacent rewards: if v > (a + b) / 2 then i = k + 1 else j = k, and the next search gets the window (vals[k], vals[k+1]).")
                 .fact("driver", "null_window")
                 .fact("carries", "Window (a, b), from this search's v")
-                .cite(g(cites::SOLVE)),
+                .cite(rk("string.solve")),
             "nullwindow",
         );
     } else {
@@ -1357,7 +1284,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         d.text(
             (cr + 12.0, pp("window").1 + 10.0 + 3.0),
             Align2::LEFT_BOTTOM,
-            "once (game.rs:947-959)",
+            "once",
             9.5,
             Color32::from_gray(0x88),
             false,
@@ -1367,14 +1294,14 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
     back(
         c,
         ortho(&[pp("child_out"), (pp("child_out").0, cb + 24.0), (692.0, cb + 24.0), (692.0, pp("child_in").1), (pp("child_in").0 + 2.0, pp("child_in").1)], 12.0),
-        &["recursion: each child's", "value comes back", "(game.rs:1151-1166)"],
+        &["recursion: each child's", "value comes back", &format!("({})", ln("string.L1326"))],
         (700.0, pp("child_in").1 + 40.0),
         Align2::LEFT_BOTTOM,
         info("back edge: alpha-beta recursion")
-            .note("For each child, best first: v = search(next, a, b); the mover's bound moves to v, and a >= b is a cutoff (game.rs:1151-1166).")
+            .note("For each child, best first: v = search(next, a, b); the mover's bound moves to v, and a >= b is a cutoff.")
             .fact("carries", "Value⊥ of a child position")
-            .cite(g(cites::SEARCH))
-            .cite(g(cites::CHILDREN)),
+            .cite(rk("string.search"))
+            .cite(rk("string.L1326")),
         "recursion",
     );
     // the transposition-table feedback
@@ -1382,26 +1309,26 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
     back(
         c,
         flatten([st, (st.0, cy - 110.0), (mx + mw - 40.0, mmy + mh + 70.0), (mx + mw - 40.0, mmy + mh + 3.0)], 24),
-        &["store (game.rs:1181-1185)"],
+        &[&format!("store ({})", ln("plan.store"))],
         (st.0 + 50.0, cy - 60.0),
         Align2::LEFT_BOTTOM,
         info("back edge: the transposition-table feedback")
-            .note("What a search finds is stored (space allowing) and read back by tt.get at the next visit of the position, in this search or a later one (store: game.rs:1181-1185, called at 1084, 1107, 1126, 1177; read: 1069-1079).")
+            .note("What a search finds is stored (space allowing) and read back by tt.get at the next visit of the position, in this search or a later one.")
             .fact("carries", "Entry {lo, hi, best}")
-            .cite(g(cites::STORE))
-            .cite(g(cites::TT_READ))
-            .cite(g(cites::STORE_CALLS)),
+            .cite(rk("plan.store"))
+            .cite(rk("string.ttRead"))
+            .cite(rk("string.L1329")),
         "tt",
     );
     // cutoff → history (chain.cutoff tells every piece; only History records it)
     let cut = pp("cutoff");
     let hist = order.iter().position(|n| n == "history");
     let cut_info = info("back edge: cutoff → history")
-        .note("a >= b: chain.cutoff(history, t) tells every piece; History adds one to the move's count (order.rs:73-75), which its key reads next time (order.rs:69-71).")
+        .note("a >= b: chain.cutoff(history, t) tells every piece; History adds one to the move's count, which its key reads next time.")
         .fact("carries", "the move that caused the cutoff")
-        .cite(g(cites::CUTOFF))
-        .cite(o(cites::CHAIN_CUTOFF))
-        .cite(o(cites::HISTORY));
+        .cite(rk("plan.cutoff"))
+        .cite(rk("string.L1335a"))
+        .cite(rk("string.L1335b"));
     match hist {
         Some(hi) => {
             let hy = tops[hi] + COL_BH / 2.0;
@@ -1416,7 +1343,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
                     ],
                     24,
                 ),
-                &["game.rs:1164"],
+                &[&ln("plan.cutoff")],
                 (cx - 6.0, cut.1 - 7.0),
                 Align2::RIGHT_BOTTOM,
                 cut_info,
@@ -1429,7 +1356,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
             back(
                 c,
                 flatten([cut, (cx - 50.0, cut.1), (end.0 + 44.0, end.1), end], 24),
-                &["game.rs:1164"],
+                &[&ln("plan.cutoff")],
                 (cx - 6.0, cut.1 - 7.0),
                 Align2::RIGHT_BOTTOM,
                 cut_info.fact(
@@ -1452,9 +1379,9 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
     legend(&d, c);
     palette(c, pal_area);
     plan_warn(c);
-    c.note("honesty", "Reading a pattern instance as a box dom → cod is the ROADMAP Phase 6 proposal. Connect-4: the core box, the chain as MoveList → MoveList boxes, the drivers as frames and the memo as a side wire are the ROADMAP design. In code the chain is one comparator over a key per piece (order.rs:196-281), and the drivers are flags (plan.rs:407-427). The nesting budget(null_window(core)) is fixed by game.rs, whatever order the JSON lists them in.");
+    c.note("honesty", "Reading a pattern instance as a box dom → cod is the ROADMAP Phase 6 proposal. Connect-4: the core box, the chain as MoveList → MoveList boxes, the drivers as frames and the memo as a side wire are the ROADMAP design. In code the chain is one comparator over a key per piece (order.rs, Chain), and the drivers are flags (plan.rs, solver_with). The nesting budget(null_window(core)) is fixed by game.rs, whatever order the JSON lists them in.");
     c.note("honesty", "A back edge is feedback, which a symmetric monoidal category does not have on its own (it needs a trace). Each one is drawn because game.rs does it, and each is cited to its lines at the pinned pflow-rs rev.");
-    c.note("honesty", "Not drawn: the plan's `root` field (estimate, non_losing at the root: plan.rs:17-25) is not a slot here yet; mtd_f and aspiration are drawn as an inner frame and a tab.");
+    c.note("honesty", "Not drawn: the plan's `root` field (the root's estimate and non_losing, cite key slot.root) is not drawn at this level; mtd_f and aspiration are drawn as an inner frame and a tab.");
 }
 
 fn lerp_col(a: Color32, b: Color32, t: f32) -> Color32 {
@@ -1528,9 +1455,9 @@ fn slot_box(
         .fact(
             "exact mode",
             if id == "filters" {
-                "filters keep the value, so they are legal (plan.rs:41-43); `[]` runs none"
+                "filters keep the value, so they are legal; `[]` runs none"
             } else {
-                "refuses every heuristic: they can change the value (plan.rs:44-49)"
+                "refuses every heuristic: they can change the value"
             },
         )
         .fact(
@@ -1545,7 +1472,7 @@ fn slot_box(
                 "an empty position, wired to nothing: the ROADMAP gives heuristics no type"
             },
         )
-        .cite(p(cites::PLAN_FILTERS));
+        .cite(rk("lens.L606"));
     let _ = explicit;
     if snap_slot(c, rr, id, i) {
         lit_ring(d, r);
