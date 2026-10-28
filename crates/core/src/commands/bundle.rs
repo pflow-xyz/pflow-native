@@ -275,6 +275,21 @@ pub const SET: &[CommandSpec] = &[
         journal: false,
     },
     CommandSpec {
+        id: "bundle.boundaries",
+        label: "Event Classes as Boundaries",
+        help: "The composition's event classes (Flatten's fused groups) read as nets with boundaries: \
+               each class is one port of the shared boundary and one composite transition; with the \
+               composite's enablement at the flat initial marking (pflow-metamodel's enabled_why_not) \
+               and each member's own, asked on a one-transition model of its arcs (and any guard link \
+               gating it) over the flat places.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: need,
+        run: boundaries,
+        journal: false,
+    },
+    CommandSpec {
         id: "bundle.game",
         label: "Token Game",
         help: "The token game on the flat net: the marking (flat place -> tokens), the transitions fired \
@@ -711,6 +726,10 @@ fn run_cmd(sess: &mut Session, a: &Value) -> Result<Value> {
 
 fn flat_of(c: &Composition) -> Result<comp::Flat> {
     comp::flatten(&c.bundle).map_err(Error::Invalid)
+}
+
+fn boundaries(sess: &mut Session, _: &Value) -> Result<Value> {
+    Ok(comp::boundaries::boundaries_json(comp_ref(sess)?))
 }
 
 fn game(sess: &mut Session, _: &Value) -> Result<Value> {

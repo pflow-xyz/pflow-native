@@ -35,6 +35,7 @@ use pflow_metamodel::{ArcType, Model};
 use serde::Serialize;
 use serde_json::{json, Value};
 
+pub mod boundaries;
 pub mod game;
 
 /// The prototype's ontology facts (patterns, ports, link kinds, idioms,
