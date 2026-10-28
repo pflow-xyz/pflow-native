@@ -31,6 +31,7 @@ pub(crate) mod mlp_net;
 pub mod outbound;
 #[cfg(feature = "rnn")]
 pub(crate) mod par;
+pub mod plan_game;
 pub mod provenance;
 pub mod registry;
 #[cfg(feature = "rnn")]

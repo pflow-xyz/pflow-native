@@ -181,6 +181,46 @@ pub const SET: &[CommandSpec] = &[
         run: set_mode,
         journal: true,
     },
+    CommandSpec {
+        id: "plan.game",
+        label: "Play the Net",
+        help: "The Connect-4 net the plan searches, played by hand: the settled marking (nonzero places), \
+               the moves enabled (the non-automatic transitions, pflow-rs's tests/common/mod.rs reading: \
+               x_ moves are sign +1, *win* transitions are automatic), whose side it is, whether the \
+               game is over (no move) with its reward (win_x - win_o), the moves played and the \
+               automatic transitions the last one settled. Starts at the settled initial marking.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: need,
+        run: game,
+        journal: false,
+    },
+    CommandSpec {
+        id: "plan.play",
+        label: "Play a Move…",
+        help: "Play a move of the Connect-4 net: fire it through pflow-metamodel's firing rule, then settle \
+               the automatic win detectors as Game::play does (lowest index first). Refused with \
+               enabled_why_not's reason when the move is not enabled, and for an automatic transition. \
+               One undo step; returns plan.game.",
+        menu: "",
+        shortcut: None,
+        args: &[arg("transition", Str, "a move, e.g. x_play_3_0")],
+        enabled: need,
+        run: play,
+        journal: true,
+    },
+    CommandSpec {
+        id: "plan.new_game",
+        label: "New Game",
+        help: "Back to the settled initial marking of the Connect-4 net. One undo step; returns plan.game.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: need,
+        run: new_game,
+        journal: true,
+    },
 ];
 
 fn net(_: &mut Session, _: &Value) -> Result<Value> {
@@ -224,7 +264,10 @@ fn open(sess: &mut Session, a: &Value) -> Result<Value> {
     };
     let plan = sp::canonical(&plan);
     sess.edit("open search plan", |s| {
-        s.search_plan = Some(OpenPlan { plan: plan.clone() });
+        s.search_plan = Some(OpenPlan {
+            plan: plan.clone(),
+            game: Default::default(),
+        });
         Ok(view(&plan))
     })
 }
@@ -277,7 +320,11 @@ fn index(a: &Value, k: &str) -> Option<usize> {
 fn set_plan(sess: &mut Session, label: &str, plan: Value) -> Result<Value> {
     let plan = sp::canonical(&plan);
     sess.edit(label, |s| {
-        s.search_plan = Some(OpenPlan { plan: plan.clone() });
+        let game = s.search_plan.take().map(|p| p.game).unwrap_or_default();
+        s.search_plan = Some(OpenPlan {
+            plan: plan.clone(),
+            game,
+        });
         Ok(view(&plan))
     })
 }
@@ -340,4 +387,37 @@ fn set_mode(sess: &mut Session, a: &Value) -> Result<Value> {
     let mut plan = plan_ref(sess)?.clone();
     plan["mode"] = json!(mode);
     set_plan(sess, &format!("plan mode {mode}"), plan)
+}
+
+// ------------------------------------------------------------ playing the net
+
+fn game(sess: &mut Session, _: &Value) -> Result<Value> {
+    let p = sess
+        .search_plan
+        .as_ref()
+        .ok_or_else(|| Error::Invalid("no search plan is open (plan.open)".into()))?;
+    Ok(crate::plan_game::game_json(&p.game))
+}
+
+fn play(sess: &mut Session, a: &Value) -> Result<Value> {
+    let t = req(a, "transition").to_string();
+    sess.edit(&format!("play {t}"), |s| {
+        let p = s
+            .search_plan
+            .as_mut()
+            .ok_or_else(|| Error::Invalid("no search plan is open (plan.open)".into()))?;
+        p.game = crate::plan_game::play(&p.game, &t).map_err(Error::Invalid)?;
+        Ok(crate::plan_game::game_json(&p.game))
+    })
+}
+
+fn new_game(sess: &mut Session, _: &Value) -> Result<Value> {
+    sess.edit("new game", |s| {
+        let p = s
+            .search_plan
+            .as_mut()
+            .ok_or_else(|| Error::Invalid("no search plan is open (plan.open)".into()))?;
+        p.game = Default::default();
+        Ok(crate::plan_game::game_json(&p.game))
+    })
 }

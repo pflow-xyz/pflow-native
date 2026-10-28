@@ -40,6 +40,9 @@ pub fn connect4_exact() -> Value {
 #[derive(Debug, Clone, PartialEq)]
 pub struct OpenPlan {
     pub plan: Value,
+    /// The Connect-4 net played by hand (`plan.play`); the net is the same
+    /// whatever the plan, so editing the plan keeps it.
+    pub game: crate::plan_game::PlayState,
 }
 
 /// The pflow-rs revision whose `plan.rs` decides (the pinned one).
