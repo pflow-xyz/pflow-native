@@ -43,7 +43,7 @@ pub struct OpenPlan {
 }
 
 /// The pflow-rs revision whose `plan.rs` decides (the pinned one).
-pub const PLAN_RS_REV: &str = "aacb7eb";
+pub const PLAN_RS_REV: &str = "a1c4b55";
 
 /// The Connect-4 net the plan is for: pflow-rs's fixture
 /// `crates/pflow-metamodel/tests/fixtures/connect-4.json`, byte-identical

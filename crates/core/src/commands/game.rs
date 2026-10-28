@@ -47,11 +47,10 @@ pub const SET: &[CommandSpec] = &[
                pflow-metamodel's alpha-beta search over the firing rule, run as `plan` names it. The game is the net read \
                through `sides` (who owns each transition), `reward` (read off the final marking) and `auto` (transitions \
                nobody chooses, fired first). The value is null when the search runs past its node budget (`nodes` then \
-               reports the budget). A plan and budget give the same result on every machine, except with the \"ode\" \
-               root estimate: it solves the mass-action ODE with every transition at rate 1, not the session's rates, \
-               and its step control uses the platform's floating-point `powf`, so the native and browser builds can \
-               search different numbers of nodes, and near the budget one can finish where the other does not. \
-               Changes neither the net nor the marking; the result is stored as a Report.",
+               reports the budget). A plan and budget give the same result on every machine, native or browser, the \
+               \"ode\" root estimate included: it solves the mass-action ODE with every transition at rate 1, not the \
+               session's rates, and its step control uses pflow-solver's correctly rounded `crmath::pow`, not the \
+               platform's `powf`. Changes neither the net nor the marking; the result is stored as a Report.",
         menu: MENU,
         shortcut: None,
         args: ARGS,
