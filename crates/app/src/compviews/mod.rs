@@ -1468,8 +1468,11 @@ pub fn goldens() -> Result<Value, String> {
     Ok(json!({
         "format": "composition-views-scene/1",
         "spec": "docs/composition-views-scene.md",
-        "generated_by": "pflow-native crates/app/src/compviews.rs (egui renderers, headless)",
+        "generated_by": "pflow-native crates/app/src/compviews (egui renderers, headless)",
         "pflow_rs": pflow_native_core::provenance::PFLOW_RS_REV,
         "manifests": manifests,
+        // The string view's transition level (spec D27-D30), kept apart so a
+        // consumer keyed by (view, example, state) keeps its 100.
+        "transition_manifests": goldens_transition()?["manifests"],
     }))
 }

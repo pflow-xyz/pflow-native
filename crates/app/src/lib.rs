@@ -99,7 +99,7 @@ pub struct App {
     /// Whether the window is on screen (not minimized, hidden or covered),
     /// as of the last logic pass. A hidden window cannot be captured.
     window_visible: bool,
-    /// The composition views' cache, drag and inspector (compviews.rs).
+    /// The composition views' cache, drag and inspector (compviews/).
     pub(crate) comp: compviews::State,
     /// What was last sent to view.report_focus.
     last_focus: Option<(Option<String>, BottomTab, bool, bool)>,

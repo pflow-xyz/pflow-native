@@ -61,12 +61,13 @@ pflow-native generates `parity/composition-views/goldens.json` (all views × exa
 states) from its egui renderer's manifest collector, run headless; pflow.xyz vendors it
 next to its existing `parity/native/` goldens and a deno test compares the web
 renderers' manifests with it, the same way `parity/native/native_parity_test.ts` does.
-A failing parity test is a finding about one renderer; it is never fixed by
-regenerating the goldens.
+Besides `manifests` (10 views × 2 examples × 5 states = 100) the file has
+`transition_manifests` (D27). A failing parity test is a finding about one renderer; it is
+never fixed by regenerating the goldens.
 
 ## Decisions
 
-Recorded by pflow-native (the egui renderer, `crates/app/src/compviews.rs`), which owns
+Recorded by pflow-native (the egui renderer, `crates/app/src/compviews/`), which owns
 this file. The readings pflow.xyz#122 proposed are adopted where they follow the
 prototype (D7 transition ports `bottom`, D10, D14 y·M₀, D15 repeats kept, D16 L3 cover,
 D19 six holes, D26 selected theory); its others already agree with D1–D26. Each decision follows what the prototype draws; where the prototype draws
@@ -145,10 +146,11 @@ more than the table names, only the table's kinds are emitted.
 - D18. `spiders`: two `junction`s. `tt` legs: `tt_best` if in the order chain (D3) and
   `memo` if the plan has a memo; `history` legs: `history` if in the chain.
 - D19. `operad`: `frame` per driver that is on (D3); `hole` per core hole: `order`,
-  `filters`, `heuristics`, `memo` and the designed `bounds`, `engine` (six; attr
-  accepts). Drivers are frames, not a hole (the drivers drop target is drawn but not
-  emitted). `piece` `{slot}/{name}` for each entry of `order`, `filters`, `heuristics` as
-  the solver reads them (D3, so `filters/must_win` by default), and `memo/memo` when the
+  `filters`, `root`, `heuristics`, `memo` and the designed `bounds`, `engine` (seven; attr
+  accepts; `root` accepts `Root`, pflow-rs's `root` field, D31). Drivers are frames, not a hole
+  (the drivers drop target is drawn but not emitted). `piece` `{slot}/{name}` for each entry of
+  `order`, `filters`, `root`, `heuristics` as the solver reads them (D3, so `filters/must_win` by
+  default; `root` has no default, so none unless the plan names one), and `memo/memo` when the
   plan has a memo.
 - D20. `string`: `box` `core`; `chain` per order piece (D3) with its index; `frame` per
   driver that is `budget` or `null_window`; `backedge` `recursion`, `tt` and `cutoff`
@@ -163,3 +165,45 @@ more than the table names, only the table's kinds are emitted.
   `driver-wrap`); `rewrite` only for the selected theory's chips (the prototype draws one
   theory at a time). With no rewrite chosen (`view.composition {rewrite}`), the selected
   theory is the first, `orderer-monoid`, so the states emit its 8 rewrites. No `cover`.
+
+**Added with the quality pass (pflow-native feat/composition-views-quality)**
+
+- D27. A manifest has an optional `level` field. It is absent for every manifest above (the
+  pattern level, the default), so those stay as they were. The string view's transition level is
+  a second manifest per example and state, `{view:"string", example, state, level:"transition",
+  elements}`, sorted and deduplicated as ever. No other view has levels. In `goldens.json` they
+  are the array `transition_manifests` (10 entries: orders and connect4 × the five states), apart
+  from `manifests` (still 100) so a consumer keyed by (view, example, state) is unaffected.
+- D28 (string, transition level, orders: `translatePetriNet` of diagram-viewer.js on
+  `bundle.flatten`). The net is `bundle.flatten` as the prototype's `dvModel` reads it: read arcs
+  left out, an arc weighs `weight || 1`, an inhibitor arc is an inhibitor.
+  - `tbox`, id the flat transition (`fused:orders/dequeue+...`, `payment/commit`): attrs `layer`
+    (int), `fused` (bool, the flat net's flag), `inputs` and `outputs` (port counts).
+  - `twire`, id `{producer box}->{consumer box}:{place}`: attrs `back` (bool), `inhibit` (bool),
+    `weight` (int, the producer arc's first weight). Parallel arcs make one entry.
+  - `tback`, id `{box}->{box}` for each pair the DFS marks as a back edge: no attrs.
+  - `tboundary`, id the place: attr `side` `in` (consumed, never produced: enters the top) or
+    `out` (produced, never consumed: leaves at the bottom).
+- D29 (string, transition level, connect4). One entry: `tnet`, id `connect-4`, attrs `boxes`,
+  `layers`, `wires`, `back_wires` (wires flagged `isBack`), `crossing_wires` (`isCrossing`),
+  `boundary_in`, `boundary_out`. 222 boxes in 150 layers and 14,296 wires are too many to list
+  (D21 treats the flat view's Connect-4 the same way). At the pin: 222, 150, 14296, 3663, 10519,
+  8, 2.
+- D30. Layers and wires come from `translatePetriNet`'s own fields, so a web renderer that runs
+  diagram-viewer.js emits them from its `diagram` object (`b.layer`, `w.isBack`, `w.isCrossing`,
+  `diagram.boundaryInputs`, `diagram.backEdges`); only `fused` needs the flat model. pflow-native
+  runs the same algorithm in Rust (`core::string_diagram`, `diagram.transition_layout`), checked
+  number for number against diagram-viewer.js's own output
+  (`crates/core/tests/fixtures/diagram-viewer/`).
+- D31. pflow-rs's plan `root` field (`{"order": ["ode", "non_losing"]}`, an estimate and the
+  root's `non_losing`; at the pin aacb7eb) is a slot of the solver template: `plan.pieces`
+  lists eight slots, `plan.add_piece {slot:"root"}` takes `ode` or `non_losing`, and every
+  verdict is pflow-rs's (`pflow_solver::game::solver` builds the `ode` estimate). The operad
+  view draws it as a hole (D19).
+- D32. The flat view's token game is the registry's (`bundle.fire`, `bundle.step`,
+  `bundle.scenario`, `bundle.reset_marking`; `plan.play`, `plan.new_game` for connect4). A
+  renderer never fires on its own. The manifest is collected in the resting state:
+  `place.initial` is the flat initial marking whatever the current marking, and `scenario`
+  entries are `bundle.run`'s. The same holds for the process view's chosen scenario and the laws
+  view's chosen step (`view.composition {scenario, step}`): what is selected is drawn, the
+  manifest keeps D15 and D16/D26.

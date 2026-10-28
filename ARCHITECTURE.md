@@ -65,7 +65,9 @@ A restore checks every part before it changes any (the store's files against
 their content ids), and refuses to overwrite a store on disk. Results are the one
 part it does not hold to that: a result it cannot read back (JSON has no NaN, so a
 diverging run saves null) is dropped and named, as its command recomputes it. The
-document, marking, selection and history are not part of it.
+document, marking, selection and history are not part of it. The open composition,
+the open search plan and which composition view is shown are (parts `composition`,
+`plan`, `composition_view`).
 
 ## One command registry
 
@@ -112,7 +114,7 @@ CommandSpec {
 | `export.*` | json/svg/csv (1), png (app), artifact export in every format (3+) |
 | `macro.*` | record/stop/play/list/get/delete (1) |
 | `command.*` | batch, list (1) |
-| `bundle.*`, `plan.*` | the composition views' state: an open composition of pattern instances (link verdicts, drag candidates, flatten, scenario runs, lens test, ontology facts) and an open search plan (`crates/core/src/composition/`, `lens.rs`, `search_plan.rs`) |
+| `bundle.*`, `plan.*` | the composition views' state: an open composition of pattern instances (link verdicts, drag candidates, flatten, scenario runs, a token game on the flat net, lens test, ontology facts) and an open search plan (slots incl. `root`, a Connect-4 game played by hand) (`crates/core/src/composition/`, `lens.rs`, `search_plan.rs`, `plan_game.rs`); `diagram.transition_layout`: diagram-viewer.js's layout (`string_diagram.rs`) for the string view |
 | `session.*` | dump_state/restore_state: what outlives one document, for the browser's storage |
 
 ## Artifacts → views
