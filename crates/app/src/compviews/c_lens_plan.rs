@@ -120,7 +120,7 @@ impl C {
         )
     }
     fn leaf() -> String {
-        gs(1081, 1087, "no moves: the score, stored as exact")
+        gs(1082, 1087, "no moves: the score, stored as exact")
     }
     fn children() -> String {
         gs(
@@ -161,7 +161,7 @@ impl C {
         gs(1183, 1185, "store: Entry { lo, hi, best } into the table")
     }
     fn table_default() -> String {
-        gs(586, 594, "Solver::MEMO = 2^23 entries by default")
+        gs(587, 594, "Solver::MEMO = 2^23 entries by default")
     }
     fn with_memo() -> String {
         gs(635, 641, "with_memo: the table is kept to N entries")
@@ -1038,7 +1038,7 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
             lens_info("the recursion: the core again, one level down")
                 .fact("forward", "child position + window")
                 .fact("backward", "the child's value v")
-                .fact("bottom", "a leaf: no moves, the score (game.rs:1081-1087)")
+                .fact("bottom", "a leaf: no moves, the score (game.rs:1082-1087)")
                 .note("self.search(next, a, b, false) for each child, best first (game.rs:1152). Budget counts these nodes too (game.rs:1057)."),
             &[C::recurse(), C::budget_count(), C::leaf()],
         );
@@ -1450,7 +1450,7 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
             lens_info("leaf: the forward lane turns back")
                 .fact("Connect-4 rewards", "win_x +1, win_o -1 (tests/common/mod.rs:35)")
                 .fact("analogy", "only the turning-around shape is borrowed")
-                .note("Where values come from: a position with no moves is scored and stored as exact (game.rs:1081-1087). In an open game, this end is where the utility comes in; here it is the reward of a final marking."),
+                .note("Where values come from: a position with no moves is scored and stored as exact (game.rs:1082-1087). In an open game, this end is where the utility comes in; here it is the reward of a final marking."),
             &[C::leaf(), C::c4_reward()],
         );
         hover_path(c, &pts, 8.0, i);
@@ -1685,7 +1685,7 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
         );
         wire(c, &sp_, col_tab, 1.6, false, true, xf.k);
         let si = cites(
-            info("[lo, hi], best: stored").note("After the children: the result as [lo, hi] (fail-soft), merged with what the table knew, stored with the best move (game.rs:1168-1185). A leaf is stored as exact (game.rs:1081-1087)."),
+            info("[lo, hi], best: stored").note("After the children: the result as [lo, hi] (fail-soft), merged with what the table knew, stored with the best move (game.rs:1168-1185). A leaf is stored as exact (game.rs:1082-1087)."),
             &[C::bounds_store(), C::store(), C::leaf()],
         );
         hover_path(c, &sp_, 5.0, si.clone());
@@ -1745,7 +1745,7 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
             cites(
                 lens_info("position → children")
                     .fact("forward", "Position → MoveList")
-                    .fact("leaf", "no moves: the score comes back at once and is stored as exact (game.rs:1081-1087)")
+                    .fact("leaf", "no moves: the score comes back at once and is stored as exact (game.rs:1082-1087)")
                     .note("The moves enabled at the position; each is played and settled into a child, then keyed by the order chain (game.rs:1089-1112)."),
                 &[C::children(), C::leaf()],
             ),
