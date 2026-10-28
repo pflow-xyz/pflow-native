@@ -1,0 +1,1159 @@
+{
+ "provenance": {
+  "source": "ontology-pflow-xyz ns/patterns.ttl@bc4a996 (private repo; cited by file:line)",
+  "copied_from": "pflow-views-prototype js/model/ontology.js and js/model/sources.js @91695ad",
+  "how": "the modules' exports, serialized with JSON.stringify (no field edited); line numbers in cites are into the file at the cite's repo rev (REPOS)",
+  "judgment": "altLabel, intent, idioms and invariants keep their assertedBy; \"assistant-judgment\" marks what the ontology itself records as judgment"
+ },
+ "ns": {
+  "NS": "https://ontology.pflow.xyz/ns#",
+  "PAT": "https://ontology.pflow.xyz/pattern/",
+  "LK": "https://ontology.pflow.xyz/linkkind/"
+ },
+ "link_kinds": {
+  "token": {
+   "iri": "https://ontology.pflow.xyz/linkkind/token",
+   "label": "token",
+   "comment": "Fuses two places: tokens are shared. Resource coupling.",
+   "fromTarget": "place",
+   "toTarget": "place",
+   "forbidsFromPortKind": "in",
+   "forbidsToPortKind": "out",
+   "requiresSchemaAgreement": true,
+   "requiresNetKind": [
+    "ResourceNet",
+    "GameNet"
+   ],
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 161,
+     "to": 166,
+     "note": "lk:token"
+    },
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 140,
+     "to": 149,
+     "note": "ns:TokenPatternLink axioms: from is not an in-port, to is not an out-port"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_matrix.go",
+     "from": 22,
+     "to": 35,
+     "note": "linkLegal: both nets must count tokens"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose.go",
+     "from": 676,
+     "to": 683,
+     "note": "validateLink: E_PORT_DIRECTION"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_flatten.go",
+     "from": 55,
+     "to": 67,
+     "note": "Flatten: place classes by union-find"
+    }
+   ]
+  },
+  "data": {
+   "iri": "https://ontology.pflow.xyz/linkkind/data",
+   "label": "data",
+   "comment": "Fuses two places for read-only observation; the observer may not consume from or produce into the observed place (E_DATALINK_CONSUMES). Legal between any net kinds.",
+   "fromTarget": "place",
+   "toTarget": "place",
+   "requiresSchemaAgreement": true,
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 167,
+     "to": 170,
+     "note": "lk:data"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_matrix.go",
+     "from": 37,
+     "to": 40,
+     "note": "linkLegal: universally legal"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose.go",
+     "from": 734,
+     "to": 748,
+     "note": "validateDataLinkObserver: E_DATALINK_CONSUMES"
+    }
+   ]
+  },
+  "event": {
+   "iri": "https://ontology.pflow.xyz/linkkind/event",
+   "label": "event",
+   "comment": "Fuses two transitions: when one fires, the other fires too, atomically. No port-direction rule.",
+   "fromTarget": "transition",
+   "toTarget": "transition",
+   "forbidsNetKind": [
+    "ComputationNet"
+   ],
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 171,
+     "to": 174,
+     "note": "lk:event"
+    },
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 151,
+     "to": 155,
+     "note": "ns:EventPatternLink axioms: both ends are transition ports"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_matrix.go",
+     "from": 42,
+     "to": 49,
+     "note": "linkLegal: no ComputationNet"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_fuse.go",
+     "from": 9,
+     "to": 20,
+     "note": "fusion over equivalence classes, so it is associative"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_flatten.go",
+     "from": 72,
+     "to": 80,
+     "note": "Flatten: transition classes by union-find"
+    }
+   ]
+  },
+  "guard": {
+   "iri": "https://ontology.pflow.xyz/linkkind/guard",
+   "label": "guard",
+   "comment": "Gates a transition in one subnet on a place in another (inhibitor or read arc, or a guard conjunct). Restrictive: properties proved of the gated net alone may no longer hold.",
+   "fromTarget": "transition",
+   "toTarget": "place",
+   "contextual": true,
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 175,
+     "to": 177,
+     "note": "lk:guard"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_matrix.go",
+     "from": 51,
+     "to": 54,
+     "note": "linkLegal: meaningful everywhere"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose.go",
+     "from": 687,
+     "to": 706,
+     "note": "validateLink: W_RESTRICTIVE_LINK"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/compose_guard.go",
+     "from": 1,
+     "to": 172,
+     "note": "lowering: \"> 0\" becomes a read arc of weight 1"
+    }
+   ]
+  }
+ },
+ "link_style": {
+  "token": {
+   "color": "#aa3333",
+   "dash": "6 4",
+   "glyph": "◆"
+  },
+  "data": {
+   "color": "#3355aa",
+   "dash": "1 4",
+   "glyph": "▷"
+  },
+  "event": {
+   "color": "#227744",
+   "dash": "",
+   "glyph": "⊗"
+  },
+  "guard": {
+   "color": "#886600",
+   "dash": "6 4",
+   "glyph": "⊘"
+  }
+ },
+ "link_style_cite": {
+  "repo": "goPflow",
+  "path": "metamodel/composedot.go",
+  "from": 28,
+  "to": 33,
+  "note": "linkStyles: color, style and glyph per link kind"
+ },
+ "patterns": {
+  "queue": {
+   "iri": "https://ontology.pflow.xyz/pattern/queue",
+   "prefLabel": "Queue",
+   "altLabel": [
+    "waiting line",
+    "line",
+    "backlog",
+    "buffer",
+    "wait in a line",
+    "pending work"
+   ],
+   "definition": "A bounded or unbounded buffer. An enqueue transition moves a token into the items place and a dequeue transition takes one out; a bounded queue adds a slots place holding the free capacity.",
+   "intent": "things arrive and wait until a consumer takes them; optionally with a limit on how many can wait",
+   "constructor": "metamodel.NewQueue(QueueSpec)",
+   "netKind": "ResourceNet",
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 186,
+     "to": 203,
+     "note": "pat:queue"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/queue.go",
+     "from": 71,
+     "to": 174,
+     "note": "NewQueue"
+    }
+   ],
+   "caveats": [
+    "Capacity 0 means unbounded: there is no slots place and enqueue becomes a source transition. The net then fails StructuralBoundedness and Validate reports W_UNBOUNDED_QUEUE; bound it from outside, usually by fusing enqueue with a producer whose own net is bounded.",
+    "The items place is a counter. The net does not order items, so first-in-first-out is not a property of this pattern; with a payload the items are told apart by item_id only.",
+    "Initial greater than a non-zero capacity is rejected with an error (NewQueue), because it would give a negative slot count."
+   ],
+   "ports": [
+    {
+     "key": "queue-port-in",
+     "id": "in",
+     "kind": "in",
+     "target": "place",
+     "element": "items",
+     "schema": "queue:items",
+     "comment": "Place items. Token link: a producer pushes work.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 216,
+       "to": 217,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/queue.go",
+       "from": 132,
+       "to": 132,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/queue-port-in"
+    },
+    {
+     "key": "queue-port-out",
+     "id": "out",
+     "kind": "out",
+     "target": "place",
+     "element": "items",
+     "schema": "queue:items",
+     "comment": "Place items. Token link: a consumer pulls work.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 218,
+       "to": 219,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/queue.go",
+       "from": 133,
+       "to": 133,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/queue-port-out"
+    },
+    {
+     "key": "queue-port-depth",
+     "id": "depth",
+     "kind": "observe",
+     "target": "place",
+     "element": "items",
+     "schema": "queue:items",
+     "comment": "Place items. Data or guard link: observe the backlog.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 220,
+       "to": 221,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/queue.go",
+       "from": 134,
+       "to": 134,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/queue-port-depth"
+    },
+    {
+     "key": "queue-port-enqueue",
+     "id": "enqueue",
+     "kind": "in",
+     "target": "transition",
+     "element": "enqueue",
+     "comment": "Transition enqueue. Event link: fire together with a producer, so produce-and-enqueue is one atomic firing.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 222,
+       "to": 223,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/queue.go",
+       "from": 135,
+       "to": 135,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/queue-port-enqueue"
+    },
+    {
+     "key": "queue-port-dequeue",
+     "id": "dequeue",
+     "kind": "out",
+     "target": "transition",
+     "element": "dequeue",
+     "comment": "Transition dequeue. Event link: fire together with a consumer.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 224,
+       "to": 225,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/queue.go",
+       "from": 136,
+       "to": 136,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/queue-port-dequeue"
+    }
+   ],
+   "invariants": [
+    {
+     "key": "queue-inv-capacity",
+     "kind": "capacity",
+     "id": "queue_capacity",
+     "expr": "tokens(\"items\") + tokens(\"slots\") == N",
+     "presentWhen": "Capacity > 0",
+     "assertedBy": "assistant-judgment",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 230,
+       "to": 233,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/queue.go",
+       "from": 119,
+       "to": 122,
+       "note": ""
+      }
+     ]
+    }
+   ]
+  },
+  "resource-pool": {
+   "iri": "https://ontology.pflow.xyz/pattern/resource-pool",
+   "prefLabel": "ResourcePool",
+   "altLabel": [
+    "workers",
+    "worker pool",
+    "fixed number of workers",
+    "semaphore",
+    "limited resources",
+    "connection pool"
+   ],
+   "definition": "A fixed number of interchangeable units. acquire moves a unit from available to in_use and release moves it back, so the total never changes.",
+   "intent": "at most N things can use something at once; each use takes one unit and gives it back",
+   "constructor": "metamodel.NewResourcePool[R](name, capacity, metadata) then (*ResourcePool[R]).ToSubnet(id)",
+   "netKind": "ResourceNet",
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 237,
+     "to": 254,
+     "note": "pat:resource-pool"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/patterns.go",
+     "from": 268,
+     "to": 300,
+     "note": "NewResourcePool"
+    },
+    {
+     "repo": "goPflow",
+     "path": "metamodel/patterns_compose.go",
+     "from": 81,
+     "to": 103,
+     "note": "ToSubnet"
+    }
+   ],
+   "caveats": [
+    "in_use is an anonymous count. The pool does not record which job holds a unit, so it cannot say that a given job released it.",
+    "The available port is tagged `resource`, the same tag a workflow's resource:<id> ports carry, but a saga's account ports are tagged `account`: a port-to-port token link between a pool and a saga is rejected with E_SCHEMA_MISMATCH.",
+    "NewResourcePool does not check capacity; a negative or zero value is not rejected in the source read."
+   ],
+   "ports": [
+    {
+     "key": "resource-pool-port-available",
+     "id": "available",
+     "kind": "inout",
+     "target": "place",
+     "element": "available",
+     "schema": "resource",
+     "comment": "Place available.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 265,
+       "to": 265,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/patterns_compose.go",
+       "from": 96,
+       "to": 96,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/resource-pool-port-available"
+    },
+    {
+     "key": "resource-pool-port-in-use",
+     "id": "in_use",
+     "kind": "out",
+     "target": "place",
+     "element": "in_use",
+     "schema": "resource",
+     "comment": "Place in_use.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 266,
+       "to": 266,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/patterns_compose.go",
+       "from": 97,
+       "to": 97,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/resource-pool-port-in-use"
+    },
+    {
+     "key": "resource-pool-port-acquire",
+     "id": "acquire",
+     "kind": "in",
+     "target": "transition",
+     "element": "acquire",
+     "comment": "Transition acquire: available -> in_use.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 267,
+       "to": 268,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/patterns_compose.go",
+       "from": 98,
+       "to": 98,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/resource-pool-port-acquire"
+    },
+    {
+     "key": "resource-pool-port-release",
+     "id": "release",
+     "kind": "out",
+     "target": "transition",
+     "element": "release",
+     "comment": "Transition release: in_use -> available.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 269,
+       "to": 270,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/patterns_compose.go",
+       "from": 99,
+       "to": 99,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/resource-pool-port-release"
+    }
+   ],
+   "invariants": [
+    {
+     "key": "resource-pool-inv-conservation",
+     "kind": "conservation",
+     "id": "pool_conservation",
+     "expr": "tokens(\"available\") + tokens(\"in_use\") == capacity",
+     "assertedBy": "assistant-judgment",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 272,
+       "to": 275,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "metamodel/patterns_compose.go",
+       "from": 90,
+       "to": 93,
+       "note": ""
+      }
+     ]
+    }
+   ]
+  },
+  "saga": {
+   "iri": "https://ontology.pflow.xyz/pattern/saga",
+   "prefLabel": "Saga",
+   "altLabel": [
+    "refund",
+    "compensation",
+    "rollback",
+    "undo on failure",
+    "compensating transaction",
+    "must be reversed if it fails"
+   ],
+   "definition": "An ordered list of steps, each paired with a compensation. One control token walks the steps forward; a failure hands it to a chain that runs the compensations in reverse. Steps move tokens between accounts and the compensation moves them back.",
+   "intent": "a multi-step business transaction where, if a later step fails, the earlier ones must be undone",
+   "constructor": "saga.New(id) with Account, SharedAccount, Step, Move, Compensate, MustBuild or BuildValidated, then (*Saga).ToMetaSubnet()",
+   "netKind": "ResourceNet",
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 414,
+     "to": 435,
+     "note": "pat:saga"
+    },
+    {
+     "repo": "goPflow",
+     "path": "saga/metasubnet.go",
+     "from": 73,
+     "to": 119,
+     "note": "ToMetaSubnet"
+    },
+    {
+     "repo": "goPflow",
+     "path": "saga/metasubnet.go",
+     "from": 8,
+     "to": 25,
+     "note": "structure"
+    }
+   ],
+   "caveats": [
+    "Saga needs weighted arcs, so it exists only on the metamodel layer.",
+    "One saga is one case: the control token is consumed once. Handling many orders takes one saga subnet per order, or a model that carries case identity; this pattern does not.",
+    "A refund is the compensation of a step that moved tokens. It runs when a later step fails or when the final acknowledgement fails (fail_commit compensates every step, including the last). A step that fails itself moved nothing, so there is nothing to refund.",
+    "A saga with a shared account is not closed, so it declares no conservation constraint of its own; the law is a property of the composite.",
+    "The net kind is ResourceNet, so nothing in the legality matrix stops a token link on a control place. Only the account ports are meant for token links.",
+    "The account ports are tagged `account`; a ResourcePool's are tagged `resource`. A port-to-port token link between them is rejected (E_SCHEMA_MISMATCH). The saga tests link a shared account to a plain place with no port, which skips the tag check.",
+    "completed and rolled_back are out-ports on places. No port fires on 'either outcome', so a transition that must happen on both (for example releasing a worker) cannot be fused with one port."
+   ],
+   "portTemplates": [
+    {
+     "key": "saga-port-account",
+     "idTemplate": "account:<id>",
+     "kind": "inout",
+     "target": "place",
+     "elementTemplate": "<id>",
+     "schema": "account",
+     "per": "accounts",
+     "comment": "Token link: share a balance with another subnet instead of duplicating it.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 444,
+       "to": 445,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 83,
+       "to": 88,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-account"
+    },
+    {
+     "key": "saga-port-completed",
+     "id": "completed",
+     "kind": "out",
+     "target": "place",
+     "element": "completed",
+     "schema": "saga:outcome",
+     "comment": "Terminal place: the saga ran to the end.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 446,
+       "to": 446,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 89,
+       "to": 94,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-completed"
+    },
+    {
+     "key": "saga-port-rolled-back",
+     "id": "rolled_back",
+     "kind": "out",
+     "target": "place",
+     "element": "rolled_back",
+     "schema": "saga:outcome",
+     "comment": "Terminal place: every step that ran was compensated.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 447,
+       "to": 447,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 89,
+       "to": 94,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-rolled-back"
+    },
+    {
+     "key": "saga-port-commit",
+     "id": "commit",
+     "kind": "in",
+     "target": "transition",
+     "element": "commit",
+     "comment": "Fuse with the external confirmation, for example a chain's.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 448,
+       "to": 449,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 96,
+       "to": 97,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-commit"
+    },
+    {
+     "key": "saga-port-fail-commit",
+     "id": "fail_commit",
+     "kind": "in",
+     "target": "transition",
+     "element": "fail_commit",
+     "comment": "Final acknowledgement fails; compensate every step.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 450,
+       "to": 450,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 98,
+       "to": 99,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-fail-commit"
+    },
+    {
+     "key": "saga-port-do",
+     "idTemplate": "do:<step>",
+     "kind": "in",
+     "target": "transition",
+     "elementTemplate": "do_<step>",
+     "per": "steps",
+     "comment": "Fuse a step with the external action it stands for.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 451,
+       "to": 452,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 103,
+       "to": 104,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-do"
+    },
+    {
+     "key": "saga-port-fail",
+     "idTemplate": "fail:<step>",
+     "kind": "in",
+     "target": "transition",
+     "elementTemplate": "fail_<step>",
+     "per": "steps",
+     "comment": "The step fails: it is marked failed and the control token turns round.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 453,
+       "to": 453,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 105,
+       "to": 106,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-fail"
+    },
+    {
+     "key": "saga-port-undo",
+     "idTemplate": "undo:<step>",
+     "kind": "out",
+     "target": "transition",
+     "elementTemplate": "undo_<step>",
+     "per": "steps",
+     "comment": "The compensation of the step.",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 454,
+       "to": 455,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 107,
+       "to": 108,
+       "note": ""
+      }
+     ],
+     "iri": "https://ontology.pflow.xyz/pattern/saga-port-undo"
+    }
+   ],
+   "invariants": [
+    {
+     "key": "saga-inv-control",
+     "kind": "control-token",
+     "id": "saga_control",
+     "expr": "sum of tokens over every control place == 1",
+     "assertedBy": "assistant-judgment",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 457,
+       "to": 459,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 287,
+       "to": 291,
+       "note": ""
+      }
+     ]
+    },
+    {
+     "key": "saga-inv-step",
+     "kind": "step-state",
+     "id": "saga_step_<step>",
+     "expr": "tokens(<step>_pending) + tokens(<step>_done) + tokens(<step>_failed) + tokens(<step>_compensated) == 1",
+     "presentWhen": "one per step",
+     "assertedBy": "assistant-judgment",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 460,
+       "to": 462,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 293,
+       "to": 301,
+       "note": ""
+      }
+     ]
+    },
+    {
+     "key": "saga-inv-conservation",
+     "kind": "conservation",
+     "id": "saga_conservation",
+     "expr": "sum of tokens over the accounts the steps touch == their summed initial balance",
+     "presentWhen": "no touched account is shared, and at least one step moves tokens",
+     "assertedBy": "assistant-judgment",
+     "cites": [
+      {
+       "repo": "ontology",
+       "path": "ns/patterns.ttl",
+       "from": 463,
+       "to": 465,
+       "note": ""
+      },
+      {
+       "repo": "goPflow",
+       "path": "saga/metasubnet.go",
+       "from": 303,
+       "to": 326,
+       "note": ""
+      }
+     ]
+    }
+   ]
+  }
+ },
+ "idioms": [
+  {
+   "key": "idiom-queue-dequeue-pool-acquire",
+   "iri": "https://ontology.pflow.xyz/pattern/idiom-queue-dequeue-pool-acquire",
+   "kind": "event",
+   "from": {
+    "pattern": "queue",
+    "port": "dequeue"
+   },
+   "to": {
+    "pattern": "resource-pool",
+    "port": "acquire"
+   },
+   "rationale": "Fuse dequeue with acquire: an item leaves the queue only at the instant a worker is free, as one atomic firing.",
+   "caveat": "Fusion makes one transition consuming from items and available. Check with sim_verify that the composite still has the conservation constraints you expect.",
+   "assertedBy": "assistant-judgment",
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 472,
+     "to": 477,
+     "note": ""
+    }
+   ]
+  },
+  {
+   "key": "idiom-queue-dequeue-saga-do",
+   "iri": "https://ontology.pflow.xyz/pattern/idiom-queue-dequeue-saga-do",
+   "kind": "event",
+   "from": {
+    "pattern": "queue",
+    "port": "dequeue"
+   },
+   "to": {
+    "pattern": "saga",
+    "port": "do:<first>"
+   },
+   "rationale": "Taking an order off the queue and running the saga's first step are one firing. The do:<step> template is instantiated with the first step's id.",
+   "caveat": "A saga is one-shot, so this wires one saga subnet to the queue for one order. Many orders need one saga subnet each.",
+   "assertedBy": "assistant-judgment",
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 486,
+     "to": 491,
+     "note": ""
+    }
+   ]
+  },
+  {
+   "key": "idiom-pool-release-saga-commit",
+   "iri": "https://ontology.pflow.xyz/pattern/idiom-pool-release-saga-commit",
+   "kind": "event",
+   "from": {
+    "pattern": "resource-pool",
+    "port": "release"
+   },
+   "to": {
+    "pattern": "saga",
+    "port": "commit"
+   },
+   "rationale": "Release the worker when the saga commits.",
+   "caveat": "Fires only on commit. If the saga rolls back, no port fires, the worker stays in in_use and the pool leaks a unit. Releasing on both outcomes is not expressible with the declared ports.",
+   "leak": true,
+   "assertedBy": "assistant-judgment",
+   "cites": [
+    {
+     "repo": "ontology",
+     "path": "ns/patterns.ttl",
+     "from": 493,
+     "to": 498,
+     "note": ""
+    }
+   ]
+  }
+ ],
+ "cq13": {
+  "cites": [
+   {
+    "repo": "ontology",
+    "path": "cq/13-linkable-ports.rq",
+    "from": 1,
+    "to": 30,
+    "note": "CQ13: which port pairs in different patterns can a link join"
+   }
+  ],
+  "expectation": "Expect event candidates and no token candidates: the three patterns' place ports carry different schemas."
+ },
+ "repos": {
+  "ontology": {
+   "name": "ontology-pflow-xyz",
+   "rev": "bc4a996",
+   "url": null,
+   "note": "main at bc4a996 (patterns module)"
+  },
+  "ontologyRoadmap": {
+   "name": "ontology-pflow-xyz",
+   "rev": "f854116",
+   "url": null,
+   "note": "ROADMAP.md as committed on valoper main at f854116 (not pushed); Phases 4-6"
+  },
+  "goPflow": {
+   "name": "go-pflow",
+   "rev": "69257b3",
+   "url": "https://github.com/pflow-xyz/go-pflow/blob/69257b3/",
+   "note": "patterns read at 69257b3; files identical at c802f34"
+  },
+  "pflowRs": {
+   "name": "pflow-rs",
+   "rev": "c396d46",
+   "url": "https://github.com/pflow-xyz/pflow-rs/blob/c396d46/",
+   "note": "main at c396d46 (search slice 1, PR #7)"
+  },
+  "pflowXyz": {
+   "name": "pflow-xyz",
+   "rev": "954b75c",
+   "url": "https://github.com/pflow-xyz/pflow-xyz/blob/954b75c/",
+   "note": "public/diagram-viewer.js, byte-identical to main on 2026-10-27"
+  }
+ },
+ "bib": {
+  "baez-master": {
+   "authors": "J. C. Baez, J. Master",
+   "title": "Open Petri Nets",
+   "year": 2018,
+   "arxiv": "1808.05415",
+   "use": "Open Petri nets as cospans; composition is a pushout along boundary places."
+  },
+  "bruni-et-al": {
+   "authors": "R. Bruni, H. Melgratti, U. Montanari, P. Sobociński",
+   "title": "Connector algebras for C/E and P/T nets' interactions",
+   "year": 2013,
+   "arxiv": "1307.0204",
+   "use": "Nets with boundaries: composition synchronises transitions on a shared boundary. The semantics of event links."
+  },
+  "coecke-duncan": {
+   "authors": "B. Coecke, R. Duncan",
+   "title": "Interacting Quantum Observables: Categorical Algebra and Diagrammatics",
+   "year": 2009,
+   "arxiv": "0906.4725",
+   "use": "ZX-calculus spiders and the spider-fusion rule. Only the fusion shape is borrowed here."
+  },
+  "spivak-wd": {
+   "authors": "D. I. Spivak",
+   "title": "The operad of wiring diagrams: formalizing a graphical language for databases, recursion, and plug-and-play circuits",
+   "year": 2013,
+   "arxiv": "1305.0297",
+   "use": "Boxes with typed ports nested in an outer box; filling a hole is operadic composition."
+  },
+  "fong-spivak": {
+   "authors": "B. Fong, D. I. Spivak",
+   "title": "Seven Sketches in Compositionality: An Invitation to Applied Category Theory",
+   "year": 2018,
+   "arxiv": "1803.05316",
+   "use": "Wiring diagrams and operads, introductory treatment."
+  },
+  "selinger": {
+   "authors": "P. Selinger",
+   "title": "A survey of graphical languages for monoidal categories",
+   "year": 2009,
+   "arxiv": "0908.3347",
+   "use": "String diagrams: boxes are morphisms, wires are objects, side by side is the tensor, stacking is composition."
+  },
+  "baez-gms": {
+   "authors": "J. C. Baez, F. Genovese, J. Master, M. Shulman",
+   "title": "Categories of Nets",
+   "year": 2021,
+   "arxiv": "2101.04238",
+   "use": "Petri nets generate monoidal categories; a run of a net is a morphism (a process)."
+  },
+  "ghani-hedges": {
+   "authors": "Neil Ghani, Jules Hedges, Viktor Winschel, Philipp Zahn",
+   "title": "Compositional Game Theory",
+   "year": 2018,
+   "venue": "LICS 2018",
+   "arxiv": "1603.04641",
+   "doi": "10.1145/3209108.3209165",
+   "use": "Open games as lenses: play flows forward, utility flows back. Here only the shape is borrowed (an analogy)."
+  },
+  "cybercat": {
+   "site": "https://cybercat.institute/",
+   "title": "CyberCat Institute",
+   "use": "Categorical cybernetics. Linked for context; no claim on this page is attributed to it."
+  },
+  "mei-douglas": {
+   "authors": "A. Mei, M. R. Douglas",
+   "title": "Beyond LLM Judge: Mechanical Verification for Agentic Autoformalization",
+   "year": 2026,
+   "arxiv": "2610.20573",
+   "use": "As cited by the ontology ROADMAP Phase 4 (faithfulness checks). Title, authors and year checked against arXiv; its content is not summarised or relied on here."
+  },
+  "psv-normal-forms": {
+   "authors": "E. Patterson, D. I. Spivak, D. Vagner",
+   "title": "Wiring diagrams as normal forms for computing in symmetric monoidal categories",
+   "year": 2021,
+   "venue": "ACT 2020, EPTCS 333, pp. 49-64",
+   "arxiv": "2101.12046",
+   "doi": "10.4204/EPTCS.333.4",
+   "use": "Directed acyclic wiring diagrams as an unbiased representation of morphisms in a symmetric monoidal category: the interchange law holds identically, so two drawings of one composite compare without rewriting. Grounds reading the wiring and string views as one morphism."
+  },
+  "catlab": {
+   "authors": "M. Halter, E. Patterson, A. Baas, J. Fairbanks",
+   "title": "Compositional Scientific Computing with Catlab and SemanticModels",
+   "year": 2020,
+   "arxiv": "2005.04831",
+   "use": "Prior art: Catlab.jl, software that composes models of interconnected systems as cospan algebras. Related work only; nothing on this page uses Catlab."
+  },
+  "meseguer-montanari": {
+   "authors": "J. Meseguer, U. Montanari",
+   "title": "Petri nets are monoids",
+   "year": 1990,
+   "venue": "Information and Computation 88(2):105-155",
+   "doi": "10.1016/0890-5401(90)90013-8",
+   "use": "Markings as elements of the free commutative monoid on places, and a net's computations as a monoidal category. Background for the firing rule and for reading a marking as a multiset."
+  },
+  "sobocinski-2010": {
+   "authors": "P. Sobociński",
+   "title": "Representations of Petri Net Interactions",
+   "year": 2010,
+   "venue": "CONCUR 2010, LNCS 6269, pp. 554-568",
+   "doi": "10.1007/978-3-642-15375-4_38",
+   "use": "Petri nets with boundaries, composed by synchronising transitions across a shared boundary: the earlier presentation of the composition that bruni-et-al develops."
+  },
+  "joyal-street": {
+   "authors": "A. Joyal, R. Street",
+   "title": "The geometry of tensor calculus, I",
+   "year": 1991,
+   "venue": "Advances in Mathematics 88(1):55-112",
+   "doi": "10.1016/0001-8708(91)90003-P",
+   "use": "Soundness of string diagrams for monoidal categories: deforming a diagram does not change the morphism it denotes, which is why a view may re-lay-out a composite without changing its meaning."
+  },
+  "chyp": {
+   "site": "https://github.com/akissinger/chyp",
+   "title": "Chyp: an interactive theorem prover for string diagrams",
+   "authors": "A. Kissinger",
+   "license": "Apache-2.0",
+   "rev": "3d28483",
+   "use": "String-diagram rewriting over cospans of hypergraphs (per its README). Used as the checker for the composition-law theory exported under chyp/; what it checked is recorded there, not here. No paper describing Chyp itself was found on arXiv, so only the repository is cited."
+  },
+  "coecke-kissinger": {
+   "authors": "B. Coecke, A. Kissinger",
+   "title": "Picturing Quantum Processes: A First Course in Quantum Theory and Diagrammatic Reasoning",
+   "year": 2017,
+   "venue": "Cambridge University Press",
+   "doi": "10.1017/9781316219317",
+   "use": "Textbook treatment of spiders and spider fusion; an alternative reference to coecke-duncan for the fusion shape borrowed for sync."
+  }
+ }
+}

@@ -8,6 +8,7 @@ use crate::registry::CommandSpec;
 pub mod analysis;
 #[cfg(feature = "services")]
 pub mod auth;
+pub mod bundle;
 pub mod cid;
 pub mod clipboard;
 pub mod command;
@@ -30,6 +31,7 @@ pub mod opt;
 #[cfg(feature = "services")]
 pub mod outbound;
 pub mod overlay;
+pub mod plan;
 pub mod provenance;
 #[cfg(feature = "services")]
 pub mod remote;
@@ -72,6 +74,8 @@ pub const ALL: &[&[CommandSpec]] = &[
     export::SET,
     models::SET,
     compose::SET,
+    bundle::SET,
+    plan::SET,
     systems::SET,
     #[cfg(feature = "services")]
     outbound::SET,

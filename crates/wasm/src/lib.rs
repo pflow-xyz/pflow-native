@@ -17,6 +17,10 @@
 //!   progress, notes, results and the store) as one JSON string
 //!   (`session.dump_state`), for the page to keep in browser storage.
 //!
+//! The composition views' commands (`bundle.*`, `plan.*`) are exposed the
+//! same way as every other: there is no allowlist, so the page lists and
+//! runs them like the rest.
+//!
 //! Every call goes through the registry (`Session::execute`; `load` through
 //! `Session::execute_unjournaled`), as the ground rules require; this crate
 //! adds no behaviour, only the JSON boundary. Errors come back as thrown JS
@@ -562,5 +566,53 @@ mod tests {
         assert!(err.contains("repeated"), "{err}");
         assert_eq!(e.dump_state_json().unwrap(), saved);
         assert_eq!(observe(&mut e, &art, &a), before);
+    }
+
+    /// The composition views' commands (`bundle.*`, `plan.*`) are in the
+    /// browser registry like every other: listed, run, and their edits
+    /// undone, with no document loaded.
+    #[test]
+    fn composition_and_plan_commands_run_in_the_browser() {
+        let mut e = Engine::new();
+        let listed: Value =
+            serde_json::from_str(&e.list_commands_json("bundle.").unwrap()).unwrap();
+        assert!(listed.to_string().contains("bundle.candidates"));
+        let listed: Value = serde_json::from_str(&e.list_commands_json("plan.").unwrap()).unwrap();
+        assert!(listed.to_string().contains("plan.slot_candidates"));
+
+        let open = ok(&mut e, "bundle.open", Value::Null);
+        assert_eq!(open["instances"], json!(["orders", "workers", "payment"]));
+        let c = ok(
+            &mut e,
+            "bundle.candidates",
+            json!({"from": "orders:dequeue"}),
+        );
+        assert!(c["lit"].as_u64().unwrap() > 0);
+        let flat = ok(&mut e, "bundle.flatten", Value::Null);
+        assert_eq!(
+            flat["fused_groups"]["fused:payment/commit+workers/release"],
+            json!(["payment/commit", "workers/release"])
+        );
+        let run = ok(&mut e, "bundle.run", json!({"scenario": "refund"}));
+        assert_eq!(run["completed"], true);
+        let err = e
+            .execute_json(
+                "bundle.add_link",
+                r#"{"kind": "event", "from": "orders:dequeue", "to": "workers:acquire"}"#,
+            )
+            .unwrap_err();
+        assert_eq!(err, "[PAGE_DUPLICATE] already linked");
+
+        let plan = ok(&mut e, "plan.open", Value::Null);
+        assert_eq!(plan["check"]["ok"], true);
+        let err = e
+            .execute_json(
+                "plan.add_piece",
+                r#"{"piece": "static_eval", "slot": "heuristics"}"#,
+            )
+            .unwrap_err();
+        assert!(err.contains("can change the value"), "{err}");
+        ok(&mut e, "edit.undo", Value::Null);
+        assert!(e.execute_json("plan.state", "").is_err());
     }
 }

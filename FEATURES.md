@@ -11,7 +11,7 @@ How to read it:
 - **Source:** where the feature lives today. `pv:` means `petri-view.js` line numbers; `sim_*` is the MCP tool name.
 - **Native:** the registry command(s) and/or the view that will carry the feature (see `ARCHITECTURE.md`).
 - **Backing:** the pflow-rs crate that does the work. **port** means pflow-rs has no equivalent yet; **remote** means it calls sim.pflow.xyz.
-- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0, phase 4 in v0.4.0, phase 5 in v0.5.0, phase 6 in v0.6.0, phase 7 in v0.7.0. v0.8.0 added sign-in, the offline build (`services` feature) and the pflow-rs fcb38ac pin (now `aa8cde3`, for `IndexedModel`, `BitModel` and `game`).
+- **Status:** ✅ done, 🟡 partial, blank = planned. Phase 1 shipped in v0.1.0, phase 2 in v0.2.0, phase 3 in v0.3.0, phase 4 in v0.4.0, phase 5 in v0.5.0, phase 6 in v0.6.0, phase 7 in v0.7.0. v0.8.0 added sign-in, the offline build (`services` feature) and the pflow-rs fcb38ac pin (then `aa8cde3`, for `IndexedModel`, `BitModel` and `game`; now `a0a2bbc`, pflow-rs#11 on `29e6a34`, for `SearchPlan`, the move filters and pflow-compose's saga).
 
 ## Phases
 
@@ -148,6 +148,27 @@ Every row backed by `remote` (pflow.xyz, sim.pflow.xyz, GitHub), along with the 
 | (sign-in) | Google sign-in; OAuth server for MCP clients (`/oauth/register`, `/authorize`, `/token`) | `auth.login {service: "sim"}` / `auth.status` / `auth.logout`; Remote → Accounts…; `pflow-native-cli login sim` | core `auth` (RFC 7591 registration, PKCE S256, RFC 8252 loopback redirect, RFC 9207 `iss` check, rotating refresh) | Accounts window | ✅ the browser signs in on sim's own page (Google); the token is stored as `SIM_PFLOW_TOKEN` and refreshed before it lapses; never returned |
 | publish_app | host an HTML app | `remote.sim.publish_app {html, id}` | remote | URL | 7 ✅ previews unless `send` (the wasm build previews only: no HTTP client) |
 
+## E. Composition views (from `pflow-views-prototype`)
+
+Milestone 1 of porting the prototype's ten views of one composition into this app and pflow.xyz: the
+registry commands the views draw from. The prototype's `js/model/` is the spec; every verdict here is
+pflow-rs's (pflow-compose constructors, `Bundle::validate`, `flatten_with_map`; pflow-metamodel firing
+and `SearchPlan`). Cross-checked against the prototype's receipts (`crates/core/tests/fixtures/views/`).
+
+| Feature | Source (prototype) | Native | Backing | Status |
+|---|---|---|---|---|
+| Instance catalog (six instances, parameters marked judgment) | `orders.js` `INSTANCE_SPECS`, `EXTRA_SPECS` | `bundle.instances` | pflow-compose `new_queue`, `new_resource_pool`, `Saga::to_meta_subnet` | ✅ (subnets equal go-pflow's on all six) |
+| Open composition, add/remove instance, add/remove/reset/clear links (undoable, journaled) | `state.js` actions | `bundle.open`, `bundle.close`, `bundle.add_instance`, `bundle.remove_instance`, `bundle.add_link`, `bundle.remove_link`, `bundle.reset_links`, `bundle.clear_links`, `bundle.state` | pflow-compose `Bundle` | ✅ |
+| Link verdicts with codes and messages; page rules (`PAGE_SAME_SUBNET`, `PAGE_DUPLICATE`) | `rules.js` `validate`, `allVerdicts` | `bundle.add_link` (refuses), `bundle.verdicts` (Table), `bundle.validate` | pflow-compose `Bundle::validate` | 🟡 all 5,576 receipt verdicts match except pflow-compose's missing `E_SCHEMA_MISMATCH` / `E_PORT_DIRECTION` checks and `{:?}`-cased kind (§D 12) |
+| Snap-together drag candidates | `rules.js` `candidates` | `bundle.candidates` | `Bundle::validate` | ✅ (inherits §D 12) |
+| Flat net, fused groups, wires, maps, initial enablement | `flatten.js` | `bundle.flatten` (Report) | `Bundle::flatten_with_map` | ✅ 10 of 11 receipt configs; `rejected` waits on §D 12 |
+| Scenario runs | `orders.js` `SCENARIOS`, `lensfind.js` `runScenario` | `bundle.scenarios`, `bundle.run` (Report) | pflow-metamodel `enabled_why_not` / `fire` | ✅ all 4 receipt runs match step for step |
+| Lens test and repairs | `lensfind.js` | `bundle.lens` (Report); `crates/core/src/lens.rs` | composition + flatten | ✅ (`lensfind.test.mjs` ported; legal token count waits on §D 12) |
+| Ontology facts (patterns, ports, link kinds, idioms, caveats, IRIs, cites) | `ontology.js`, `sources.js` | `bundle.ontology` (embedded `composition/ontology.json`, ns/patterns.ttl@bc4a996) | data | ✅ |
+| Connect-4 search plan: open, check, slot candidates, add/remove/move piece, mode | `plan.js` | `plan.open`, `plan.close`, `plan.state`, `plan.check`, `plan.pieces`, `plan.slot_candidates`, `plan.add_piece`, `plan.remove_piece`, `plan.move_piece`, `plan.set_mode` | pflow-metamodel `SearchPlan` | ✅ 289 receipt plans match, with pflow-rs 7ba0824's deliberate changes named |
+| The ten views (egui, pflow.xyz) | `js/views/*.js` | | | (milestone 2) |
+| Composition and plan in `session.dump_state` | | | | (not yet: the browser re-opens them by command) |
+
 ## C. Visualizations and exports
 
 | View | Fed by | Export | Phase | Status |
@@ -185,3 +206,4 @@ Every row backed by `remote` (pflow.xyz, sim.pflow.xyz, GitHub), along with the 
 
     Switching `data.calibrate` back to upstream would bring back the disagreement between the two commands. Keep the local replay for both after the pin bump, or upstream these differences first.
 11. RNN games through the metamodel (`pflow-tropical`). `ElmanRnn::play_game`, `self_play_train` and `generate_game_trajectories` fire through `NetMatrix`, which has no inhibitor or read arcs, capacities or colours, and `play_game` has no step cap, so it never returns on a net that does not stop. `commands/rnn.rs` therefore uses only the network (`new` for the seeded weights) and plays its own capped games through `sim::Compiled`; `rnn_net.rs` runs `step` and the three trainers' arithmetic on flat buffers, checked bit for bit against `ElmanRnn`. Upstream could take that layout too. Upstream could take a firing callback (enabled, fire) and a step cap; then `rnn.*` can call it directly.
+12. Link validation parity with go-pflow (`pflow-compose` `validate.rs`). At the pin, `Bundle::validate` skips go-pflow's `E_SCHEMA_MISMATCH` (port schemas differ) and `E_PORT_DIRECTION` (token link from an in-port / to an out-port) checks, and writes `E_ENDPOINT_KIND`'s kind with `{:?}` ("a Token link"). Against go-pflow's own verdicts (§E), 470 of 5,576 port-pair verdicts lack a code and 246 of them are legal here but refused there. Fixed upstream on pflow-rs branch `fix/validate-link-go-parity` (commit `7015a50`, on `29e6a34`; with it the 968 queue/pool verdicts match exactly); `tests/views_compose.rs` holds the gap and fails when the pin moves past it.
