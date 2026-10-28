@@ -56,6 +56,7 @@
 
 pub mod backend;
 pub mod canon;
+pub mod kind;
 pub mod predicate;
 pub mod query;
 
@@ -67,6 +68,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 
 pub use backend::{FsBackend, MemoryBackend, StoreBackend};
+pub use kind::{kind_of, DocKind};
 use predicate::{Fate, Kind, Range};
 
 use crate::doc::Document;

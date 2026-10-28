@@ -9,6 +9,7 @@ pub mod analysis;
 #[cfg(feature = "services")]
 pub mod auth;
 pub mod bundle;
+pub mod bundle_doc;
 pub mod cid;
 pub mod clipboard;
 pub mod command;
@@ -77,6 +78,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     models::SET,
     compose::SET,
     bundle::SET,
+    bundle_doc::SET,
     plan::SET,
     systems::SET,
     #[cfg(feature = "services")]
