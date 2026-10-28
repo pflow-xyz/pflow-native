@@ -72,13 +72,33 @@ fn sorted(v: &Value) -> Value {
     }
 }
 
-/// A JSON value from a value or a string holding it.
+/// Most bytes of a document `bundle.load` / `content.load` accept.
+pub const MAX_DOCUMENT_BYTES: usize = 4 * 1024 * 1024;
+
+/// A JSON value from a value or a string holding it, refused over
+/// [`MAX_DOCUMENT_BYTES`].
 pub fn value_arg(v: &Value, what: &str) -> Result<Value> {
-    match v {
-        Value::String(s) => serde_json::from_str(s)
-            .map_err(|e| Error::BadArgs(format!("{what}: not valid JSON: {e}"))),
-        other => Ok(other.clone()),
+    let out = match v {
+        Value::String(s) => {
+            if s.len() > MAX_DOCUMENT_BYTES {
+                return Err(refuse(
+                    "DOCUMENT_TOO_LARGE",
+                    format!("{what} is {} bytes; at most {MAX_DOCUMENT_BYTES}", s.len()),
+                ));
+            }
+            serde_json::from_str(s)
+                .map_err(|e| Error::BadArgs(format!("{what}: not valid JSON: {e}")))?
+        }
+        other => other.clone(),
+    };
+    let n = out.to_string().len();
+    if n > MAX_DOCUMENT_BYTES {
+        return Err(refuse(
+            "DOCUMENT_TOO_LARGE",
+            format!("{what} is {n} bytes; at most {MAX_DOCUMENT_BYTES}"),
+        ));
     }
+    Ok(out)
 }
 
 // ------------------------------------------------------------ state

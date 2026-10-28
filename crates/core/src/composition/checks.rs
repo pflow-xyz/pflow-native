@@ -14,6 +14,10 @@ use super::Composition;
 use crate::search_plan::OpenPlan;
 use crate::session::Session;
 
+/// Most steps a check may have: a check is a loop of registry queries, and a
+/// document from outside must not be able to ask for unbounded work.
+pub const MAX_STEPS: usize = 16;
+
 /// Whether the check runner may run `id`: a registered query (`journal:
 /// false`) in the `bundle.` or `plan.` namespace.
 pub fn command_allowed(id: &str) -> std::result::Result<(), String> {
@@ -44,6 +48,12 @@ pub fn check_problems(check: &Value) -> Vec<String> {
     };
     if steps.is_empty() {
         out.push("a check needs at least one step".into());
+    }
+    if steps.len() > MAX_STEPS {
+        out.push(format!(
+            "a check has {} steps; at most {MAX_STEPS} are run",
+            steps.len()
+        ));
     }
     for (i, st) in steps.iter().enumerate() {
         match st.get("command").and_then(Value::as_str) {

@@ -43,6 +43,11 @@ pub const OPS: [&str; 9] = [
     "==", "!=", "<", "<=", ">", ">=", "contains", "exists", "absent",
 ];
 pub const SCENARIO_OPS: [&str; 6] = ["==", "!=", "<", "<=", ">", ">="];
+/// Bounds on a content document, so a loaded one cannot ask for unbounded
+/// work or memory (a document is also at most `document::MAX_DOCUMENT_BYTES`).
+pub const MAX_ENTRIES: usize = 1000;
+pub const MAX_TEXT_BYTES: usize = 32 * 1024;
+pub const MAX_ABOUT: usize = 64;
 
 // ------------------------------------------------------------ types
 
@@ -586,7 +591,7 @@ pub struct Ids {
     flat_ok: bool,
 }
 
-const TYPES: [&str; 12] = [
+const TYPES: [&str; 16] = [
     "model",
     "instance",
     "place",
@@ -599,9 +604,43 @@ const TYPES: [&str; 12] = [
     "flat-transition",
     "idiom",
     "view",
+    "piece",
+    "slot",
+    "net-place",
+    "net-transition",
 ];
 
 impl Ids {
+    /// The element ids of the Connect-4 search plan: its pieces, template
+    /// slots and net, plus the views (spec §3.2, plan subject).
+    pub fn of_plan() -> Ids {
+        let mut sets: BTreeMap<&'static str, BTreeSet<String>> = BTreeMap::new();
+        let mut put = |t: &'static str, id: String| {
+            sets.entry(t).or_default().insert(id);
+        };
+        for p in crate::search_plan::pieces() {
+            put("piece", p.name.to_string());
+        }
+        for sl in crate::search_plan::SLOTS.iter() {
+            put("slot", sl.id.to_string());
+        }
+        if let Ok(m) = crate::search_plan::connect4_model() {
+            for p in &m.places {
+                put("net-place", p.id.clone());
+            }
+            for t in &m.transitions {
+                put("net-transition", t.id.clone());
+            }
+        }
+        for v in VIEWS {
+            put("view", v.to_string());
+        }
+        Ids {
+            sets,
+            flat_ok: false,
+        }
+    }
+
     pub fn of(c: &Composition, declared_scenarios: &[String]) -> Ids {
         let mut sets: BTreeMap<&'static str, BTreeSet<String>> = BTreeMap::new();
         let mut put = |t: &'static str, id: String| {
@@ -764,6 +803,23 @@ pub fn validate(content: &ModelContent, c: &Composition, strict: bool) -> Report
     r
 }
 
+/// [`validate`] for a plan subject: structure, and every `about` id against
+/// the Connect-4 plan's pieces, slots and net.
+pub fn validate_plan(content: &ModelContent, strict: bool) -> Report {
+    let mut r = Report::default();
+    let ids = Ids::of_plan();
+    validate_entries(content, &mut r, |reference| ids.resolves(reference), strict);
+    for e in content.entries.iter().filter(|e| e.kind == "scenario") {
+        r.errors.push(Issue::new(
+            "SCENARIO_INVALID",
+            Some(&e.id),
+            None,
+            "a plan declares no firing scenarios".into(),
+        ));
+    }
+    r
+}
+
 /// The checks that do not depend on the subject: structure, kinds, views,
 /// cites, check syntax; `resolve` decides the element ids.
 pub fn validate_entries(
@@ -774,7 +830,30 @@ pub fn validate_entries(
 ) {
     let bib = bib_keys();
     let mut seen = BTreeSet::new();
+    if content.entries.len() > MAX_ENTRIES {
+        r.errors.push(Issue::new(
+            "CONTENT_LIMIT",
+            None,
+            None,
+            format!(
+                "{} entries; at most {MAX_ENTRIES} are accepted",
+                content.entries.len()
+            ),
+        ));
+    }
     for e in &content.entries {
+        if e.text.len() > MAX_TEXT_BYTES || e.about.len() > MAX_ABOUT {
+            r.errors.push(Issue::new(
+                "CONTENT_LIMIT",
+                Some(&e.id),
+                None,
+                format!(
+                    "text of {} bytes and {} about ids; at most {MAX_TEXT_BYTES} bytes and {MAX_ABOUT} ids",
+                    e.text.len(),
+                    e.about.len()
+                ),
+            ));
+        }
         let id = Some(e.id.as_str());
         let ok_id = !e.id.is_empty()
             && e.id

@@ -1289,71 +1289,35 @@ pub struct Scenario {
     pub note: &'static str,
 }
 
-const fn ex(place: &'static str, n: i64, says: &'static str) -> Expect {
-    Expect {
-        place,
-        op: "==",
-        n,
-        says,
-    }
-}
-
-/// The prototype's four scenarios (`SCENARIOS`).
+/// The orders library's four scenarios (`SCENARIOS`), derived from the
+/// library content (`library/orders.content.json`, the one place they are
+/// written) and parsed once.
 pub fn scenarios() -> &'static [Scenario] {
     static S: OnceLock<Vec<Scenario>> = OnceLock::new();
     S.get_or_init(|| {
-        vec![
-            Scenario {
-                id: "commit",
-                title: "An order is paid",
-                script: vec!["orders/dequeue", "payment/do_charge", "payment/commit"],
-                expect: vec![
-                    ex("payment/completed", 1, "the saga completes"),
-                    ex("workers/available", 2, "the worker returns to the pool"),
-                ],
-                note: "",
-            },
-            Scenario {
-                id: "refund",
-                title: "The payment fails after the charge (refund)",
-                script: vec![
-                    "orders/dequeue",
-                    "payment/do_charge",
-                    "payment/fail_commit",
-                    "payment/undo_charge",
-                    "payment/undo_reserve",
-                ],
-                expect: vec![
-                    ex("payment/rolled_back", 1, "the saga rolls back"),
-                    ex("payment/customer", 1, "the customer is refunded"),
-                    ex("workers/available", 2, "the worker returns to the pool"),
-                ],
-                note: "Expected to fail on the last predicate: release is fused only with commit (the pool-leak caveat, patterns.ttl:496).",
-            },
-            Scenario {
-                id: "charge-fails",
-                title: "The charge itself fails (nothing to refund)",
-                script: vec!["orders/dequeue", "payment/fail_charge", "payment/undo_reserve"],
-                expect: vec![
-                    ex("payment/rolled_back", 1, "the saga rolls back"),
-                    ex("payment/customer", 1, "the customer was never charged"),
-                    ex("workers/available", 2, "the worker returns to the pool"),
-                ],
-                note: "A step that fails itself moved nothing, so there is nothing to refund (saga caveat). The worker leaks here too.",
-            },
-            Scenario {
-                id: "second-order",
-                title: "A second order, one saga",
-                script: vec![
-                    "orders/dequeue",
-                    "payment/do_charge",
-                    "payment/commit",
-                    "orders/dequeue",
-                ],
-                expect: vec![ex("orders/items", 0, "both orders are taken off the queue")],
-                note: "Expected to stop at the last step: the fused dequeue needs next_reserve, which the one-shot saga has spent (saga caveat: one saga is one case).",
-            },
-        ]
+        // Leaked once: the static list lives as long as the process.
+        let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+        content::library_entry("orders")
+            .map(|l| l.content.scenarios())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|d| Scenario {
+                id: leak(d.id),
+                title: leak(d.title),
+                script: d.script.into_iter().map(leak).collect(),
+                expect: d
+                    .expect
+                    .into_iter()
+                    .map(|e| Expect {
+                        place: leak(e.place),
+                        op: leak(e.op),
+                        n: e.n,
+                        says: leak(e.says),
+                    })
+                    .collect(),
+                note: leak(d.note),
+            })
+            .collect()
     })
 }
 
