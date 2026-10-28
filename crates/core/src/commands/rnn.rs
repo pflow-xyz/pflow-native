@@ -19,13 +19,14 @@ use serde_json::{json, Value};
 
 use crate::analysis::Structure;
 use crate::artifact::{ArtifactData, Bar, Series, TraceStep};
+use crate::game::{auto, game_rules, reward, sides, Dense, Rules};
 use crate::mlp_net::Mlp;
-use crate::registry::{always, b, n, nums, opt, s, strs, ArgType::*, CommandSpec};
+use crate::registry::{always, b, n, nums, opt, s, ArgType::*, CommandSpec};
 use crate::rnn_net::{softmax_into, Rnn, Seq};
 use crate::session::{Session, Step};
 use crate::sim::{self, Compiled, Marking};
 use crate::{Error, Result};
-use pflow_metamodel::game::{self, Solver};
+use pflow_metamodel::game::Solver;
 
 const MENU: &str = "Learn";
 const KIND: &str = "rnn-model";
@@ -583,23 +584,6 @@ fn rnn_chooser<'a>(rnn: &'a Policy, sample: bool) -> Box<Chooser<'a>> {
     })
 }
 
-/// `auto` resolved to a flag per transition (prefixes of transition ids).
-fn auto(v: &View, a: &Value) -> Result<Vec<bool>> {
-    let prefixes = strs(a, "auto").unwrap_or_default();
-    for p in &prefixes {
-        if !v.st.transitions.iter().any(|t| t.starts_with(p.as_str())) {
-            return Err(Error::BadArgs(format!(
-                "auto names {p}, which no transition id starts with"
-            )));
-        }
-    }
-    Ok(v.st
-        .transitions
-        .iter()
-        .map(|t| prefixes.iter().any(|p| t.starts_with(p.as_str())))
-        .collect())
-}
-
 /// The side to move: the sign every enabled move shares.
 fn mover(v: &View, sign: &[f64], enabled: &[usize]) -> Result<f64> {
     let s = sign[enabled[0]];
@@ -982,7 +966,7 @@ fn train(sess: &mut Session, a: &Value) -> Result<Value> {
     let lr = rate(a)?;
     let batch = batch(a)?;
     let v = View::new(sess)?;
-    let auto = auto(&v, a)?;
+    let auto = auto(&v.st, a)?;
     let from = start(sess, a);
 
     let played = each_game(games, |i| {
@@ -1072,7 +1056,7 @@ fn play(sess: &mut Session, a: &Value) -> Result<Value> {
     let stochastic = b(a, "stochastic").unwrap_or(false);
     let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
-    let auto = auto(&v, a)?;
+    let auto = auto(&v.st, a)?;
     let from = start(sess, a);
     let g = game(
         &v,
@@ -1141,86 +1125,14 @@ fn play(sess: &mut Session, a: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// `reward` resolved to (index into the input vector, weight).
-fn reward(v: &View, a: &Value) -> Result<Vec<(usize, f64)>> {
-    let obj = match a.get("reward").filter(|x| !x.is_null()) {
-        Some(Value::String(s)) => {
-            serde_json::from_str::<Value>(s).map_err(|e| Error::BadArgs(format!("reward: {e}")))?
-        }
-        Some(x) => x.clone(),
-        None => {
-            return Err(Error::BadArgs(
-                "reward is required: {place: weight}, e.g. {\"win_x\": 1, \"win_o\": -1}".into(),
-            ))
-        }
-    };
-    let obj = obj
-        .as_object()
-        .ok_or_else(|| Error::BadArgs("reward must be an object {place: weight}".into()))?;
-    let mut out = vec![];
-    for (k, w) in obj {
-        let w = w
-            .as_f64()
-            .ok_or_else(|| Error::BadArgs(format!("reward weight for {k} must be a number")))?;
-        let idx: Vec<usize> = (0..v.st.places.len())
-            .filter(|&i| v.st.display[i] == *k || v.st.base[i] == *k)
-            .collect();
-        if idx.is_empty() {
-            return Err(Error::BadArgs(format!(
-                "reward names {k}, which is not a place of this net"
-            )));
-        }
-        out.extend(idx.into_iter().map(|i| (i, w)));
-    }
-    Ok(out)
-}
-
-/// `sides` resolved to (transition index → sign); None without `sides`.
-fn sides(v: &View, a: &Value) -> Result<Option<Vec<f64>>> {
-    let obj = match a.get("sides").filter(|x| !x.is_null()) {
-        None => return Ok(None),
-        Some(Value::String(s)) => {
-            serde_json::from_str::<Value>(s).map_err(|e| Error::BadArgs(format!("sides: {e}")))?
-        }
-        Some(x) => x.clone(),
-    };
-    let obj = obj.as_object().ok_or_else(|| {
-        Error::BadArgs("sides must be an object {transition-id prefix: sign}".into())
-    })?;
-    let mut prefixes = vec![];
-    for (k, w) in obj {
-        let w = w
-            .as_f64()
-            .ok_or_else(|| Error::BadArgs(format!("sides sign for {k} must be a number")))?;
-        if !v.st.transitions.iter().any(|t| t.starts_with(k.as_str())) {
-            return Err(Error::BadArgs(format!(
-                "sides names {k}, which no transition id starts with"
-            )));
-        }
-        prefixes.push((k.as_str(), w));
-    }
-    Ok(Some(
-        v.st.transitions
-            .iter()
-            .map(|t| {
-                prefixes
-                    .iter()
-                    .filter(|(p, _)| t.starts_with(p))
-                    .max_by_key(|(p, _)| p.len())
-                    .map_or(0.0, |&(_, w)| w)
-            })
-            .collect(),
-    ))
-}
-
 fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
     let (mid, m) = model(sess, a)?;
     let v = View::new(sess)?;
     v.check(&m)?;
     let mut rnn = from_json(&m, &v)?;
-    let reward = reward(&v, a)?;
-    let sides = sides(&v, a)?;
-    let auto = auto(&v, a)?;
+    let reward = reward(&v.st, a)?;
+    let sides = sides(&v.st, a)?;
+    let auto = auto(&v.st, a)?;
     let rounds = int(a, "rounds", 20, 1, 500)?;
     let games = int(a, "games", 50, 1, 2000)?;
     let epochs = int(a, "epochs", 1, 1, 100)?;
@@ -1326,27 +1238,6 @@ fn self_play(sess: &mut Session, a: &Value) -> Result<Value> {
     }))
 }
 
-/// The rules of a two-sided game: each transition's side, the reward
-/// read from the final marking, and the automatic transitions.
-struct Rules {
-    sign: Vec<f64>,
-    reward: Vec<(usize, f64)>,
-    auto: Vec<bool>,
-}
-
-fn game_rules(v: &View, a: &Value) -> Result<Rules> {
-    let sign = sides(v, a)?.ok_or_else(|| {
-        Error::BadArgs(
-            "sides is required: {transition-id prefix: sign}, e.g. {\"x_\": 1, \"o_\": -1}".into(),
-        )
-    })?;
-    Ok(Rules {
-        sign,
-        reward: reward(v, a)?,
-        auto: auto(v, a)?,
-    })
-}
-
 /// What [`imitate`] trains on, and what it reports about it.
 type Imitation = (
     Vec<Seq>,
@@ -1372,7 +1263,7 @@ fn imitate_sampled(
 ) -> Result<Imitation> {
     let min_moves = int(a, "min_moves", 14, 0, 10_000)?;
     let budget = int(a, "budget", 800_000, 1, 1_000_000_000)?;
-    let d = Dense::new(v, rules)?;
+    let d = Dense::new(&v.st, rules)?;
     let (labelled, found, skipped, cached) = sample_labelled(
         v,
         &d,
@@ -1427,7 +1318,7 @@ fn imitate(sess: &mut Session, a: &Value) -> Result<Value> {
     let v = View::new(sess)?;
     let mut rnn = Policy::new(&v, a, seed)?;
     let (name, shape) = (rnn.name(), rnn.shape());
-    let rules = game_rules(&v, a)?;
+    let rules = game_rules(&v.st, a)?;
     let from = sim::initial_marking(&sess.doc);
     let mode = s(a, "positions").unwrap_or("games");
     match mode {
@@ -1596,7 +1487,7 @@ fn evaluate(sess: &mut Session, a: &Value) -> Result<Value> {
     } else {
         (None, None)
     };
-    let Rules { sign, reward, auto } = game_rules(&v, a)?;
+    let Rules { sign, reward, auto } = game_rules(&v.st, a)?;
     let games = int(a, "games", 200, 1, 5000)?;
     let max_steps = int(a, "max_steps", 200, 1, 10000)?;
     let seed = int(a, "seed", 1, 0, u32::MAX as usize)? as u64;
@@ -1859,7 +1750,7 @@ fn verify(sess: &mut Session, a: &Value) -> Result<Value> {
     } else {
         (None, None)
     };
-    let rules = game_rules(&v, a)?;
+    let rules = game_rules(&v.st, a)?;
     let Rules { sign, reward, auto } = &rules;
     let (sign, reward, auto) = (sign.clone(), reward.clone(), auto.clone());
     let from = sim::initial_marking(&sess.doc);
@@ -1953,96 +1844,6 @@ fn verify(sess: &mut Session, a: &Value) -> Result<Value> {
     Ok(out)
 }
 
-/// The session's view of a net and the dense, index-resolved form
-/// [`pflow_metamodel::game`] searches, side by side.
-struct Dense {
-    rules: game::Game,
-    /// Per [`View`] place: its index in a dense marking.
-    place: Vec<usize>,
-    /// Per [`View`] transition: its index in `rules.ix`; and back.
-    to_ix: Vec<usize>,
-    to_view: Vec<usize>,
-}
-
-impl Dense {
-    fn new(v: &View, r: &Rules) -> Result<Self> {
-        let ix = v.st.net.model.indexed();
-        let missing = || {
-            Error::Invalid(
-                "the exact search needs every token place and transition of the net (a coloured net with unused \
-                 colour copies is not supported)"
-                    .into(),
-            )
-        };
-        if ix.places.len() != v.st.places.len() {
-            return Err(missing());
-        }
-        let place =
-            v.st.places
-                .iter()
-                .map(|p| ix.places.iter().position(|q| q == p).ok_or_else(missing))
-                .collect::<Result<Vec<_>>>()?;
-        let to_ix =
-            v.st.transitions
-                .iter()
-                .map(|t| {
-                    ix.transitions
-                        .iter()
-                        .position(|u| u == t)
-                        .ok_or_else(missing)
-                })
-                .collect::<Result<Vec<_>>>()?;
-        let mut to_view = vec![usize::MAX; ix.transitions.len()];
-        for (i, &j) in to_ix.iter().enumerate() {
-            to_view[j] = i;
-        }
-        if to_view.contains(&usize::MAX) {
-            return Err(missing());
-        }
-        let (mut auto, mut sign) = (
-            vec![false; ix.transitions.len()],
-            vec![0.0; ix.transitions.len()],
-        );
-        for (i, &j) in to_ix.iter().enumerate() {
-            auto[j] = r.auto[i];
-            sign[j] = r.sign[i];
-        }
-        let reward: Vec<(usize, f64)> = r.reward.iter().map(|&(p, w)| (place[p], w)).collect();
-        Ok(Self {
-            rules: game::Game::new(ix, auto, sign, reward),
-            place,
-            to_ix,
-            to_view,
-        })
-    }
-
-    fn dense(&self, v: &View, mk: &Marking) -> Vec<i64> {
-        let x = v.st.marking(mk);
-        let mut d = vec![0; self.rules.ix.places.len()];
-        for (i, &p) in self.place.iter().enumerate() {
-            d[p] = x[i];
-        }
-        d
-    }
-
-    /// A dense marking as the policy's input (the [`View`]'s place order).
-    fn input(&self, d: &[i64]) -> Vec<f64> {
-        self.place.iter().map(|&p| d[p] as f64).collect()
-    }
-
-    /// A dense marking as a session marking, shaped like `template`.
-    fn marking(&self, v: &View, template: &Marking, d: &[i64]) -> Marking {
-        let mut mk = template.clone();
-        for (i, &p) in self.place.iter().enumerate() {
-            let (base, c) = v.st.net.base(&v.st.places[i]);
-            if let Some(slot) = mk.get_mut(&base).and_then(|x| x.get_mut(c)) {
-                *slot = d[p];
-            }
-        }
-        mk
-    }
-}
-
 /// A sampled decision position, labelled by the exact search.
 struct Labelled {
     mk: Vec<i64>,
@@ -2074,7 +1875,7 @@ fn verify_sampled(
     let min_moves = int(a, "min_moves", 14, 0, 10_000)?;
     let budget = int(a, "budget", 800_000, 1, 1_000_000_000)?;
     let seed = int(a, "seed", 13, 0, u32::MAX as usize)? as u64;
-    let d = Dense::new(v, rules)?;
+    let d = Dense::new(&v.st, rules)?;
     let r = &d.rules;
     let (labelled, found, skipped, cached) = sample_labelled(
         v,
@@ -2102,7 +1903,7 @@ fn verify_sampled(
                 }
                 "ode" => {
                     let en_view: Vec<usize> = p.moves.iter().map(|&t| d.to_view[t]).collect();
-                    let mk = d.marking(v, from, &p.mk);
+                    let mk = d.marking(&v.st, from, &p.mk);
                     d.to_ix[ode.choose(&rules.auto, &rules.sign, &mk, &en_view)?]
                 }
                 _ => p.moves[p.vals.iter().position(|&x| x == best).expect("a best move")],
@@ -2189,7 +1990,7 @@ fn sample_labelled(
     labels: Option<&str>,
 ) -> Result<(Vec<Labelled>, usize, usize, usize)> {
     let r = &d.rules;
-    let mut start = d.dense(v, from);
+    let mut start = d.dense(&v.st, from);
     r.settle(&mut start)?;
     let state = net.map(Policy::state).unwrap_or_default();
     let sampled = each_game(games, |i| {
@@ -2239,9 +2040,11 @@ fn sample_labelled(
             .chunks(batch.len().div_ceil(64).max(1))
             .map(<[_]>::to_vec)
             .collect();
-        // One solver (and transposition table) per chunk, on every core.
+        // One solver (and transposition table) per chunk, on every core;
+        // up to 64 run at once, so each table is kept to 2^20 entries
+        // rather than the default 2^23 (264 MiB each at most).
         let done: Vec<(Vec<i64>, Option<Vec<f64>>)> = crate::par::map(chunks, |chunk| {
-            let mut solver = Solver::new(r, budget);
+            let mut solver = Solver::new(r, budget).with_memo(1 << 20);
             chunk
                 .into_iter()
                 .map(|mk| -> Result<(Vec<i64>, Option<Vec<f64>>)> {
@@ -2303,16 +2106,7 @@ impl LabelCache {
 
     /// What a label depends on: the net, the rules and the budget.
     fn header(d: &Dense, budget: usize) -> Value {
-        let r = &d.rules;
-        json!({
-            "labels": 1,
-            "places": r.ix.places,
-            "transitions": r.ix.transitions,
-            "auto": r.auto,
-            "sign": r.sign,
-            "reward": r.reward,
-            "budget": budget,
-        })
+        d.label_header(budget)
     }
 
     fn open(path: &str, d: &Dense, budget: usize) -> Result<Self> {
@@ -2436,7 +2230,7 @@ fn policy(sess: &mut Session, a: &Value) -> Result<Value> {
     let mk = sess.marking.clone();
     let (weights, title, label, mid): (Vec<(usize, f64)>, String, String, Option<String>) =
         if teacher_mode {
-            let Rules { sign, reward, auto } = game_rules(&v, a)?;
+            let Rules { sign, reward, auto } = game_rules(&v.st, a)?;
             let mut t = Teacher::new(&v, &auto, &sign, &reward);
             let here = t.settle(&mk)?;
             let en = v.enabled(&here);
@@ -2458,7 +2252,7 @@ fn policy(sess: &mut Session, a: &Value) -> Result<Value> {
             let (mid, m) = model(sess, a)?;
             v.check(&m)?;
             let rnn = from_json(&m, &v)?;
-            let auto = auto(&v, a)?;
+            let auto = auto(&v.st, a)?;
             let en: Vec<usize> = v.enabled(&mk).into_iter().filter(|&t| !auto[t]).collect();
             if en.is_empty() {
                 return Err(Error::Invalid("no move to choose at this marking".into()));
@@ -2531,12 +2325,12 @@ mod tests {
         sess.execute(open.0, open.1).expect("open");
         let v = View::new(&sess).expect("view");
         let a = json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1, "win_o": -1}, "auto": ["x_win_", "o_win_"]});
-        let rules = game_rules(&v, &a).expect("rules");
+        let rules = game_rules(&v.st, &a).expect("rules");
         let mut teacher = Teacher::new(&v, &rules.auto, &rules.sign, &rules.reward);
         teacher
             .solve(&sim::initial_marking(&sess.doc))
             .expect("solve");
-        let d = Dense::new(&v, &rules).expect("dense");
+        let d = Dense::new(&v.st, &rules).expect("dense");
         let mut solver = Solver::new(&d.rules, usize::MAX);
         let mut checked = 0;
         for (key, &want) in teacher.value.iter().step_by(step) {
@@ -2563,8 +2357,8 @@ mod tests {
             .expect("open");
         let v = View::new(&sess).expect("view");
         let a = json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1, "win_o": -1}, "auto": ["x_win_", "o_win_"]});
-        let rules = game_rules(&v, &a).expect("rules");
-        let d = Dense::new(&v, &rules).expect("dense");
+        let rules = game_rules(&v.st, &a).expect("rules");
+        let d = Dense::new(&v.st, &rules).expect("dense");
         let from = sim::initial_marking(&sess.doc);
         let path = std::env::temp_dir().join(format!("pflow-labels-{}.jsonl", std::process::id()));
         let _ = std::fs::remove_file(&path);

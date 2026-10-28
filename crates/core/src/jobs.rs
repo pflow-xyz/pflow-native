@@ -37,6 +37,7 @@ pub const BACKGROUND: &[&str] = &[
     "data.calibrate",
     "system.run",
     "compose.diff",
+    "game.",
     "rnn.",
 ];
 

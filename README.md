@@ -83,6 +83,7 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 | Structure | `analysis.incidence`, `analysis.invariants` (P/T, highlighted on the net), `analysis.siphons` (siphons/traps, Commoner, deadlock witnesses), `analysis.validate`, `analysis.canonical` / `analysis.classify` (symmetry orbits, identical to sim.pflow.xyz on the bundled examples) |
 | State space | `analysis.reachability` (graph; click a state to load it), `analysis.verify` (counterexamples become traces you can step through), `analysis.reach` (shortest witness or invariant certificate), `analysis.diagnose` (tornado) |
 | Event logs | `data.load_log` (CSV/JSONL), `data.generate` (seeded synthetic logs), `data.conformance` (fitness/precision/…, residual on the net), `data.replay` (first divergence + repair), `data.discover` (alpha/heuristic mining → new net) |
+| Games | `game.value` (the exact value of the current position, from `sides`, `reward` and `auto` as the `rnn.*` commands take them), `game.move` (a best move there, not fired); both run a pflow-metamodel `SearchPlan` under a node budget and keep the result as a Report. A plan and budget give the same result on any machine, except that a plan naming the `ode` root estimate can search a different number of nodes in the browser build (its ODE step control uses the platform's `powf`), so near the budget one build can finish where the other gives up |
 | Learning | `data.calibrate` (rates from a log), `opt.fit` (ODE rates to observed series), `opt.distill` (game scorer vs exact minimax). With `apply`, the learned rates are one undo step |
 | Views | `view.string_diagram` (pflow.xyz's string diagram), `net.layout {algorithm: "string"}` |
 
@@ -181,12 +182,12 @@ The last row held on all 4 seeds tried, so a trained MLP is minimax-equivalent o
 
 Undertrained models only slip as O, in 2–3 of about 450 positions. Those moves give up value against perfect play but don't change a result, because O loses with best play anyway. On 14 cores a `[256, 128]` run takes 2–5 minutes.
 
-`examples/connect-4.json` is Connect Four: 131 places, 222 transitions, about 4.5 trillion positions. That is far past the teacher's 200,000-position cap, so `rnn.verify` and `rnn.imitate` take `games` and sample instead. Positions come from random-play games, at least `min_moves` (default 14) moves in, and every legal move at each is valued by an exact alpha-beta search over the firing rule (`budget` nodes per move; positions past it are skipped and counted, never guessed). `labels` keeps those values in a JSONL file, so later runs only search new positions. On the default sample (250 games, seed 13: 1,819 positions, 123 skipped):
+`examples/connect-4.json` is Connect Four: 131 places, 222 transitions, about 4.5 trillion positions. That is far past the teacher's 200,000-position cap, so `rnn.verify` and `rnn.imitate` take `games` and sample instead. Positions come from random-play games, at least `min_moves` (default 14) moves in, and every legal move at each is valued by an exact alpha-beta search over the firing rule (`budget` nodes per move; positions past it are skipped and counted, never guessed). `labels` keeps those values in a JSONL file, so later runs only search new positions. On the default sample (250 games, seed 13, 1,942 distinct positions): at the pflow-rs `9ce3d43` pin, whose search runs the `must_win` filter by default, the default 800,000-node budget labels 1,860 and skips 82 (1,819 and 123 before it). The `ode` row is measured at the pin; the MLP rows were measured on the earlier 1,819 positions, so they count out of 940 / 879:
 
 | player | X game-losing | O game-losing |
 |---|---|---|
 | random legal move | about 33% | about 33% |
-| `ode`, `horizon` 3 | 17 / 940 | 17 / 879 |
+| `ode`, `horizon` 3 | 19 / 964 | 18 / 896 |
 | MLP `[256, 128]` trained on these same positions | 0 / 940 | 0 / 879 |
 | MLP `[256, 128]`, 7,064 positions from other games (seed 1, 1,000 games) | 245 / 940 | 235 / 879 |
 | MLP `[256, 128]`, 36,227 positions (5,000 games) | 137 / 940 | 139 / 879 |
@@ -195,7 +196,7 @@ Undertrained models only slip as O, in 2–3 of about 450 positions. Those moves
 
 None of the referee's positions appear in any training set. The MLP learns every position it is shown, ties included, and generalizes slowly: each fivefold step in data takes a third to a half off its held-out mistakes (a quarter from 25,000 to 100,000 games), which at 100,000 games brings it level with the `ode` player. Connect-3 hid this because there it saw every position. (100 epochs, `learning_rate` 0.005. For `positions: "sampled"` the softmax ranges over each position's legal moves; over all 222 outputs the illegal moves' logits are pushed down without end, and runs on 5,000 games diverged. Each position's gradient is also clipped by its length rather than entry by entry: with entry-wise clipping, 100,000 games silenced all but a handful of the second layer's units within 10–20 epochs at every learning rate tried, and the model fell back to 265 / 940 and 250 / 879. The training loss is no guide here: it rewards spreading probability over tied best moves, so the run that plays best has the highest loss.)
 
-Every label above was checked against Pascal Pons' Connect-4 solver (github.com/PascalPons/connect4): all 4,635,258 move values of the 734,548 training positions and the referee's 11,672 agree. The positions skipped for budget are not a random sample: 72% of them are wins for the side to move, against about a third of those labelled.
+Every label above was checked against Pascal Pons' Connect-4 solver (github.com/PascalPons/connect4): all 4,635,258 move values of the 734,548 training positions and the referee's 11,672 agree. The positions skipped for budget are not a random sample: 72% of the 123 skipped before the pin are wins for the side to move, against about a third of those labelled.
 
 It is off by default. A learned policy is a guess, not a verdict like the rest of the app's results, and pflow-tropical is research code.
 

@@ -18,6 +18,21 @@
 //!   keys as written and serde meets a budget's fields in that order. A
 //!   pflow-rs build alone sorts them. Wording of malformed plans only.
 //!
+//!
+//! Then pflow-rs main (7532a79 root pieces and an aspiration driver,
+//! 484017f, dfb9067, 890b380 the mtd_f driver; in the aacb7eb pin):
+//!
+//! - `KNOWN_LIST` (46, as above): the list also names the drivers `mtd_f`
+//!   and `aspiration` and the estimate `ode`.
+//! - `MTD_F_BUILT` (9): `mtd_f` is a built driver: "is a driver, not a …"
+//!   elsewhere, and next to `null_window` the two are refused together.
+//! - `DRIVER_ONCE` (6): each driver at most once ("listed twice"), where
+//!   a second `null_window` was a no-op and a second `budget` replaced
+//!   the first.
+//! - `BUDGET_MS` (10): `budget` takes `nodes`, `ms` or both, so its
+//!   serde words and refusals changed.
+//! - `ROOT_FIELD` (1): a plan has a `root` field, which serde lists.
+//!
 //! The receipt's solver prints (values and node counts on probe positions)
 //! are not compared: `must_win` is on by default since 7ba0824, which
 //! changes node counts by design.
@@ -67,7 +82,55 @@ fn goalless() -> Game {
 }
 
 const KNOWN_OLD: &str = r#"(known: ["tt_best", "immediate_win", "history", "centrality", "threats"], ["null_window", "budget"]"#;
-const KNOWN_NEW: &str = r#"(known: ["tt_best", "immediate_win", "history", "centrality", "threats"], ["must_win", "non_losing"], ["null_window", "budget"]"#;
+const KNOWN_NEW: &str = r#"(known: ["tt_best", "immediate_win", "history", "centrality", "threats"], ["must_win", "non_losing"], ["null_window", "mtd_f", "aspiration", "budget"], ["ode"]"#;
+
+/// pflow-rs main's budget (`{"nodes": N, "ms": T}`, either or both): the
+/// receipt case and what plan.rs says now.
+const BUDGET_MS: [(&str, Option<&str>); 10] = [
+    (
+        "rs/budget-nodes-0",
+        Some(r#"search plan: driver "budget": nodes and ms must be at least 1"#),
+    ),
+    (
+        "edge/budget-args-empty",
+        Some(r#"search plan: driver "budget" takes "nodes", "ms" or both"#),
+    ),
+    (
+        "edge/budget-args-seq",
+        Some(
+            r#"search plan: driver "budget": invalid length 1, expected struct Budget with 2 elements"#,
+        ),
+    ),
+    (
+        "edge/budget-args-seq-0",
+        Some(
+            r#"search plan: driver "budget": invalid length 1, expected struct Budget with 2 elements"#,
+        ),
+    ),
+    (
+        "edge/budget-args-seq-empty",
+        Some(
+            r#"search plan: driver "budget": invalid length 0, expected struct Budget with 2 elements"#,
+        ),
+    ),
+    ("edge/budget-args-seq-two", None),
+    (
+        "edge/budget-unknown-field",
+        Some("search plan: driver \"budget\": unknown field `extra`, expected `nodes` or `ms`"),
+    ),
+    (
+        "edge/budget-unknown-field-first",
+        Some("search plan: driver \"budget\": unknown field `extra`, expected `nodes` or `ms`"),
+    ),
+    (
+        "edge/budget-only-unknown-field",
+        Some("search plan: driver \"budget\": unknown field `zz`, expected `nodes` or `ms`"),
+    ),
+    (
+        "edge/budget-nodes-null",
+        Some(r#"search plan: driver "budget" takes "nodes", "ms" or both"#),
+    ),
+];
 
 fn noun(slot: &str) -> &str {
     match slot {
@@ -90,9 +153,44 @@ fn expected(c: &Value) -> (Verdict, &'static str) {
         c["step"].as_str().map(String::from),
     );
     let refuse = |e: &str| (false, Some(e.to_string()), Some("check".to_string()));
+    if let Some((_, e)) = BUDGET_MS.iter().find(|(x, _)| *x == id) {
+        return (
+            match e {
+                Some(e) => refuse(e),
+                None => (true, None, None),
+            },
+            "BUDGET_MS",
+        );
+    }
+    let twice = |n: &str| {
+        (
+            refuse(&format!("search plan: driver {n:?} is listed twice")),
+            "DRIVER_ONCE",
+        )
+    };
+    match id {
+        "edge/null-window-twice" => return twice("null_window"),
+        "edge/budget-twice-last-wins" => return twice("budget"),
+        "edge/proposed-in-order" => return (refuse(r#"search plan: "mtd_f" is a driver, not a order piece"#), "MTD_F_BUILT"),
+        "rs/field-ordr" => return ((false, Some("search plan: unknown field `ordr`, expected one of `mode`, `order`, `drivers`, `filters`, `root`, `heuristics`, `memo` at line 1 column 7".into()), Some("parse".into())), "ROOT_FIELD"),
+        _ => {}
+    }
     if let Some(rest) = id.strip_prefix("page/drop/") {
         let (_, drop) = rest.split_once('/').unwrap();
         let (piece, slot) = drop.split_once('@').unwrap();
+        if slot == "drivers" && (piece == "null_window" || piece == "budget") {
+            return twice(piece);
+        }
+        if piece == "mtd_f" {
+            return (
+                refuse(&if slot == "drivers" {
+                    r#"search plan: drivers "null_window" and "mtd_f" both find the value by yes/no searches: name one"#.to_string()
+                } else {
+                    format!("search plan: \"mtd_f\" is a driver, not a {}", noun(slot))
+                }),
+                "MTD_F_BUILT",
+            );
+        }
         if piece == "must_win" || piece == "non_losing" {
             return if slot == "filters" {
                 ((true, None, None), "BUILT_FILTERS")
@@ -162,11 +260,15 @@ fn plans_match_pflow_rs_verdicts() {
     assert_eq!(
         counts,
         [
-            ("", 214),
+            ("", 197),
+            ("BUDGET_MS", 10),
             ("BUILT_FILTERS", 16),
+            ("DRIVER_ONCE", 6),
             ("FILTERS_NULL", 1),
-            ("KNOWN_LIST", 55),
-            ("PRESERVE_ORDER", 3)
+            ("KNOWN_LIST", 46),
+            ("MTD_F_BUILT", 9),
+            ("PRESERVE_ORDER", 3),
+            ("ROOT_FIELD", 1)
         ]
         .into_iter()
         .collect()
@@ -280,7 +382,9 @@ fn palette_status_is_read_off_pflow_rs() {
             "budget",
             "memo",
             "must_win",
-            "non_losing"
+            "non_losing",
+            "mtd_f",
+            "aspiration"
         ]
     );
     for p in sp::pieces() {
@@ -338,8 +442,19 @@ fn plan_commands_edit_with_pflow_rs_verdicts() {
         )
         .unwrap_err()
         .to_string();
+    assert_eq!(
+        err,
+        "search plan: drivers \"null_window\" and \"mtd_f\" both find the value by yes/no searches: name one"
+    );
+    let err = s
+        .execute(
+            "plan.add_piece",
+            json!({"piece": "lmr", "slot": "heuristics"}),
+        )
+        .unwrap_err()
+        .to_string();
     assert!(
-        err.starts_with("search plan: unknown driver \"mtd_f\""),
+        err.starts_with("search plan: unknown heuristic \"lmr\""),
         "{err}"
     );
 

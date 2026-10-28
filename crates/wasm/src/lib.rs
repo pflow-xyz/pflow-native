@@ -240,6 +240,20 @@ mod tests {
     }
 
     #[test]
+    fn plays_a_game_search() {
+        let mut e = Engine::new();
+        let all: Value = serde_json::from_str(&e.list_commands_json("game.").unwrap()).unwrap();
+        assert!(all.to_string().contains("game.move"), "{all}");
+        e.load_json(&example("tic-tac-toe")).unwrap();
+        let rules = json!({"sides": {"x_": 1, "o_": -1}, "reward": {"win_x": 1, "win_o": -1},
+                           "auto": ["x_win_", "o_win_"]});
+        let m = ok(&mut e, "game.move", rules);
+        assert_eq!(m["value"], json!(0.0), "{m}");
+        assert_eq!(m["exact"], true, "{m}");
+        assert!(m["transition"].as_str().unwrap().starts_with("x_"), "{m}");
+    }
+
+    #[test]
     fn loads_runs_and_reports_errors() {
         let mut e = Engine::new();
         e.load_json(&sir()).unwrap();

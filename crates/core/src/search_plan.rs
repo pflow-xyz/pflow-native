@@ -43,7 +43,7 @@ pub struct OpenPlan {
 }
 
 /// The pflow-rs revision whose `plan.rs` decides (the pinned one).
-pub const PLAN_RS_REV: &str = "9f8c36e";
+pub const PLAN_RS_REV: &str = "aacb7eb";
 
 /// The Connect-4 net the plan is for: pflow-rs's fixture
 /// `crates/pflow-metamodel/tests/fixtures/connect-4.json`, byte-identical
@@ -227,7 +227,7 @@ fn piece(
 }
 
 /// The drivers plan.rs takes (its private `DRIVERS`).
-pub const DRIVERS: [&str; 2] = ["null_window", "budget"];
+pub const DRIVERS: [&str; 4] = ["null_window", "mtd_f", "aspiration", "budget"];
 
 /// The palette, in the prototype's order (`PIECES`), with each status
 /// read off pflow-rs where it can be (`Piece::NAMES`, `Filter::NAMES`).
@@ -247,7 +247,8 @@ pub fn pieces() -> &'static [PieceInfo] {
             piece("non_losing", "Filter", "sound-pruning", "Drops moves that lose at once, checking replies at every node: for a few positions, not a whole search."),
             piece("beam", "Filter", "value-changing", "Reserved name. Can change the value; refused in exact mode, and not built in play mode."),
             piece("static_eval", "Heuristic", "value-changing", "Reserved name. Can change the value; refused in exact mode, and not built in play mode."),
-            piece("mtd_f", "Driver", "value-preserving", "Null-window bisection on the value (approved candidate). Not built."),
+            piece("mtd_f", "Driver", "value-preserving", "Finds the value by yes/no searches, choosing each next one from the bound the last proved (Solver::with_mtd_f). Not together with null_window."),
+            piece("aspiration", "Driver", "value-preserving", "Starts the search from the root's estimate, which root.order must name (Solver::with_aspiration). No estimate is built into pflow-metamodel; root is not a slot here yet."),
             piece("forced_moves", "Filter", "sound-pruning", "Falls out of non_losing (approved candidate). Not built."),
             piece("lmr", "Heuristic", "value-changing", "Late move reductions, play mode only (approved candidate). Not built."),
             piece("futility", "Filter", "value-changing", "Futility pruning, play mode only (approved candidate). Not built."),
@@ -358,7 +359,15 @@ pub fn slot(id: &str) -> Option<&'static Slot> {
 pub fn canonical(plan: &Value) -> Value {
     let mut out = Map::new();
     let o = plan.as_object().cloned().unwrap_or_default();
-    for k in ["mode", "order", "drivers", "filters", "heuristics", "memo"] {
+    for k in [
+        "mode",
+        "order",
+        "drivers",
+        "filters",
+        "root",
+        "heuristics",
+        "memo",
+    ] {
         match o.get(k) {
             None | Some(Value::Null) => {}
             Some(Value::Array(a)) if a.is_empty() && k == "heuristics" => {}
@@ -501,19 +510,6 @@ pub fn slot_candidates(plan: &Value, name: &str) -> Vec<Value> {
             }
             if name == "memo" && s.field != Some("memo") {
                 return no(format!("memo is not a {} entry", s.label));
-            }
-            let drivers = plan.get("drivers").and_then(Value::as_array);
-            if s.id == "drivers"
-                && name == "budget"
-                && drivers.is_some_and(|d| d.iter().any(|x| x.get("budget").is_some()))
-            {
-                return no("the plan already has a budget (a second one would replace it: plan.rs keeps the last)".into());
-            }
-            if s.id == "drivers"
-                && name == "null_window"
-                && drivers.is_some_and(|d| d.iter().any(|x| x == "null_window"))
-            {
-                return no("null_window is already on".into());
             }
             let Some(next) = with_piece(plan, name, s.id, None) else {
                 return no("the page has no way to say this drop".into());

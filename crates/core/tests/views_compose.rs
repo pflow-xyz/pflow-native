@@ -2,7 +2,7 @@
 //! prototype's receipt `tests/fixtures/views/gopflow.json` (go-pflow
 //! c802f34 via pflow-views-prototype tools/gocheck; see the README there).
 //!
-//! The pin is pflow-rs 9f8c36e (branch feat/saga, pflow-rs#11: pflow-compose's
+//! The pin is pflow-rs aacb7eb (main, with pflow-rs#11 merged: pflow-compose's
 //! saga and its validateLink checks brought level with go-pflow), so every
 //! receipt case is compared exactly: the six subnets, all 5,576 verdicts, the
 //! eleven flattens and the four scenario runs.
