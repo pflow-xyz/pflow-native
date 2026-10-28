@@ -28,6 +28,7 @@ pub mod lens;
 pub mod mining;
 #[cfg(feature = "rnn")]
 pub(crate) mod mlp_net;
+pub mod model_id;
 pub mod outbound;
 #[cfg(feature = "rnn")]
 pub(crate) mod par;
