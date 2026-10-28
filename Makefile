@@ -1,4 +1,4 @@
-.PHONY: screenshot-views composition-goldens build build-zk build-rnn build-offline run test test-zk test-rnn test-offline lint wasm-check wasm-shim web web-build screenshot mcp
+.PHONY: screenshot-views composition-goldens wasm-publish build build-zk build-rnn build-offline run test test-zk test-rnn test-offline lint wasm-check wasm-shim web web-build screenshot mcp
 
 build:
 	cargo build --release
@@ -50,6 +50,12 @@ wasm-shim:
 	wasm-bindgen --target web --out-dir target/wasm-shim \
 	  target/wasm32-unknown-unknown/wasm-release/pflow_native_wasm.wasm
 	@ls -l target/wasm-shim/*.wasm && gzip -9 -c target/wasm-shim/pflow_native_wasm_bg.wasm | wc -c | xargs echo gzip bytes:
+
+# Publish the wasm-shim build to cdn.stackdump.com under its content address
+# (scripts/publish-wasm.sh); prints the URL and sha256s a page pins.
+#   make wasm-publish [DRAFT=0] [DRY_RUN=1] [PFLOW_XYZ=../pflow-xyz]
+wasm-publish: wasm-shim
+	@./scripts/publish-wasm.sh
 
 # Needs `cargo install trunk`; serves on :8080.
 web:
