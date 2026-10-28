@@ -275,6 +275,75 @@ pub const SET: &[CommandSpec] = &[
         journal: false,
     },
     CommandSpec {
+        id: "bundle.game",
+        label: "Token Game",
+        help: "The token game on the flat net: the marking (flat place -> tokens), the transitions fired \
+               since the last reset, each flat transition's enablement at it (pflow-metamodel's \
+               enabled_why_not, with the refusal), the selected scenario's progress (steps taken, and \
+               once done the predicates at the marking reached) and each declared constraint \
+               evaluated at the marking (holding at one marking proves nothing). Starts at the \
+               initial marking; any edit that changes the flat net starts it afresh.",
+        menu: "",
+        shortcut: None,
+        args: &[],
+        enabled: need,
+        run: game,
+        journal: false,
+    },
+    CommandSpec {
+        id: "bundle.fire",
+        label: "Fire Flat Transition…",
+        help: "Fire a flat transition (its flat id, or a member \"<subnet>/<transition>\") in the token \
+               game, through pflow-metamodel's enabled_why_not / fire; refused with the reason when it \
+               is not enabled. Leaves any selected scenario. One undo step; returns bundle.game.",
+        menu: "Compose",
+        shortcut: None,
+        args: &[arg("transition", Str, "flat transition id, or a member \"<subnet>/<transition>\"")],
+        enabled: need,
+        run: fire,
+        journal: true,
+    },
+    CommandSpec {
+        id: "bundle.reset_marking",
+        label: "Reset Token Game",
+        help: "Back to the flat net's initial marking: nothing fired, no scenario selected. One undo \
+               step; returns bundle.game.",
+        menu: "Compose",
+        shortcut: None,
+        args: &[],
+        enabled: need,
+        run: reset_marking,
+        journal: true,
+    },
+    CommandSpec {
+        id: "bundle.scenario",
+        label: "Select Scenario…",
+        help: "Select a scenario (bundle.scenarios) for the token game: back to the initial marking with \
+               none of its script fired. bundle.step then fires it a step at a time. One undo step; \
+               returns bundle.game.",
+        menu: "Compose",
+        shortcut: None,
+        args: &[arg("id", Str, "scenario id")],
+        enabled: need,
+        run: select_scenario,
+        journal: true,
+    },
+    CommandSpec {
+        id: "bundle.step",
+        label: "Step Scenario",
+        help: "Take the selected scenario's next step (or, with all: true, the rest of them): its member \
+               is resolved to the flat transition that contains it and fired when enabled; the first one \
+               that is not enabled stops the script. When the script is done its predicates are \
+               evaluated (judgment, frozen; the firing is pflow-metamodel's). One undo step; returns \
+               bundle.game.",
+        menu: "Compose",
+        shortcut: None,
+        args: &[opt("all", Bool, "run to the end (default: one step)")],
+        enabled: need,
+        run: step,
+        journal: true,
+    },
+    CommandSpec {
         id: "bundle.lens",
         label: "Lens Test",
         help: "The lens test on the open composition (the prototype's lensfind.js): backward pairs, \
@@ -636,6 +705,69 @@ fn run_cmd(sess: &mut Session, a: &Value) -> Result<Value> {
     );
     out["artifact"] = json!(id);
     Ok(out)
+}
+
+// ------------------------------------------------------------ the token game
+
+fn flat_of(c: &Composition) -> Result<comp::Flat> {
+    comp::flatten(&c.bundle).map_err(Error::Invalid)
+}
+
+fn game(sess: &mut Session, _: &Value) -> Result<Value> {
+    let c = comp_ref(sess)?;
+    Ok(comp::game::game_json(&c.bundle, &c.game))
+}
+
+fn fire(sess: &mut Session, a: &Value) -> Result<Value> {
+    let t = req(a, "transition").to_string();
+    edit_comp(sess, &format!("fire {t}"), |c| {
+        let flat = flat_of(c)?;
+        // A member "subnet/transition" names the flat transition it is in.
+        let id = if flat.model.transitions.iter().any(|x| x.id == t) {
+            t.clone()
+        } else {
+            flat.transition_of(&t)
+                .map(str::to_string)
+                .unwrap_or(t.clone())
+        };
+        let mut g = c.game.of(&flat);
+        g.fire(&flat, &id).map_err(Error::Invalid)?;
+        c.game = g;
+        Ok(comp::game::game_json(&c.bundle, &c.game))
+    })
+}
+
+fn reset_marking(sess: &mut Session, _: &Value) -> Result<Value> {
+    edit_comp(sess, "reset token game", |c| {
+        let flat = flat_of(c)?;
+        c.game = c.game.reset(&flat);
+        Ok(comp::game::game_json(&c.bundle, &c.game))
+    })
+}
+
+fn select_scenario(sess: &mut Session, a: &Value) -> Result<Value> {
+    let id = req(a, "id").to_string();
+    edit_comp(sess, &format!("scenario {id}"), |c| {
+        let flat = flat_of(c)?;
+        c.game = c.game.select(&flat, &id).map_err(Error::BadArgs)?;
+        Ok(comp::game::game_json(&c.bundle, &c.game))
+    })
+}
+
+fn step(sess: &mut Session, a: &Value) -> Result<Value> {
+    let all = b(a, "all").unwrap_or(false);
+    edit_comp(sess, "step scenario", |c| {
+        let flat = flat_of(c)?;
+        let mut g = c.game.of(&flat);
+        loop {
+            let more = g.step(&flat).map_err(Error::Invalid)?;
+            if !all || !more {
+                break;
+            }
+        }
+        c.game = g;
+        Ok(comp::game::game_json(&c.bundle, &c.game))
+    })
 }
 
 fn lens_cmd(sess: &mut Session, a: &Value) -> Result<Value> {

@@ -35,6 +35,8 @@ use pflow_metamodel::{ArcType, Model};
 use serde::Serialize;
 use serde_json::{json, Value};
 
+pub mod game;
+
 /// The prototype's ontology facts (patterns, ports, link kinds, idioms,
 /// caveats, IRIs) and its sources and bibliography, as one JSON document.
 /// Provenance is in its `provenance` field: ontology-pflow-xyz
@@ -405,6 +407,8 @@ pub struct Composition {
     pub unavailable: Vec<Unavailable>,
     /// Links asked for whose ends are not in the composition.
     pub dropped_links: Vec<(Link, String)>,
+    /// The token game on the flat net (`bundle.fire` …); part of undo.
+    pub game: game::FlatGame,
 }
 
 impl Composition {
@@ -417,6 +421,7 @@ impl Composition {
             bundle: Bundle::new("composition"),
             unavailable: vec![],
             dropped_links: vec![],
+            game: game::FlatGame::default(),
         };
         for id in instances {
             if let Err(e) = c.add_instance(id) {
