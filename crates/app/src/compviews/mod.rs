@@ -32,7 +32,10 @@ mod b_draw;
 mod b_orders;
 mod b_transition;
 mod boundaries_view;
+mod c_chyp;
 mod c_draw;
+mod c_hypergraph;
+mod c_laws_live;
 mod c_lens_orders;
 mod c_lens_plan;
 mod c_process;
@@ -917,7 +920,7 @@ pub fn draw(
             ("incidence", false) => incidence_c4(&mut c, body),
             ("process", true) => process_orders(&mut c, body, cv.scenario.as_deref()),
             ("process", false) => process_c4(&mut c, body),
-            ("laws", _) => laws(&mut c, body, orders, rewrite),
+            ("laws", _) => laws(&mut c, body, orders, rewrite, cv.step),
             _ => {}
         }
     }
