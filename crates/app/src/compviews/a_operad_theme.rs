@@ -4,6 +4,7 @@
 //!
 //! `proto_*` names are kept so they can be de-duplicated after merging.
 
+use super::a_draw::*;
 use super::*;
 
 pub(super) const FAINT: Color32 = Color32::from_rgb(0x9a, 0xa3, 0xad);

@@ -5,6 +5,7 @@
 //! instances, event and guard links as ghosts. After the prototype's
 //! `js/views/cospan.js`, in its design coordinates.
 
+use super::a_draw::*;
 use super::*;
 
 // --- geometry (the prototype's constants) ------------------------------------

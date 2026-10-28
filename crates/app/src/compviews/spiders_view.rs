@@ -8,6 +8,7 @@
 //! and never computed here. Connect-4: the fixed core, the two shared tables
 //! as junctions (not spiders), and the pieces that touch them.
 
+use super::a_draw::*;
 use super::*;
 
 // ------------------------------------------------------------ colours

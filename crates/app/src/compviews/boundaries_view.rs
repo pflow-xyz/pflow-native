@@ -7,7 +7,6 @@
 
 use super::d_bnd_layout::{self as bl, *};
 use super::d_draw::*;
-use super::d_draw::PAPER;
 use super::pflow_rs_cites::pflow_rs;
 use super::*;
 

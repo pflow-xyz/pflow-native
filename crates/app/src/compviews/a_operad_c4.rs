@@ -8,6 +8,7 @@
 //! the slots (`plan.slot_candidates` lights the legal ones); a piece added
 //! slides into its slot. Cites into pflow-rs are at the pinned rev.
 
+use super::a_draw::*;
 use super::a_operad_theme::*;
 use super::*;
 
