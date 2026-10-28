@@ -28,7 +28,9 @@ pub const SET: &[CommandSpec] = &[
         help: "Show or hide the composition views and pick what they draw: `view` (cospan, spiders, operad, string, \
                flat, boundaries, lens, incidence, process, laws), `example` (orders: the open composition; connect4: \
                the open search plan), `lens` (strict: the lens test as composed; assume: the fallback that assumes a \
-               backward pass where one is found mechanically). Opening the views opens the default composition and \
+               backward pass where one is found mechanically), `level` (the string view: pattern, the default, or \
+               transition: diagram-viewer.js's drawing of the flat net or the Connect-4 net), `lens_y` (the \
+               transition level's 1:1 lens on the Connect-4 net: its top, in diagram-viewer.js's y). Opening the views opens the default composition and \
                plan if none is open. Returns the view state.",
         menu: "View",
         shortcut: None,
@@ -38,6 +40,8 @@ pub const SET: &[CommandSpec] = &[
             opt("example", Str, "orders or connect4"),
             opt("lens", Str, "strict or assume"),
             opt("rewrite", Str, "the Laws view's rewrite (\"\" for the default)"),
+            opt("level", Str, "the string view's level: pattern or transition"),
+            opt("lens_y", Num, "the transition level's lens position on the Connect-4 net"),
         ],
         enabled: always,
         run: composition,
@@ -311,6 +315,17 @@ fn composition(sess: &mut Session, a: &Value) -> Result<Value> {
             )));
         }
         cv.lens = l.into();
+    }
+    if let Some(l) = s(a, "level") {
+        if l != "pattern" && l != "transition" {
+            return Err(Error::BadArgs(format!(
+                "level is \"pattern\" or \"transition\", not {l:?}"
+            )));
+        }
+        cv.level = l.into();
+    }
+    if let Some(y) = n(a, "lens_y") {
+        cv.lens_y = y.max(0.0);
     }
     if let Some(r) = s(a, "rewrite") {
         cv.rewrite = (!r.is_empty()).then(|| r.to_string());

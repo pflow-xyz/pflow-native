@@ -183,6 +183,18 @@ pub struct CompositionView {
     /// connects to, or the theory's first).
     #[serde(default)]
     pub rewrite: Option<String>,
+    /// The string view's level: `pattern` (the default) or `transition`
+    /// (diagram-viewer.js's drawing of the flat net / the Connect-4 net).
+    #[serde(default = "default_level")]
+    pub level: String,
+    /// The transition level's 1:1 lens position on the Connect-4 net: the
+    /// top of the window, in diagram-viewer.js's own y.
+    #[serde(default)]
+    pub lens_y: f64,
+}
+
+fn default_level() -> String {
+    "pattern".into()
 }
 
 impl Default for CompositionView {
@@ -193,6 +205,8 @@ impl Default for CompositionView {
             example: "orders".into(),
             lens: "strict".into(),
             rewrite: None,
+            level: default_level(),
+            lens_y: 0.0,
         }
     }
 }
