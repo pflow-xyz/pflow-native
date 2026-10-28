@@ -15,6 +15,7 @@ use std::collections::{BTreeMap, BTreeSet};
 
 use super::c_draw::*;
 use super::c_process::*;
+use super::pflow_rs_cites::pflow_rs;
 use super::*;
 
 const W: f32 = 1150.0;
@@ -100,31 +101,16 @@ impl Cites {
         ttl(434, "saga caveat: no port fires on either outcome")
     }
     fn game_auto() -> String {
-        rs(
-            "src/game.rs",
-            3,
-            11,
-            "automatic transitions fire as soon as enabled; every other transition is a move",
-        )
+        pflow_rs("process.auto")
     }
     fn settle() -> String {
-        rs(
-            "src/game.rs",
-            279,
-            279,
-            "settle: automatic transitions, lowest index first, until none is enabled",
-        )
+        pflow_rs("process.settle")
     }
     fn by_name() -> String {
-        rs(
-            "tests/common/mod.rs",
-            5,
-            8,
-            "the fixtures name their parts by convention; the tests declare them",
-        )
+        pflow_rs("process.byName")
     }
     fn game() -> String {
-        rs("tests/common/mod.rs", 18, 40, "game(): auto = name contains \"win\", x_ moves are +1, reward win_x - win_o, settled start")
+        pflow_rs("process.game")
     }
     fn fixture() -> String {
         rs(
@@ -2760,6 +2746,6 @@ pub(super) fn process_c4(c: &mut Ctx, area: Rect) {
     if !indep.is_empty() {
         c.note("honesty", format!("Step{} {} take{} nothing the step before produced: as boxes, each could be drawn before its left neighbour (interchange law). The columns follow the play.", if indep.len() > 1 { "s" } else { "" }, indep.iter().map(|k| k.to_string()).collect::<Vec<_>>().join(", "), if indep.len() > 1 { "" } else { "s" }));
     }
-    c.note(if autos_seen { "warn" } else { "honesty" }, format!("Automatic transitions: the tests read every transition whose name contains \"win\" as automatic ({auto_count} here; tests/common/mod.rs:28) and pflow-rs fires them as soon as they are enabled, lowest index first (game.rs settle, :279). {}", if autos_seen { "One is enabled in this play, which this drawing omits." } else { "None is enabled after any of the four drops (checked on every transition), so the play has no automatic boxes. Token identities are first-in first-out per place, this view's choice." }));
+    c.note(if autos_seen { "warn" } else { "honesty" }, format!("Automatic transitions: the tests read every transition whose name contains \"win\" as automatic ({auto_count} here; tests/common/mod.rs:28) and pflow-rs fires them as soon as they are enabled, lowest index first (game.rs settle, :277-288). {}", if autos_seen { "One is enabled in this play, which this drawing omits." } else { "None is enabled after any of the four drops (checked on every transition), so the play has no automatic boxes. Token identities are first-in first-out per place, this view's choice." }));
     let _ = (Cites::game_auto(), Cites::settle(), Cites::by_name());
 }

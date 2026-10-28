@@ -18,19 +18,11 @@
 #![allow(clippy::too_many_arguments)]
 
 use super::c_draw::*;
+use super::pflow_rs_cites::pflow_rs;
 use super::*;
 
 // --- pflow-rs cites at aacb7eb ---------------------------------------------
 
-fn gs(a: u32, b: u32, note: &str) -> String {
-    rs_cite("src/game.rs", a, b, note)
-}
-fn od(a: u32, b: u32, note: &str) -> String {
-    rs_cite("src/order.rs", a, b, note)
-}
-fn pl(a: u32, b: u32, note: &str) -> String {
-    rs_cite("src/plan.rs", a, b, note)
-}
 fn road(a: u32, b: u32, note: &str) -> String {
     let o = comp::ontology();
     let rev = o["repos"]["ontology"]["rev"].as_str().unwrap_or("");
@@ -41,233 +33,139 @@ struct C;
 #[allow(non_snake_case)]
 impl C {
     fn value() -> String {
-        gs(
-            809,
-            815,
-            "Solver::value: the exact value, or None past the budget",
-        )
+        pflow_rs("lens.value")
     }
     fn run() -> String {
-        gs(
-            918,
-            934,
-            "run: the bit engine when the marking fits, else counts; nodes reset to 0 (926, 933)",
-        )
+        pflow_rs("lens.engine")
     }
     fn budget_count() -> String {
-        gs(1057, 1060, "search: nodes += 1; past the budget, None")
+        pflow_rs("lens.budgetCount")
     }
     fn up_solve() -> String {
-        gs(982, 984, "solve: a None from a search is returned at once")
+        pflow_rs("lens.upSolve")
     }
     fn up_search() -> String {
-        gs(
-            1152,
-            1154,
-            "search: a None from a child is returned at once",
-        )
+        pflow_rs("lens.upSearch")
     }
     fn solve() -> String {
-        gs(
-            937,
-            996,
-            "Solver::solve: yes/no searches, one per gap between adjacent rewards",
-        )
+        pflow_rs("lens.solve")
     }
     fn window() -> String {
-        gs(970, 977, "k: the gap nearest the guess, else the mover's worst gap first; window (vals[k], vals[k+1])")
+        pflow_rs("lens.window")
     }
     fn narrow() -> String {
-        gs(
-            978,
-            995,
-            "v > (a+b)/2: i = k+1, else j = k; returns vals[i]",
-        )
+        pflow_rs("lens.narrow")
     }
     fn full_range() -> String {
-        gs(947, 958, "null_window off (or under 3 rewards): one search over the whole range, or first a window around the guess")
+        pflow_rs("lens.fullRange")
     }
     fn mtd_f() -> String {
-        gs(
-            998,
-            1043,
-            "mtd_f_run: the next test follows the bound the last one proved",
-        )
+        pflow_rs("piece.mtd_f.2")
     }
     fn rewards() -> String {
-        gs(
-            121,
-            138,
-            "rewards(): the distinct sums of the reward weights",
-        )
+        pflow_rs("lens.rewards")
     }
     fn c4_reward() -> String {
-        rs_cite(
-            "tests/common/mod.rs",
-            35,
-            35,
-            "Connect-4 rewards: win_x +1, win_o -1",
-        )
+        pflow_rs("lens.c4reward")
     }
     fn search() -> String {
-        gs(1046, 1181, "Solver::search: fail-soft alpha-beta")
+        pflow_rs("lens.search")
     }
     fn tt_get() -> String {
-        gs(
-            1069,
-            1079,
-            "tt.get: a settled entry returns at once; else (a, b) narrowed and first = best",
-        )
+        pflow_rs("lens.ttGet")
     }
     fn leaf() -> String {
-        gs(1082, 1087, "no moves: the score, stored as exact")
+        pflow_rs("lens.leaf")
     }
     fn children() -> String {
-        gs(
-            1089,
-            1112,
-            "children keyed by the chain (must_win may settle the node here)",
-        )
+        pflow_rs("lens.children")
     }
     fn loop_() -> String {
-        gs(
-            1142,
-            1167,
-            "each child searched with (a, b); max/min; a >= b: chain.cutoff, break",
-        )
+        pflow_rs("lens.loop")
     }
     fn recurse() -> String {
-        gs(
-            1152,
-            1152,
-            "self.search(next, a, b, false): the core again, one level down",
-        )
+        pflow_rs("lens.recurse")
     }
     fn cutoff() -> String {
-        gs(
-            1163,
-            1166,
-            "a >= b: self.chain.cutoff(&mut self.history, t); break",
-        )
+        pflow_rs("lens.cutoff")
     }
     fn bounds_store() -> String {
-        gs(
-            1168,
-            1177,
-            "the result as [lo, hi], merged with the old entry, stored",
-        )
+        pflow_rs("lens.boundsStore")
     }
     fn store() -> String {
-        gs(1183, 1185, "store: Entry { lo, hi, best } into the table")
+        pflow_rs("lens.store")
     }
     fn table_default() -> String {
-        gs(587, 594, "Solver::MEMO = 2^23 entries by default")
+        pflow_rs("lens.tableDefault")
     }
     fn with_memo() -> String {
-        gs(635, 641, "with_memo: the table is kept to N entries")
+        pflow_rs("lens.withMemo")
     }
     fn age() -> String {
-        gs(895, 899, "start: the table ages between calls")
+        pflow_rs("lens.clear")
     }
     fn memo_doc() -> String {
-        rs_cite(
-            "src/memo.rs",
-            1,
-            26,
-            "bounded table: past N, a new key takes the weakest slot",
-        )
+        pflow_rs("lens.capDefault")
     }
     fn order_only() -> String {
-        od(
-            1,
-            7,
-            "order never changes a value, only how soon a cutoff comes",
-        )
+        pflow_rs("lens.orderOnly")
     }
     fn ctx_read() -> String {
-        od(15, 24, "Ctx: what a piece may read (first, history)")
+        pflow_rs("lens.ctxRead")
     }
     fn cutoff_noop() -> String {
-        od(
-            36,
-            37,
-            "Orderer::cutoff: a no-op unless a piece overrides it",
-        )
+        pflow_rs("lens.cutoffNoop")
     }
     fn tt_best() -> String {
-        od(52, 58, "TtBest: key 1 for cx.first; DECISIVE")
+        pflow_rs("lens.ttBest")
     }
     fn imm_win() -> String {
-        od(
-            60,
-            66,
-            "ImmediateWin: key 1 when next is over and the mover wins; DECISIVE",
-        )
+        pflow_rs("lens.immWin")
     }
     fn hist_key() -> String {
-        od(68, 71, "History: key = history[t]")
+        pflow_rs("lens.histKey")
     }
     fn hist_cut() -> String {
-        od(73, 75, "History::cutoff: history[t] += 1")
+        pflow_rs("lens.histCut")
     }
     fn centrality() -> String {
-        od(90, 94, "Centrality: key = centrality[t]")
+        pflow_rs("lens.centrality")
     }
     fn threats() -> String {
-        od(96, 103, "Threats: goals t feeds one token short after t")
+        pflow_rs("lens.threats")
     }
     fn chain_key() -> String {
-        od(
-            259,
-            269,
-            "Chain::key: piece by piece, stopping at a decisive piece's nonzero key",
-        )
+        pflow_rs("lens.chainKey")
     }
     fn chain_before() -> String {
-        od(271, 275, "Chain::before: the first key to differ decides")
+        pflow_rs("lens.chainBefore")
     }
     fn chain_cutoff() -> String {
-        od(277, 281, "Chain::cutoff: every piece's cutoff")
+        pflow_rs("lens.chainCutoff")
     }
     fn chain_default() -> String {
-        od(205, 216, "Chain::default: tt_best, immediate_win, history")
+        pflow_rs("lens.chainDefault")
     }
     fn plan_chain() -> String {
-        pl(
-            283,
-            298,
-            "chain(): no order gives Chain::default; a repeated piece is refused",
-        )
+        pflow_rs("lens.planChain")
     }
     fn solver() -> String {
-        pl(400, 440, "solver_with(): budget, chain, null_window / mtd_f, filters, aspiration, memo; mode only reaches choose")
+        pflow_rs("lens.solver")
     }
     fn drivers_doc() -> String {
-        pl(
-            29,
-            38,
-            "drivers: null_window on by default; budget gives a value up past N nodes",
-        )
+        pflow_rs("lens.driversDoc")
     }
     fn drivers_flags() -> String {
-        pl(
-            205,
-            281,
-            "drivers(): the list is read into flags, so its JSON order does not change the nesting",
-        )
+        pflow_rs("lens.driversFlags")
     }
     fn filters_doc() -> String {
-        pl(
-            341,
-            358,
-            "filters(): absent is Filter::DEFAULT = [must_win]; [] runs none",
-        )
+        pflow_rs("slot.filters")
     }
     fn filter_default() -> String {
-        rs_cite("src/filter.rs", 42, 42, "Filter::DEFAULT: [MustWin]")
+        pflow_rs("piece.must_win")
     }
     fn aspiration() -> String {
-        gs(697, 705, "with_aspiration: start from the root's estimate; a window around it, the whole range if the value falls outside")
+        pflow_rs("piece.aspiration")
     }
     fn core_type() -> String {
         road(
@@ -402,8 +300,10 @@ fn piece_base(name: &str) -> Info {
             .fact("kind", p.kind)
             .fact("status", p.status)
             .fact("contract", p.contract)
-            .note(p.doc)
-            .cite(pl(1, 55, "the plan's module doc: every name a plan takes"));
+            .note(p.doc);
+        for c in sp::piece_cites(name) {
+            i = i.cite(c.label());
+        }
     }
     i
 }
@@ -905,7 +805,7 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
             .fact("backward lane (bottom)", "child values → max/min; a ≥ b is a cutoff: chain.cutoff, and the remaining children are not tried")
             .fact("interleaving", "each child's value comes back before the next child is tried, so forward and backward passes alternate: a lens runs one, then the other")
             .fact("wire types", "Position (+ window) → Value: a fail-soft bound inside (a, b)")
-            .fact("filters", format!("{} drop moves only where the value is already known (must_win settles a node at a winning move, game.rs:1103-1111)", if g.filters.is_empty() { "none run here".to_string() } else { g.filters.join(", ") }))
+            .fact("filters", format!("{} drop moves only where the value is already known (must_win settles a node at a winning move, game.rs:1103-1109)", if g.filters.is_empty() { "none run here".to_string() } else { g.filters.join(", ") }))
             .fact("⊥ inside", "the budget check is at the top of every search() (game.rs:1057-1060), and a None from a child is returned at once (game.rs:1152-1154): the ROADMAP's PROPOSED reading types the core Position → Value⊥ (ROADMAP:428-430). This drawing puts ⊥ on the budget frame, where it is decided")
             .note("Fail-soft alpha-beta in the +1 side's view: inside the bounds every result is a bound on the true value; with the window the whole range, it is the value."),
         &[C::search(), C::children(), C::loop_(), C::bounds_store(), C::order_only(), C::budget_count(), C::up_search(), C::core_type()],
@@ -1895,11 +1795,6 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
                     false,
                 );
                 slot_target(c, r, "filters");
-                let (a, b) = if name == "must_win" {
-                    (1103, 1111)
-                } else {
-                    (1112, 1129)
-                };
                 let fi = cites(
                     piece_base(name)
                         .fact(
@@ -1918,11 +1813,7 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
                             "{} {ANALOGY}",
                             sp::piece_info(name).map_or("", |p| p.doc)
                         )),
-                    &[
-                        gs(a, b, &format!("{name} in search")),
-                        C::filters_doc(),
-                        C::filter_default(),
-                    ],
+                    &[C::filters_doc(), C::filter_default()],
                 );
                 c.hover(r, fi);
                 if plan.get("filters").is_some() {
@@ -2231,7 +2122,7 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
                     .fact("plan.rs", "names of pieces that can change the value; the reserved name static_eval is refused in exact mode")
                     .fact("placement", "by the recursion, where a static evaluation would stand in for searching further down: this page's judgment")
                     .fact("today", "none built: exact mode refuses a heuristic (it can change the value); play mode: not built in this release"),
-                &[pl(44, 47, "pieces that can change the value: none built yet")],
+                &[pflow_rs("slot.heuristics")],
             ),
         );
     }
@@ -2451,6 +2342,54 @@ pub(super) fn lens_c4(c: &mut Ctx, area: Rect) {
                     .fact("now", if g.frames.is_empty() { "none (drivers given empty: one search over the whole range)".to_string() } else { g.frames.iter().map(|f| f.id.clone()).collect::<Vec<_>>().join(" ∘ ") })
                     .note(ANALOGY),
                 &[C::drivers_flags(), C::drivers_doc()],
+            ),
+        );
+        // the root slot: pieces that run once at the position searched
+        let rx = FX0 + 128.0;
+        let root: Vec<String> = plan["root"]["order"]
+            .as_array()
+            .map(|a| a.iter().map(|x| s(x).to_string()).collect())
+            .unwrap_or_default();
+        let rtxt = if root.is_empty() {
+            "⊕ root slot".to_string()
+        } else {
+            format!("root: {}", root.join(" · "))
+        };
+        let rw = (tw(c, xf, &rtxt, 10.0, false) + 24.0).max(96.0);
+        let rr = dbox(
+            c,
+            xf,
+            rx,
+            40.0,
+            rw,
+            20.0,
+            10.0,
+            Color32::from_white_alpha(140),
+            hex("#9aa3ad"),
+            1.3,
+            root.is_empty(),
+        );
+        dbold(
+            c,
+            xf,
+            rx + rw / 2.0,
+            54.0,
+            Align2::CENTER_CENTER,
+            &rtxt,
+            10.0,
+            if root.is_empty() { t_muted } else { t_ink },
+            false,
+        );
+        slot_target(c, rr, "root");
+        c.hover(
+            rr,
+            cites(
+                slot_info(c, "root")
+                    .fact("now", if root.is_empty() { "none".to_string() } else { root.join(", ") })
+                    .fact("runs", "once, at the position searched: an estimate (ode) breaks the order chain's ties among the root's moves, and non_losing drops the root's moves that leave the other side a win at once")
+                    .fact("placement", "beside the drivers: it acts on the position the search starts from, before the frames' lanes carry it in (this page's judgment)")
+                    .note(ANALOGY),
+                &sp::slot_cites("root").iter().map(|c| c.label()).collect::<Vec<_>>(),
             ),
         );
         let _ = has_driver(&g, "budget");
