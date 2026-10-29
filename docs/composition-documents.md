@@ -63,11 +63,16 @@ Fields:
 **`params` is a canonical-JSON string in the exported form.** Only `arcs`, `token`, `weight`,
 `capacity`, `initial` and `parents` are `@list`s to the sealer (`cid.rs` `LIST_TERMS`); every other
 array hashes as an unordered set, so a saga's `steps` reordered would seal to the same CID. An ordered
-or structured value therefore travels as a string whose bytes the hash covers. Canonical means: object
-keys sorted bytewise at every depth, no whitespace, integers as integers, strings escaped as
-`JSON.stringify` does (no `<>&` escaping). The loader also accepts `params` as an object (the
-prototype's shape) and canonicalises it, so `load → export` is stable. `instances` and `links` are sets
-to the sealer and are not ordered by it; their order in the text is preserved by the store, not by the CID.
+or structured value therefore travels as a string whose bytes the hash covers. Canonical means
+`model_id::canonical_json`'s rule: object keys sorted bytewise at every depth, no whitespace, numbers
+spelled as `JSON.stringify` does, strings escaped as it does (no `<>&` escaping). **A `params` string is
+sealed as received and never re-canonicalised** (the identity rule): it is parsed to build the subnet, and
+`bundle.export` writes the same text back, so `cid` is the seal of the document received even for a
+respaced or `\u`-escaped string. The loader also accepts `params` as an object (the prototype's shape) and
+writes the canonical text of it, so an object and its canonical string are one document. `instances` and
+`links` are sets to the sealer and are not ordered by it; their order in the text is preserved by the
+store, not by the CID. A top-level `@id` is accepted when it is the document's own CID (what `store.get`
+returns) and is not written by an export.
 
 Errors (all `[CODE] message`): `COMPOSITION_TYPE`, `INSTANCE_DUPLICATE`, `INSTANCE_ID`,
 `PATTERN_UNKNOWN`, `PARAMS_INVALID`, `INSTANCE_BUILD` (the constructor refused the parameters; its
@@ -81,14 +86,22 @@ keys, so the **loaded JSON is kept beside the parsed bundle**: `bundle.export` r
 while the composition is unedited (the CID then equals the sealed bytes as received), and re-serialises
 the struct once it is edited.
 
+A part named by `cid` is resolved **only to flatten and draw**: the received subnet (its `cid`, no `model`)
+stays the document, so `cid` is the seal of what was received, the model CID is the one the identity rule
+gives (a bare wrapper of one by-reference part *is* that net, `reduced: true`), and an unedited export is the
+bytes received. An edit that does not touch a part or link writes it back as received, with its `cid` and
+every key beside it; a changed or new one is what pflow-compose serialises plus the unknown keys its received
+form had. So `preserved_keys` (and the `KEYS_PRESERVED` text) names exactly the keys the next export carries.
+
 What loads and what is refused:
 
 | Input | Result |
 |---|---|
 | a Bundle with inline `model` subnets | loads; validated; its report is returned, errors do not block the load |
-| a subnet with `cid` and no `model` | resolved from the local store (a stored net becomes the inline subnet) when present, else `[BUNDLE_PART_UNRESOLVED]` naming the CID |
+| a subnet with `cid` and no `model` | resolved from the local store (a stored net's compiled model draws it) when present, else `[BUNDLE_PART_UNRESOLVED]` naming the CID; the document keeps the reference |
+| `@context` missing or not `https://pflow.xyz/schema` | `[DOCUMENT_CONTEXT]` |
 | the `tokenmodel/subnet` shape (`from_subnet` links) | `[BUNDLE_SHAPE_TOKENMODEL]` |
-| `@type` neither of the two | `[DOCUMENT_TYPE]` |
+| `@type` neither of the two | `[DOCUMENT_TYPE]` (a document with no `@type` and a `subnets` array is read as a Bundle) |
 | links whose ends are `place` or `transition` rather than `port` (cafe's) | load; an end is written `subnet:port`, `subnet:@place/<id>` or `subnet:@transition/<id>` in link keys |
 
 A raw bundle has no pattern, so each subnet gets an `InstanceSpec` with `pattern: ""` (specs stay 1:1
@@ -98,11 +111,18 @@ are not interpreted until pflow-compose has the fields.
 
 ### 1.3 Identity, stated plainly
 
-`bundle.export` and `store.put` report `cid`: the pflow seal of the exported document. For form (a)
-they also report `bundle_cid`, the seal of the plain Bundle that form flattens to (what a Bundle-reading
-tool such as pflow.xyz or go-pflow would hash). Until models-first D1 is decided, **a PatternComposition
-or ModelContent CID is a handle for storing and receipting that document, not the identity of a model**;
-the identity runs mint no composition CIDs yet, and this PR changes no net's CID.
+`bundle.load`, `bundle.export` and `store.put` report `cid`: the pflow seal of the exported document
+(`cid::seal`, as written). `bundle.load` and `bundle.export` also report what `model_id` (the identity
+rule, `crates/core/src/model_id.rs`) says about that document: `model_cid` (the part's CID when the
+document is a bare wrapper), `reduced` and `parts` (the by-reference CIDs), or `model_error` with the
+`[E_…]` text when the rule refuses the shape. That check is a report, not a gate: `bundle.load` accepts
+shapes the rule refuses. For form (a) they also report `bundle_cid`, the seal of the plain Bundle that
+form flattens to (what a Bundle-reading tool such as pflow.xyz or go-pflow would hash). A
+PatternComposition has no part CIDs, so it is its own `@type` with CID = seal(doc); `tests/composition_documents.rs`
+(`the_exported_documents_agree_with_the_identity_rule`, `the_by_reference_identity_vectors_load_to_their_golden_cids_and_export_unchanged`)
+pins that `model_id(doc).sealed` equals the CID the commands report, for both forms, the cafe Bundle and the
+four by-reference vectors of `tests/fixtures/model/`. A ModelContent CID is a handle for storing and
+receipting that document, not the identity of a model. This feature changes no net's CID.
 
 ## 2. What each form can and cannot draw
 

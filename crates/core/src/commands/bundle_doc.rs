@@ -93,11 +93,27 @@ pub fn validation_json(c: &Composition) -> Value {
     json!({"valid": res.valid, "errors": issues(&res.errors), "warnings": issues(&res.warnings)})
 }
 
+/// What model identity ([`crate::model_id`]) says about an exported document, as members of a
+/// result: `model_cid` (the part's CID when the document is a bare wrapper), `reduced`, and the
+/// by-reference `parts`. `cid` stays the seal of the document as written. A document the identity
+/// rule refuses is reported (`model_error`, its `[E_…]` text), not refused here: `bundle.load`
+/// accepts shapes the rule checks, such as a subnet with a recipe and no net.
+pub fn identity_into(out: &mut Value, doc: &Value) {
+    match crate::model_id::model_id(doc) {
+        Ok(id) => {
+            out["model_cid"] = json!(id.cid);
+            out["reduced"] = json!(id.reduced);
+            out["parts"] = json!(id.parts);
+        }
+        Err(e) => out["model_error"] = json!(e.to_string()),
+    }
+}
+
 /// What `bundle.load` returns for a composition just built.
 pub fn load_result(c: &Composition, form: Form) -> Result<Value> {
     let exp = c.export(Some(form))?;
     let flat = comp::flatten(&c.bundle).err();
-    Ok(json!({
+    let mut out = json!({
         "form": form.name(),
         "name": c.bundle.name,
         "cid": exp.cid,
@@ -108,7 +124,9 @@ pub fn load_result(c: &Composition, form: Form) -> Result<Value> {
         "flatten": match flat { None => json!({"ok": true}), Some(e) => json!({"ok": false, "error": e}) },
         "missing": document::missing(c),
         "content": document::content_json(c),
-    }))
+    });
+    identity_into(&mut out, &exp.document);
+    Ok(out)
 }
 
 /// Builds the composition a `bundle.load` argument set describes (nothing
@@ -194,6 +212,7 @@ fn export(sess: &mut Session, a: &Value) -> Result<Value> {
         "cid": exp.cid,
         "bundle_cid": exp.bundle_cid,
     });
+    identity_into(&mut out, &exp.document);
     if b(a, "content").unwrap_or(false) {
         out["content"] = match &c.doc.content {
             Some(k) => json!({"document": k.to_document(), "cid": k.cid()?}),

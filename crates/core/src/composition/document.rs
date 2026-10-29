@@ -41,35 +41,14 @@ pub fn refuse(code: &str, msg: impl std::fmt::Display) -> Error {
 
 // ------------------------------------------------------------ canonical JSON
 
-/// The canonical text of a parameter value: object keys sorted bytewise at
-/// every depth, no whitespace, integral numbers as integers, strings escaped
-/// as `JSON.stringify` does. (Not Go's HTML-escaping `receipt.canonical`.)
+/// The canonical text of a parameter value: [`crate::model_id::canonical_json`]'s
+/// rule (object keys sorted bytewise at every depth, no whitespace, numbers
+/// spelled as `JSON.stringify` does, strings escaped as it does; not Go's
+/// HTML-escaping `receipt.canonical`), so the writer and the identity rule
+/// cannot drift. It is what a writer emits for a value it built; a string
+/// received in a document is kept as received.
 pub fn canonical_json(v: &Value) -> String {
-    serde_json::to_string(&sorted(v)).expect("a Value serializes")
-}
-
-fn sorted(v: &Value) -> Value {
-    match v {
-        Value::Object(m) => {
-            let mut keys: Vec<&String> = m.keys().collect();
-            keys.sort();
-            let mut out = Map::new();
-            for k in keys {
-                out.insert(k.clone(), sorted(&m[k]));
-            }
-            Value::Object(out)
-        }
-        Value::Array(a) => Value::Array(a.iter().map(sorted).collect()),
-        Value::Number(n) if n.is_f64() => {
-            let f = n.as_f64().unwrap_or(0.0);
-            if f.fract() == 0.0 && f.abs() < 9.0e15 {
-                json!(f as i64)
-            } else {
-                v.clone()
-            }
-        }
-        other => other.clone(),
-    }
+    crate::model_id::canonical_value(v)
 }
 
 /// Most bytes of a document `bundle.load` / `content.load` accept.
@@ -169,11 +148,15 @@ pub struct DocState {
     pub origin: Origin,
     pub name: String,
     pub description: String,
-    /// The Bundle JSON as loaded (form b); an unedited export returns it.
+    /// The Bundle JSON as received (form b); an unedited export returns it,
+    /// an edited one is merged from it ([`Composition::to_bundle_document`]).
     pub original: Option<Value>,
-    /// JSON paths of keys the document had that this build keeps but does
-    /// not interpret (`subnets[0].pattern`).
-    pub preserved_keys: Vec<String>,
+    /// What the parsed bundle serialised to at load, part references
+    /// resolved: the composition is unedited while it still does.
+    pub baseline: Option<Value>,
+    /// Form (a): each instance's `params` text as received, so a sealed
+    /// string is written back as it came and never re-canonicalised.
+    pub params_text: BTreeMap<String, String>,
     pub content: Option<ModelContent>,
     pub content_source: ContentSource,
 }
@@ -391,10 +374,23 @@ impl Composition {
                 format!("@type must be {TYPE_COMPOSITION:?}"),
             ));
         }
+        if let Some(id) = m.get("@id") {
+            // `store.get` returns the document with the `@id` the store
+            // added; the seal ignores a top-level `@id`, so accept the one
+            // that is this document's CID (an export drops it).
+            let want = crate::cid::seal(doc)?;
+            if id.as_str() != Some(want.as_str()) {
+                return Err(refuse(
+                    "COMPOSITION_FIELD",
+                    format!("document: \"@id\" must be the CID of the document ({want}) or absent"),
+                ));
+            }
+        }
         only_keys(
             m,
             &[
                 "@context",
+                "@id",
                 "@type",
                 "name",
                 "description",
@@ -412,6 +408,9 @@ impl Composition {
         let mut c = Composition::open(&[], &[]).map_err(Error::Invalid)?;
         for inst in insts {
             let spec = spec_from_json(inst)?;
+            if let Some(text) = inst.get("params").and_then(Value::as_str) {
+                c.doc.params_text.insert(spec.id.clone(), text.to_string());
+            }
             if c.spec(&spec.id).is_some() {
                 return Err(refuse(
                     "INSTANCE_DUPLICATE",
@@ -462,9 +461,22 @@ impl Composition {
             origin: Origin::Document,
             name,
             description: c.bundle.description.clone(),
+            params_text: std::mem::take(&mut c.doc.params_text),
             ..Default::default()
         };
         Ok(c)
+    }
+
+    /// The `params` text an instance is written with: the string received
+    /// when it still says what the spec says (a sealed string is never
+    /// re-canonicalised), else the canonical text of the spec's value.
+    fn params_text(&self, s: &InstanceSpec) -> String {
+        self.doc
+            .params_text
+            .get(&s.id)
+            .filter(|t| serde_json::from_str::<Value>(t).is_ok_and(|v| v == s.params))
+            .cloned()
+            .unwrap_or_else(|| canonical_json(&s.params))
     }
 
     /// The `PatternComposition` document of this composition: instances in
@@ -487,7 +499,7 @@ impl Composition {
                 let mut v = json!({
                     "id": s.id,
                     "pattern": s.pattern,
-                    "params": canonical_json(&s.params),
+                    "params": self.params_text(s),
                 });
                 if s.label != s.id {
                     v["label"] = json!(s.label);
@@ -629,6 +641,7 @@ impl Composition {
                  which means something else than metamodel.Bundle; it is not loaded",
             ));
         }
+        check_context(m)?;
         // Resolve part references into inline subnets before parsing.
         let mut resolved = doc.clone();
         if let Some(subs) = resolved.get_mut("subnets").and_then(Value::as_array_mut) {
@@ -650,7 +663,19 @@ impl Composition {
                     let sub = subnet_from_net(s, &net).map_err(|e| {
                         refuse("BUNDLE_PART_UNRESOLVED", format!("subnets[{i}] {cid}: {e}"))
                     })?;
-                    *s = serde_json::to_value(&sub).expect("subnet serializes");
+                    // Resolved only to flatten and draw: the received subnet
+                    // (its `cid`, and any key beside it) is what an export
+                    // gives back. Keys beside the `cid` ride along so
+                    // `preserved_keys` still names them.
+                    let mut inlined = serde_json::to_value(&sub).expect("subnet serializes");
+                    if let (Some(from), Some(to)) = (s.as_object(), inlined.as_object_mut()) {
+                        for (k, v) in from {
+                            if k != "cid" && !to.contains_key(k) {
+                                to.insert(k.clone(), v.clone());
+                            }
+                        }
+                    }
+                    *s = inlined;
                 }
             }
         }
@@ -668,20 +693,13 @@ impl Composition {
                 why: String::new(),
             })
             .collect();
-        let mut preserved = vec![];
-        keys_not_kept(
-            &resolved,
-            &serde_json::to_value(&bundle).expect("bundle serializes"),
-            "",
-            &mut preserved,
-        );
         let mut c = Composition::open(&[], &[]).map_err(Error::Invalid)?;
         c.doc = DocState {
             origin: Origin::Bundle,
             name: bundle.name.clone(),
             description: bundle.description.clone(),
             original: Some(doc.clone()),
-            preserved_keys: preserved,
+            baseline: Some(serde_json::to_value(&bundle).expect("bundle serializes")),
             ..Default::default()
         };
         c.bundle = bundle;
@@ -689,27 +707,104 @@ impl Composition {
         Ok(c)
     }
 
-    /// The Bundle JSON of this composition: the document as loaded while a
-    /// raw load is unedited, else what pflow-compose serialises.
+    /// The Bundle JSON of this composition. A raw load gives back what it
+    /// received: the document itself while it is unedited (so its CID is the
+    /// seal of the bytes received, whatever was resolved to draw it), and,
+    /// once edited, what pflow-compose serialises with every part, link and
+    /// key the edit did not touch written as it was received. Anything else
+    /// is what pflow-compose serialises.
     pub fn to_bundle_document(&self) -> Value {
-        if let Some(orig) = &self.doc.original {
-            if self.unedited() {
-                return orig.clone();
-            }
+        let cur = serde_json::to_value(&self.bundle).expect("bundle serializes");
+        match (&self.doc.original, &self.doc.baseline) {
+            (Some(orig), Some(base)) if *base == cur => orig.clone(),
+            (Some(orig), Some(base)) => merge_received(orig, base, cur),
+            _ => cur,
         }
-        serde_json::to_value(&self.bundle).expect("bundle serializes")
     }
 
     /// Whether the bundle is what the raw document parsed to.
     pub fn unedited(&self) -> bool {
-        let Some(orig) = &self.doc.original else {
-            return false;
-        };
-        serde_json::from_value::<Bundle>(orig.clone())
-            .ok()
-            .and_then(|b| serde_json::to_value(&b).ok())
-            == serde_json::to_value(&self.bundle).ok()
+        self.doc.baseline.as_ref().is_some_and(|b| {
+            serde_json::to_value(&self.bundle)
+                .ok()
+                .is_some_and(|cur| *b == cur)
+        })
     }
+
+    /// JSON paths of keys the received document has that this build writes
+    /// back but does not interpret (`subnets[0].pattern`, a top-level
+    /// `@id`). Read from what an export gives now, so an edit that removes
+    /// the part or link carrying a key drops it from the list. A part
+    /// reference's `cid` is not one: it is how the part was resolved.
+    pub fn preserved_keys(&self) -> Vec<String> {
+        if self.doc.original.is_none() {
+            return vec![];
+        }
+        let cur = serde_json::to_value(&self.bundle).expect("bundle serializes");
+        let exported = self.to_bundle_document();
+        let mut out = vec![];
+        keys_not_kept(&exported, &cur, "", &mut out);
+        let subs = exported.get("subnets").and_then(Value::as_array);
+        out.retain(|p| {
+            let by_ref = p
+                .strip_prefix("subnets[")
+                .and_then(|r| r.strip_suffix("].cid"))
+                .and_then(|i| i.parse::<usize>().ok())
+                .and_then(|i| subs.and_then(|s| s.get(i)))
+                .is_some_and(|s| s.get("model").is_none());
+            !by_ref
+        });
+        out
+    }
+}
+
+/// An edited raw load, exported: `cur` (what pflow-compose serialises) with
+/// what the received document had and the edit left alone put back. A
+/// subnet or link unchanged since load is the received JSON, so a part keeps
+/// its `cid` and a recipe or extra key survives; a changed one gets the
+/// unknown keys its received form had; top-level unknown keys are kept.
+fn merge_received(orig: &Value, base: &Value, mut cur: Value) -> Value {
+    let unknown = |from: &Value, kept: &Value, to: &mut Value| {
+        if let (Some(f), Some(k), Some(t)) =
+            (from.as_object(), kept.as_object(), to.as_object_mut())
+        {
+            for (key, v) in f {
+                if !k.contains_key(key) && !t.contains_key(key) && !is_empty_value(v) {
+                    t.insert(key.clone(), v.clone());
+                }
+            }
+        }
+    };
+    let list = |v: &'_ Value, k: &str| -> Vec<Value> {
+        v.get(k)
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+    };
+    for key in ["subnets", "links"] {
+        let (o, b) = (list(orig, key), list(base, key));
+        let Some(arr) = cur.get_mut(key).and_then(Value::as_array_mut) else {
+            continue;
+        };
+        for item in arr.iter_mut() {
+            let same = |x: &Value| key == "links" || x.get("id") == item.get("id");
+            let at = b.iter().position(|x| same(x) && x == item);
+            if let Some(i) = at.filter(|i| *i < o.len()) {
+                *item = o[i].clone();
+            } else if key == "subnets" {
+                if let Some(i) = b.iter().position(same).filter(|i| *i < o.len()) {
+                    let mut with = item.clone();
+                    unknown(&o[i], &b[i], &mut with);
+                    if let Some(m) = with.as_object_mut() {
+                        m.remove("cid");
+                    }
+                    *item = with;
+                }
+            }
+        }
+    }
+    unknown(orig, base, &mut cur);
+    cur
 }
 
 /// A subnet from a stored net: the net compiled to a metamodel `Model`,
@@ -948,12 +1043,13 @@ pub fn missing(c: &Composition) -> Vec<Value> {
                 .into(),
         );
     }
-    if !c.doc.preserved_keys.is_empty() {
+    let preserved = c.preserved_keys();
+    if !preserved.is_empty() {
         add(
             "KEYS_PRESERVED",
             format!(
                 "the document has keys this build keeps but does not interpret: {}",
-                c.doc.preserved_keys.join(", ")
+                preserved.join(", ")
             ),
         );
     }
@@ -983,7 +1079,7 @@ pub fn document_json(c: &Composition) -> Value {
         "origin": c.doc.origin.name(),
         "name": c.bundle.name,
         "description": c.bundle.description,
-        "preserved_keys": c.doc.preserved_keys,
+        "preserved_keys": c.preserved_keys(),
         "edited": c.doc.original.is_some() && !c.unedited(),
     })
 }

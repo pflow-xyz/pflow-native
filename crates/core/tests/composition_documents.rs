@@ -583,12 +583,12 @@ fn reordering_a_sagas_steps_changes_the_params_text_and_the_cid() {
 }
 
 #[test]
-fn params_as_an_object_a_canonical_string_or_a_respaced_string_load_alike() {
+fn params_as_an_object_or_a_canonical_string_load_alike_and_a_sealed_string_is_never_rewritten() {
     let canonical = fixture("orders.composition.json")["instances"][2]["params"]
         .as_str()
         .unwrap()
         .to_string();
-    // Same saga: another key order, whitespace, a pretty-printed layout.
+    // Same saga: another key order, whitespace, a pretty-printed layout, a \u escape.
     let respaced = r#" {
         "steps" : [
             { "name": "reserve stock", "moves": [], "id": "reserve", "compensation": "release stock" },
@@ -599,17 +599,23 @@ fn params_as_an_object_a_canonical_string_or_a_respaced_string_load_alike() {
         "accounts" : { "merchant": { "shared": false, "initial": 0 },
                        "customer": { "initial": 1, "shared": false } }
     } "#;
-    let forms = [
-        ("object", saga_params()),
-        ("canonical string", json!(canonical)),
-        ("respaced string", json!(respaced)),
+    let escaped = canonical.replacen("reserve stock", "reserve\\u0020stock", 1);
+    assert_ne!(escaped, canonical);
+    let strings = [
+        ("respaced string", respaced.to_string()),
         (
             "pretty-printed string",
-            json!(serde_json::to_string_pretty(&saga_params()).unwrap()),
+            serde_json::to_string_pretty(&saga_params()).unwrap(),
         ),
+        ("string with a \\u escape", escaped),
     ];
+
+    // An object and the canonical string are one document: the export is the canonical string.
     let mut first: Option<(Value, Value)> = None;
-    for (name, params) in forms {
+    for (name, params) in [
+        ("object", saga_params()),
+        ("canonical string", json!(canonical)),
+    ] {
         let mut inst = payment_inst();
         inst["params"] = params;
         let d = doc(json!([inst]), json!([]));
@@ -619,9 +625,60 @@ fn params_as_an_object_a_canonical_string_or_a_respaced_string_load_alike() {
         assert_eq!(
             exp["document"]["instances"][0]["params"],
             json!(canonical),
-            "{name}: re-exported as the canonical string"
+            "{name}: written as the canonical string"
         );
         assert_eq!(out["cid"], exp["cid"], "{name}");
+        let sub = state(&mut s)["subnets"][0].clone();
+        match &first {
+            None => first = Some((json!(exp["cid"]), sub)),
+            Some((cid0, sub0)) => {
+                assert_eq!(&exp["cid"], cid0, "{name}: one CID");
+                assert_eq!(&sub, sub0, "{name}: one subnet");
+            }
+        }
+    }
+    let (canonical_cid, canonical_sub) = first.unwrap();
+
+    // A string is sealed as it came (identity rule: a consumer never re-canonicalises a sealed
+    // string): the composition built is the same, the document and its CID are the received ones,
+    // and store.put of the received bytes names the same CID the loader reports.
+    for (name, text) in strings {
+        let mut inst = payment_inst();
+        inst["params"] = json!(text);
+        let mut d = doc(json!([inst]), json!([]));
+        d.as_object_mut().unwrap().remove("links"); // the writer omits an empty list
+        let mut s = session();
+        let out = run(&mut s, "bundle.load", json!({"document": d}));
+        let exp = run(&mut s, "bundle.export", json!({}));
+        assert_eq!(
+            exp["document"]["instances"][0]["params"],
+            json!(text),
+            "{name}: params written back unchanged"
+        );
+        assert_eq!(
+            exp["document"], d,
+            "{name}: the document is the one received"
+        );
+        assert_eq!(
+            out["cid"],
+            cid::seal(&d).unwrap(),
+            "{name}: the seal of what was received"
+        );
+        assert_eq!(exp["cid"], out["cid"], "{name}");
+        assert_ne!(
+            exp["cid"], canonical_cid,
+            "{name}: another sealed string, another CID"
+        );
+        assert_eq!(
+            run(&mut s, "store.put", json!({"document": d}))["cid"],
+            out["cid"],
+            "{name}: the store names the document by the same CID"
+        );
+        assert_eq!(
+            state(&mut s)["subnets"][0],
+            canonical_sub,
+            "{name}: one subnet"
+        );
         // Idempotent: the export loads to itself.
         let mut t = session();
         let again = run(&mut t, "bundle.load", json!({"document": exp["document"]}));
@@ -634,16 +691,78 @@ fn params_as_an_object_a_canonical_string_or_a_respaced_string_load_alike() {
             exp["document"],
             "{name}"
         );
-        // And they are the same composition.
-        let sub = state(&mut s)["subnets"][0].clone();
-        match &first {
-            None => first = Some((json!(exp["cid"]), sub)),
-            Some((cid0, sub0)) => {
-                assert_eq!(&exp["cid"], cid0, "{name}: one CID for every spelling");
-                assert_eq!(&sub, sub0, "{name}: one subnet");
-            }
-        }
     }
+}
+
+/// The writer is the identity rule's canonical form, numbers included: an extra parameter key the
+/// constructor ignores is still part of the text the hash covers.
+#[test]
+fn params_written_from_an_object_are_the_identity_rules_canonical_text() {
+    let raw = r#"{"Payload":"","Initial":2,"ID":"orders","Capacity":3,"big":1e20,"odd":9007199254740993,"half":0.5,"w":"a\u00e9<>&"}"#;
+    let mut inst = orders_inst();
+    inst["params"] = serde_json::from_str(raw).unwrap();
+    let mut s = session();
+    run(
+        &mut s,
+        "bundle.load",
+        json!({"document": doc(json!([inst]), json!([]))}),
+    );
+    let exp = run(&mut s, "bundle.export", json!({}));
+    let text = exp["document"]["instances"][0]["params"].as_str().unwrap();
+    assert_eq!(
+        text,
+        pflow_native_core::model_id::canonical_json(raw).unwrap()
+    );
+    assert!(text.contains("\"big\":100000000000000000000"), "{text}");
+    assert!(text.contains("\"odd\":9007199254740992"), "{text}");
+    assert!(
+        text.contains("\"half\":0.5") && text.contains("\"w\":\"a\u{e9}<>&\""),
+        "{text}"
+    );
+}
+
+#[test]
+fn a_bundle_with_no_context_or_a_wrong_one_is_refused_with_its_code() {
+    for (name, ctx) in [
+        ("missing", None),
+        ("wrong", Some("https://example.com/other")),
+    ] {
+        let mut d = cafe();
+        match ctx {
+            None => {
+                d.as_object_mut().unwrap().remove("@context");
+            }
+            Some(c) => d["@context"] = json!(c),
+        }
+        assert_code(&load_err(&d), "DOCUMENT_CONTEXT");
+        let _ = name;
+    }
+}
+
+#[test]
+fn a_composition_carrying_its_own_cid_as_at_id_loads_and_exports_without_it() {
+    let mut first = session();
+    run(&mut first, "bundle.load", json!({"document": small_doc()}));
+    let canon = run(&mut first, "bundle.export", json!({}));
+    let (d, want) = (canon["document"].clone(), canon["cid"].clone());
+    assert_eq!(json!(cid::seal(&d).unwrap()), want);
+    let mut with_id = d.clone();
+    with_id["@id"] = want.clone();
+    let mut s = session();
+    let out = run(&mut s, "bundle.load", json!({"document": with_id}));
+    assert_eq!(out["cid"], want, "the seal ignores a top-level @id");
+    let exp = run(&mut s, "bundle.export", json!({}));
+    assert_eq!(exp["document"], d, "an export drops the @id");
+    // What store.get returns for a stored composition loads as it is.
+    let put = run(&mut s, "store.put", json!({"composition": true}));
+    let got = run(&mut s, "store.get", json!({"cid": put["cid"]}));
+    let mut t = session();
+    let again = run(&mut t, "bundle.load", json!({"document": got}));
+    assert_eq!(again["cid"], put["cid"]);
+    // Someone else's CID there is refused: the document would not be what it says it is.
+    let mut wrong = d;
+    wrong["@id"] = json!("zNotTheCidOfThis");
+    assert_code(&load_err(&wrong), "COMPOSITION_FIELD");
 }
 
 // ------------------------------------------------------------ 3. form (b): cafe
@@ -1038,6 +1157,117 @@ fn extra_keys_a_build_does_not_interpret_survive_the_unedited_round_trip() {
     let mut plain = session();
     let out = run(&mut plain, "bundle.load", json!({"document": cafe()}));
     assert!(!missing_codes(&out["missing"]).contains(&"KEYS_PRESERVED".to_string()));
+}
+
+#[test]
+fn an_edit_of_a_raw_bundle_keeps_every_key_and_part_it_did_not_touch() {
+    let mut with_keys = cafe();
+    with_keys["subnets"][0]["pattern"] = json!("workflow");
+    with_keys["subnets"][0]["params"] = json!({"places": 3});
+    with_keys["subnets"][1]["extra_sub_key"] = json!("kept");
+    with_keys["x-provenance"] = json!({"minted_by": "a test"});
+    with_keys["links"][0]["future_link_key"] = json!(7);
+    with_keys["links"][6]["on_the_removed_link"] = json!(true);
+    let n = with_keys["links"].as_array().unwrap().len();
+
+    let mut s = session();
+    let out = run(&mut s, "bundle.load", json!({"document": with_keys}));
+    assert_eq!(out["cid"], json!(cid::seal(&with_keys).unwrap()));
+    // Remove the last link (the one carrying `on_the_removed_link`).
+    run(&mut s, "bundle.remove_link", json!({"index": n - 1}));
+    let st = state(&mut s);
+    assert_eq!(st["document"]["edited"], true);
+    let exp = run(&mut s, "bundle.export", json!({}));
+    let doc = &exp["document"];
+    assert_eq!(doc["links"].as_array().unwrap().len(), n - 1);
+    assert_eq!(doc["subnets"][0]["pattern"], "workflow", "a recipe key");
+    assert_eq!(doc["subnets"][0]["params"], json!({"places": 3}));
+    assert_eq!(
+        doc["subnets"][1]["extra_sub_key"], "kept",
+        "a key on another subnet"
+    );
+    assert_eq!(
+        doc["x-provenance"],
+        json!({"minted_by": "a test"}),
+        "a top-level key"
+    );
+    assert_eq!(doc["links"][0]["future_link_key"], 7, "a key on a link");
+    assert!(
+        !doc.to_string().contains("on_the_removed_link"),
+        "the key of the link that was removed goes with it"
+    );
+    // Everything else is the document received, byte for byte, minus the removed link.
+    let mut want = with_keys.clone();
+    want["links"].as_array_mut().unwrap().pop();
+    assert_eq!(doc, &want);
+    assert_eq!(exp["cid"], json!(cid::seal(&want).unwrap()));
+
+    // What state says it keeps is what the export has: the removed link's key is gone from the
+    // list, the others are named.
+    let kept = st["document"]["preserved_keys"].as_array().unwrap();
+    for key in [
+        "subnets[0].pattern",
+        "subnets[0].params",
+        "subnets[1].extra_sub_key",
+        "x-provenance",
+        "links[0].future_link_key",
+    ] {
+        assert!(kept.contains(&json!(key)), "{key} in {kept:?}");
+    }
+    assert!(
+        !kept
+            .iter()
+            .any(|k| k.as_str().unwrap().contains("on_the_removed_link")),
+        "{kept:?}"
+    );
+    assert!(missing_codes(&st["missing"]).contains(&"KEYS_PRESERVED".to_string()));
+
+    // The edited export still loads, to itself.
+    let mut again = session();
+    let r = run(
+        &mut again,
+        "bundle.load",
+        json!({"document": exp["document"]}),
+    );
+    assert_eq!(r["cid"], exp["cid"]);
+    assert_eq!(
+        run(&mut again, "bundle.export", json!({}))["document"],
+        exp["document"]
+    );
+
+    // Undo is the document received.
+    run(&mut s, "edit.undo", json!({}));
+    assert_eq!(
+        run(&mut s, "bundle.export", json!({}))["document"],
+        with_keys
+    );
+}
+
+#[test]
+fn an_edit_of_a_bundle_that_names_its_parts_by_cid_keeps_the_references() {
+    let root = format!(
+        "{}/tests/fixtures/model/fixtures",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let read = |f: &str| -> Value {
+        serde_json::from_slice(&std::fs::read(format!("{root}/{f}")).unwrap()).unwrap()
+    };
+    let handoff = read("compose-handoff.jsonld");
+    let mut s = session();
+    for part in ["part-maker.jsonld", "part-taker.jsonld"] {
+        run(&mut s, "store.put", json!({"document": read(part)}));
+    }
+    let out = run(&mut s, "bundle.load", json!({"document": handoff}));
+    assert_eq!(out["cid"], json!(cid::seal(&handoff).unwrap()));
+    run(&mut s, "bundle.remove_link", json!({"index": 0}));
+    let exp = run(&mut s, "bundle.export", json!({}));
+    let mut want = handoff.clone();
+    want.as_object_mut().unwrap().remove("links");
+    assert_eq!(
+        exp["document"], want,
+        "both parts are still named by cid, no model inlined"
+    );
+    assert_eq!(state(&mut s)["document"]["preserved_keys"], json!([]));
 }
 
 // ------------------------------------------------------------ 4. across the forms
@@ -1553,21 +1783,26 @@ fn the_tokenmodel_subnet_shape_is_refused() {
 
 #[test]
 fn a_bundle_that_does_not_parse_is_refused() {
+    let ctx = json!(CONTEXT);
     assert_code(
-        &load_err(&json!({"@type": "PetriNetBundle", "subnets": "x"})),
+        &load_err(&json!({"@context": ctx, "@type": "PetriNetBundle", "subnets": "x"})),
         "BUNDLE_PARSE",
     );
     assert_code(
-        &load_err(&json!({"@type": "PetriNetBundle", "subnets": [{"id": "n", "model": 5}]})),
+        &load_err(
+            &json!({"@context": ctx, "@type": "PetriNetBundle", "subnets": [{"id": "n", "model": 5}]}),
+        ),
         "BUNDLE_PARSE",
     );
     assert_code(
-        &load_err(&json!({"@type": "PetriNetBundle", "subnets": [], "links": "x"})),
+        &load_err(
+            &json!({"@context": ctx, "@type": "PetriNetBundle", "subnets": [], "links": "x"}),
+        ),
         "BUNDLE_PARSE",
     );
     // A bundle with no @type but with subnets is read as one; a mistyped @type is a parse error.
     assert_code(
-        &load_err(&json!({"@type": 5, "subnets": []})),
+        &load_err(&json!({"@context": ctx, "@type": 5, "subnets": []})),
         "BUNDLE_PARSE",
     );
     let mut untyped = cafe();
@@ -1598,7 +1833,7 @@ fn a_part_reference_the_store_cannot_resolve_is_refused_naming_its_cid() {
 }
 
 #[test]
-fn a_part_reference_to_a_net_in_the_store_is_resolved_and_inlined() {
+fn a_part_reference_to_a_net_in_the_store_is_resolved_to_draw_and_the_document_stays_as_received() {
     let mut s = session();
     run(&mut s, "file.open_example", json!({"name": "sir"}));
     let sir = store::open().put_model(&s.doc, Some("sir"), None).unwrap();
@@ -1610,6 +1845,12 @@ fn a_part_reference_to_a_net_in_the_store_is_resolved_and_inlined() {
     assert_eq!(out["form"], "bundle");
     assert_eq!(out["instances"], json!(["epi"]));
     assert_eq!(out["flatten"], json!({"ok": true}));
+    // The CID reported is the seal of the document received, and the model identity says the same
+    // (a named wrapper is its own composition; its one part is listed).
+    assert_eq!(out["cid"], cid::seal(&reference).unwrap());
+    assert_eq!(out["model_cid"], out["cid"]);
+    assert_eq!(out["reduced"], false);
+    assert_eq!(out["parts"], json!([cid]));
     let f = flat(&mut s);
     let place_ids: Vec<&str> = f["places"]
         .as_array()
@@ -1622,37 +1863,100 @@ fn a_part_reference_to_a_net_in_the_store_is_resolved_and_inlined() {
     place_ids.sort();
     assert_eq!(place_ids, ["I", "R", "S"], "the stored net's places");
     assert_eq!(f["transitions"].as_array().unwrap().len(), 2);
-    let sub = &state(&mut s)["subnets"][0];
+    let st = state(&mut s);
+    let sub = &st["subnets"][0];
     assert_eq!(sub["net_type"], "WorkflowNet");
     assert_eq!(sub["places"].as_array().unwrap().len(), 3);
-    // The net became the inline subnet (spec 1.2), so the export is self-contained: it needs
-    // nothing from the store, and what `bundle.load` reported is the seal of what it writes.
+    // Resolved only to flatten and draw: nothing was edited, no key is "preserved", and the
+    // export is the document received, `cid` and all.
+    assert_eq!(st["document"]["edited"], false);
+    assert_eq!(st["document"]["preserved_keys"], json!([]));
     let exp = run(&mut s, "bundle.export", json!({}));
     assert_eq!(exp["form"], "bundle");
-    let part = &exp["document"]["subnets"][0];
-    assert_eq!(part["id"], "epi");
-    assert_eq!(part["net_type"], "WorkflowNet");
-    assert!(
-        part.get("cid").is_none() && part["model"]["places"].is_array(),
-        "{part}"
-    );
+    assert_eq!(exp["document"], reference);
     assert_eq!(exp["cid"], out["cid"]);
-    assert_eq!(cid::seal(&exp["document"]).unwrap(), exp["cid"]);
+    assert_eq!(exp["model_cid"], out["model_cid"]);
+
+    // It needs its part to draw, not to be named: an empty store refuses the load and says which
+    // CID it wants; with the part there again the same CID comes back.
     let mut elsewhere = session();
+    let err = refused(
+        &mut elsewhere,
+        "bundle.load",
+        json!({"document": exp["document"]}),
+    );
+    assert_code(&err, "BUNDLE_PART_UNRESOLVED");
+    assert!(err.contains(&cid), "{err}");
+    run(&mut elsewhere, "file.open_example", json!({"name": "sir"}));
+    let doc = elsewhere.doc.clone();
+    store::open().put_model(&doc, Some("sir"), None).unwrap();
     let again = run(
         &mut elsewhere,
         "bundle.load",
         json!({"document": exp["document"]}),
     );
-    assert_eq!(
-        again["cid"], exp["cid"],
-        "an empty store loads it to the same CID"
-    );
+    assert_eq!(again["cid"], exp["cid"]);
     assert_eq!(flat(&mut elsewhere), flat(&mut s));
     assert_eq!(
         run(&mut elsewhere, "bundle.export", json!({}))["document"],
         exp["document"]
     );
+}
+
+/// The model-identity vectors that name their parts by CID (tests/fixtures/model/golden.json):
+/// with the parts in the store, `bundle.load` reports the seal the vector says, and the model
+/// CID, and `bundle.export` is the document received.
+#[test]
+fn the_by_reference_identity_vectors_load_to_their_golden_cids_and_export_unchanged() {
+    let root = format!("{}/tests/fixtures", env!("CARGO_MANIFEST_DIR"));
+    let read = |rel: &str| -> Value {
+        let p = format!("{root}/{rel}");
+        serde_json::from_slice(&std::fs::read(&p).unwrap_or_else(|e| panic!("{p}: {e}")))
+            .unwrap_or_else(|e| panic!("{p}: {e}"))
+    };
+    let golden = read("model/golden.json");
+    let mut checked = vec![];
+    for v in golden["vectors"].as_array().unwrap() {
+        let name = v["name"].as_str().unwrap();
+        let parts = v["parts"].as_array().cloned().unwrap_or_default();
+        // The vectors that are documents naming parts by CID (the parts themselves and the plans
+        // have none).
+        if parts.is_empty() || v["file"].as_str().unwrap().contains("plan-") {
+            continue;
+        }
+        let document = read(&format!("model/{}", v["file"].as_str().unwrap()));
+        let mut s = session();
+        for file in [
+            "model/fixtures/part-maker.jsonld",
+            "model/fixtures/part-taker.jsonld",
+            "cid/coffee-shop.jsonld",
+        ] {
+            run(&mut s, "store.put", json!({"document": read(file)}));
+        }
+        let out = run(&mut s, "bundle.load", json!({"document": document}));
+        assert_eq!(
+            out["cid"], v["sealed"],
+            "{name}: load.cid is the seal of the document received"
+        );
+        assert_eq!(
+            out["model_cid"], v["model"],
+            "{name}: the model CID the identity rule gives"
+        );
+        assert_eq!(out["reduced"], v["reduced"], "{name}");
+        assert_eq!(out["parts"], json!(parts), "{name}");
+        let st = state(&mut s);
+        assert_eq!(st["document"]["edited"], false, "{name}");
+        assert_eq!(st["document"]["preserved_keys"], json!([]), "{name}");
+        let exp = run(&mut s, "bundle.export", json!({}));
+        assert_eq!(
+            exp["document"], document,
+            "{name}: export is the document received"
+        );
+        assert_eq!(exp["cid"], v["sealed"], "{name}");
+        checked.push(name.to_string());
+    }
+    // compose-handoff, its relinked twin, and the two wrappers (one bare, so it reduces to its part).
+    assert_eq!(checked.len(), 4, "{checked:?}");
 }
 
 #[test]

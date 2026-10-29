@@ -320,6 +320,16 @@ pub fn canonical_json(text: &str) -> Result<String> {
     Ok(out)
 }
 
+/// [`canonical_json`] of a value that is already parsed: what a writer
+/// emits when it builds the text a sealed document carries (a subnet's
+/// `params`, a check). A *received* string is never passed through this: it
+/// is hashed as given.
+pub fn canonical_value(v: &Value) -> String {
+    let mut out = String::new();
+    write_canonical(&mut out, v);
+    out
+}
+
 fn write_canonical(out: &mut String, v: &Value) {
     match v {
         Value::Null => out.push_str("null"),
