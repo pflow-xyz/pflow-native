@@ -6,6 +6,7 @@
 
 use std::sync::Arc;
 
+use pflow_native_core::cid;
 use pflow_native_core::store::{self, DocKind, Store};
 use pflow_native_core::{ArtifactData, Session};
 use serde_json::{json, Value};
@@ -113,6 +114,63 @@ fn row<'a>(list: &'a Value, cid: &str) -> &'a Value {
         .iter()
         .find(|r| r["cid"] == json!(cid))
         .unwrap_or_else(|| panic!("{cid} is not listed in {list}"))
+}
+
+/// docs §3.1: a content document's top-level `@id` is accepted when it is the document's own CID
+/// (what `store.get` returns) and is `[CONTENT_FIELD]` otherwise. `content.load` refuses the
+/// document. `store.put {document}` does not refuse a document that does not parse (docs §5): it
+/// stores it as given, under its own seal (the store writes that CID as the `@id`), with a note
+/// that carries the refusal; the right `@id` gets no note.
+#[test]
+fn a_content_documents_own_id_must_be_its_cid() {
+    let mut s = session();
+    run(&mut s, "bundle.open", json!({}));
+    let plain = orders_content();
+    let own = cid::seal(&plain).unwrap();
+    let with_id = |id: &str| {
+        let mut d = plain.clone();
+        d["@id"] = json!(id);
+        d
+    };
+    let other = "z4EBG9j1SUhuY7XnEcPfHQPzQkmqjUtgrD2wHADw8qdRbpnNt6W";
+    assert_ne!(own, other);
+    let library_source = run(&mut s, "content.get", Value::Null)["source"].clone();
+
+    // Another document's CID as its `@id`: refused, and the refusal says what it must be.
+    let e = refused(&mut s, "content.load", json!({"document": with_id(other)}));
+    assert!(e.starts_with("[CONTENT_FIELD] "), "{e}");
+    assert!(e.contains(&own) && e.contains("@id"), "{e}");
+    assert_eq!(
+        run(&mut s, "content.get", Value::Null)["source"],
+        library_source,
+        "nothing was attached"
+    );
+    let put = run(&mut s, "store.put", json!({"document": with_id(other)}));
+    let note = put["note"].as_str().unwrap();
+    assert!(
+        note.contains("does not parse as model content")
+            && note.contains("[CONTENT_FIELD]")
+            && note.contains(&own),
+        "{put}"
+    );
+    assert_eq!(
+        put["cid"],
+        json!(own),
+        "the `@id` is not part of the seal: {put}"
+    );
+
+    // Its own CID, as `store.get` hands it back: accepted by both, with nothing to say.
+    let loaded = run(&mut s, "content.load", json!({"document": with_id(&own)}));
+    assert_eq!(loaded["cid"], json!(own), "{loaded}");
+    assert_eq!(loaded["source"], "loaded", "{loaded}");
+    let put = run(&mut s, "store.put", json!({"document": with_id(&own)}));
+    assert_eq!(put["cid"], json!(own), "{put}");
+    assert_eq!(put["kind"], "content", "{put}");
+    assert!(put.get("note").is_none(), "no complaint: {put}");
+    assert_eq!(
+        run(&mut s, "store.get", json!({"cid": own}))["@id"],
+        json!(own)
+    );
 }
 
 #[test]
