@@ -1532,3 +1532,73 @@ fn a_store_file_that_is_not_the_document_its_name_says_is_refused_on_every_read(
     let e = err(&mut s, "bundle.load", json!({"document": handoff}));
     assert!(e.contains("BUNDLE_PART_UNRESOLVED"), "{e}");
 }
+
+// ------------------------------------------------------------ signature-only verification
+
+fn verify_signature_only(s: &mut Session, receipt: &Value) -> Value {
+    run(
+        s,
+        "provenance.verify_receipt",
+        json!({"receipt": receipt, "replay": false}),
+    )
+}
+
+/// With `replay: false` the signature is the only gate: `replay_ok` is true by construction, so a
+/// verdict that forgot the signature would call a forged receipt valid. Run, check and content
+/// receipts, each altered after signing (the claim, the signature) are invalid without a replay,
+/// and a receipt signed by another key is valid but not trusted.
+#[test]
+fn a_forged_receipt_is_invalid_without_a_replay_for_every_kind() {
+    world();
+    let mut s = session();
+    let receipts = [
+        (
+            "composition-run",
+            run(&mut s, "bundle.receipt", json!({"scenario": "commit"})),
+        ),
+        (
+            "check",
+            run(
+                &mut s,
+                "content.receipt",
+                json!({"entry": "commit-completes"}),
+            ),
+        ),
+        ("content", run(&mut s, "content.receipt", json!({}))),
+    ];
+    let foreign = pv::ReceiptKey::from_seed([7u8; 32], Some(PathBuf::from("/nowhere/key.json")));
+    for (what, out) in receipts {
+        let good = &out["receipt"];
+        let v = verify_signature_only(&mut s, good);
+        assert_eq!(v["verdict"], "valid", "{what}: {v}");
+        assert_eq!(v["signatureValid"], true, "{what}: {v}");
+        assert!(v.get("replayed").is_none(), "{what}: {v}");
+
+        // The claim changed after it was signed.
+        let mut claim = good.clone();
+        claim["resultHash"] = json!(format!("sha256:{}", "0".repeat(64)));
+        let v = verify_signature_only(&mut s, &claim);
+        assert_eq!(v["verdict"], "invalid", "{what}: {v}");
+        assert_eq!(v["signatureValid"], false, "{what}: {v}");
+        assert!(
+            v.get("replayed").is_none() && v.get("resultMatches").is_none(),
+            "{what}: nothing was replayed: {v}"
+        );
+
+        // The signature changed.
+        let mut sig = good.clone();
+        let text = sig["signature"].as_str().unwrap().to_string();
+        let last = if text.ends_with('A') { 'B' } else { 'A' };
+        sig["signature"] = json!(format!("{}{last}", &text[..text.len() - 1]));
+        let v = verify_signature_only(&mut s, &sig);
+        assert_eq!(v["verdict"], "invalid", "{what}: {v}");
+        assert_eq!(v["signatureValid"], false, "{what}: {v}");
+
+        // Signed again by somebody else: the signature holds, the key is not ours.
+        let theirs = resign_with(good, &foreign, |_| {});
+        let v = verify_signature_only(&mut s, &theirs);
+        assert_eq!(v["verdict"], "valid", "{what}: {v}");
+        assert_eq!(v["trustedKey"], false, "{what}: {v}");
+        assert!(v.get("replayed").is_none(), "{what}: {v}");
+    }
+}
