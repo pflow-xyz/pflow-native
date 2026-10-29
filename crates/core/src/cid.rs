@@ -43,6 +43,21 @@
 //! an approximation of Go's `net/url` and govalidator's `IsURL`; that only
 //! matters for documents that use full IRIs as property names.
 //!
+//! # Bounded work, no deep recursion
+//!
+//! URDNA2015 is superlinear on purpose: blank nodes that look alike are told
+//! apart by walking their neighbours (a long `@list` is quadratic) and by
+//! permuting groups of identical neighbours (factorial). A document a few
+//! hundred bytes long can ask for more time than anyone has, and `seal` runs
+//! on documents that were received. So the canonicaliser counts its steps
+//! ([`MAX_SEAL_WORK`]) and refuses, with `[DOCUMENT_TOO_COMPLEX]`, a document
+//! that needs more; the count is the same on every platform, and a document
+//! that is refused is never given a different CID. The N-degree hash is
+//! recursive in the specification and in json-gold; here its recursion is a
+//! stack on the heap, so the depth of a long list cannot overflow the
+//! thread's stack (a browser's is 1 MiB): the same steps in the same order,
+//! the same hashes.
+//!
 //! # Go is the reference, not jsonld.js
 //!
 //! The server's CID is the one stored as `@id`, so where pflow.xyz's two
@@ -119,7 +134,7 @@ pub fn seal(doc: &Value) -> Result<String> {
 /// The canonical (URDNA2015) N-Quads `seal` hashes, for debugging a CID
 /// mismatch against pflow.xyz's stored `canonical/{cid}.nq`.
 pub fn nquads(doc: &Value) -> Result<String> {
-    Ok(canonicalize(&to_rdf(doc)?))
+    canonicalize(&to_rdf(doc)?)
 }
 
 /// CIDv1 (dag-json, sha2-256, base58btc) of canonical N-Quads.
@@ -712,9 +727,43 @@ struct Canon<'a> {
     first_degree: Vec<Option<String>>,
     /// The canonical issuer (`_:c14n`).
     canonical: Issuer,
+    /// Steps taken so far, and the most that are allowed ([`MAX_SEAL_WORK`]).
+    work: u64,
+    limit: u64,
 }
 
-fn canonicalize(quads: &[Quad]) -> String {
+/// The most steps URDNA2015 may take for one document before `seal` refuses
+/// it with `[DOCUMENT_TOO_COMPLEX]`. A step is one N-degree hash call
+/// (counted with the quads it reads) or one permutation tried (counted with
+/// its length). The algorithm is superlinear by design: blank nodes that look
+/// alike (siblings with the same content, the cells of a long `@list`) are
+/// told apart by walking and permuting their neighbours, so a few hundred
+/// bytes of identical siblings cost factorial time and a long list costs
+/// quadratic time. The byte cap on a document bounds its size, not this; the
+/// count does, and it is the same on every platform, so a document seals or
+/// is refused alike everywhere. The largest parity fixture needs 0.4 million
+/// steps, a 200-place ring net 1.6 million, and every composition document
+/// of this repository under 0.13 million; a hostile one costs the whole
+/// budget (a few seconds in a debug build) and no more.
+pub const MAX_SEAL_WORK: u64 = 2_000_000;
+
+/// The deepest chain of N-degree calls (the length of a list, give or take):
+/// each pending call holds a few hundred bytes on the heap, not the stack.
+const MAX_SEAL_DEPTH: usize = 20_000;
+
+fn too_complex(limit: u64) -> Error {
+    Error::Invalid(format!(
+        "[DOCUMENT_TOO_COMPLEX] cannot seal: canonicalising this document takes more than {limit} steps \
+         (many identical sibling objects, or a very long list, make URDNA2015 superlinear); \
+         remove the repeated structure or split the document"
+    ))
+}
+
+fn canonicalize(quads: &[Quad]) -> Result<String> {
+    canonicalize_within(quads, MAX_SEAL_WORK)
+}
+
+fn canonicalize_within(quads: &[Quad], limit: u64) -> Result<String> {
     let nodes = quads
         .iter()
         .flat_map(|q| [&q.s, &q.o])
@@ -737,6 +786,8 @@ fn canonicalize(quads: &[Quad]) -> String {
         first_degree: vec![None; nodes],
         canonical: Issuer::new(nodes),
         bnode_quads,
+        work: 0,
+        limit,
     };
 
     // Issue canonical ids to nodes with a unique first-degree hash, in hash
@@ -773,9 +824,11 @@ fn canonicalize(quads: &[Quad]) -> String {
             if c.canonical.get(id).is_some() {
                 continue;
             }
+            // A fresh issuer is a vector of every node: that is work too.
+            c.spend(1 + nodes as u64 / 64)?;
             let mut issuer = Issuer::new(nodes);
             issuer.issue(id);
-            let (h, result) = c.hash_n_degree(id, issuer);
+            let (h, result) = c.hash_n_degree(id, issuer)?;
             hash_paths.entry(h).or_default().push(result);
         }
         for issuers in hash_paths.values() {
@@ -795,10 +848,50 @@ fn canonicalize(quads: &[Quad]) -> String {
     };
     let mut lines: Vec<String> = quads.iter().map(|q| quad_nq(q, &label)).collect();
     lines.sort();
-    lines.concat()
+    Ok(lines.concat())
+}
+
+/// One pending call of the N-degree hash. The hash is recursive in the
+/// specification (depth = the length of a list); here the recursion is a
+/// stack of these on the heap, so a long list cannot overflow the thread's
+/// stack (the browser's is 1 MiB), and [`MAX_SEAL_WORK`] bounds the time.
+struct Frame {
+    /// The issuer this call returns: the chosen one after each related group.
+    issuer: Issuer,
+    groups: std::vec::IntoIter<(String, Vec<usize>)>,
+    md: Sha256,
+    group: Option<Group>,
+}
+
+/// One related-hash group of a [`Frame`]: the permutations of its nodes.
+struct Group {
+    perms: Permutator,
+    /// One related node: one permutation, always chosen, no copy of the issuer.
+    single: bool,
+    chosen_path: String,
+    chosen_issuer: Option<Issuer>,
+    attempt: Option<Attempt>,
+}
+
+/// One permutation being tried: its path so far, and the related nodes it
+/// still has to hash (the calls that were recursive).
+struct Attempt {
+    issuer: Issuer,
+    path: String,
+    todo: std::vec::IntoIter<usize>,
+    /// The identifier issued to the related node being hashed.
+    issued: u32,
 }
 
 impl Canon<'_> {
+    fn spend(&mut self, steps: u64) -> Result<()> {
+        self.work = self.work.saturating_add(steps);
+        if self.work > self.limit {
+            return Err(too_complex(self.limit));
+        }
+        Ok(())
+    }
+
     fn hash_first_degree(&mut self, id: usize) -> String {
         if let Some(h) = &self.first_degree[id] {
             return h.clone();
@@ -833,7 +926,10 @@ impl Canon<'_> {
         sha256_hex(&[pos, &pred, &id])
     }
 
-    fn hash_n_degree(&mut self, id: usize, mut issuer: Issuer) -> (String, Issuer) {
+    /// The start of an N-degree call: the related blank nodes of `id`,
+    /// grouped by the hash of how they relate to it.
+    fn enter(&mut self, id: usize, issuer: Issuer) -> Result<Frame> {
+        self.spend(1 + self.bnode_quads[id].len() as u64)?;
         let quads = self.quads;
         let mut hash_to_related: BTreeMap<String, Vec<usize>> = BTreeMap::new();
         for qi in self.bnode_quads[id].clone() {
@@ -847,70 +943,131 @@ impl Canon<'_> {
                 }
             }
         }
+        Ok(Frame {
+            issuer,
+            groups: hash_to_related.into_iter().collect::<Vec<_>>().into_iter(),
+            md: Sha256::new(),
+            group: None,
+        })
+    }
 
+    /// json-gold's `hashNDegreeQuads`, with its recursion turned into a stack
+    /// of [`Frame`]s: same steps in the same order, so the same hash.
+    fn hash_n_degree(&mut self, id: usize, issuer: Issuer) -> Result<(String, Issuer)> {
         let longer = |path: &str, chosen: &str| {
             !chosen.is_empty() && path.len() >= chosen.len() && path > chosen
         };
-        let mut md = Sha256::new();
-        for (related_hash, blank_nodes) in hash_to_related {
-            md.update(related_hash.as_bytes());
-            let mut chosen_path = String::new();
-            let mut chosen_issuer: Option<Issuer> = None;
+        let mut stack = vec![self.enter(id, issuer)?];
+        // What the call that just finished returns to its caller.
+        let mut returned: Option<(String, Issuer)> = None;
+        loop {
+            let Frame {
+                issuer,
+                groups,
+                md,
+                group,
+            } = stack.last_mut().expect("a frame while the loop runs");
+
+            if let Some((result_hash, result_issuer)) = returned.take() {
+                // Back in the caller, inside its attempt: the recursion's tail.
+                let g = group.as_mut().expect("a caller is inside a group");
+                let at = g.attempt.as_mut().expect("a caller is inside an attempt");
+                at.path
+                    .push_str(&format!("_:b{}<{result_hash}>", at.issued));
+                at.issuer = result_issuer;
+                if longer(&at.path, &g.chosen_path) {
+                    g.attempt = None;
+                }
+            }
+
+            let Some(g) = group.as_mut() else {
+                // Between groups: the next related-hash group, or this call is done.
+                match groups.next() {
+                    Some((related_hash, blank_nodes)) => {
+                        md.update(related_hash.as_bytes());
+                        *group = Some(Group {
+                            single: blank_nodes.len() == 1,
+                            perms: Permutator::new(blank_nodes),
+                            chosen_path: String::new(),
+                            chosen_issuer: None,
+                            attempt: None,
+                        });
+                    }
+                    None => {
+                        let done = stack.pop().expect("the frame just used");
+                        let result = (hex(&done.md.finalize()), done.issuer);
+                        if stack.is_empty() {
+                            return Ok(result);
+                        }
+                        returned = Some(result);
+                    }
+                }
+                continue;
+            };
+
+            if let Some(at) = g.attempt.as_mut() {
+                if let Some(related) = at.todo.next() {
+                    // Issued when the attempt was built; the call keeps it.
+                    at.issued = at.issuer.issue(related);
+                    let handed = std::mem::replace(&mut at.issuer, Issuer::new(0));
+                    if stack.len() >= MAX_SEAL_DEPTH {
+                        return Err(too_complex(self.limit));
+                    }
+                    let child = self.enter(related, handed)?;
+                    stack.push(child);
+                } else {
+                    let at = g.attempt.take().expect("the attempt just read");
+                    if g.chosen_path.is_empty() || at.path < g.chosen_path {
+                        g.chosen_path = at.path;
+                        g.chosen_issuer = Some(at.issuer);
+                    }
+                }
+                continue;
+            }
+
+            // No attempt in progress: the group's next permutation.
+            let Some(permutation) = g.perms.next_permutation() else {
+                md.update(g.chosen_path.as_bytes());
+                if let Some(chosen) = g.chosen_issuer.take() {
+                    *issuer = chosen;
+                }
+                *group = None;
+                continue;
+            };
+            self.spend(1 + permutation.len() as u64)?;
             // With a single related node there is one permutation, always
             // chosen: work on `issuer` itself instead of a copy.
-            let single = blank_nodes.len() == 1;
-            let mut perms = Permutator::new(blank_nodes);
-            while let Some(permutation) = perms.next_permutation() {
-                let mut issuer_copy = if single {
-                    std::mem::replace(&mut issuer, Issuer::new(0))
+            let mut issuer_copy = if g.single {
+                std::mem::replace(issuer, Issuer::new(0))
+            } else {
+                issuer.clone()
+            };
+            let mut path = String::new();
+            let mut recursion = Vec::new();
+            let mut skip = false;
+            for &related in &permutation {
+                if let Some(c) = self.canonical.get(related) {
+                    path.push_str(&format!("_:c14n{c}"));
                 } else {
-                    issuer.clone()
-                };
-                let mut path = String::new();
-                let mut recursion = Vec::new();
-                let mut skip = false;
-                for &related in &permutation {
-                    if let Some(c) = self.canonical.get(related) {
-                        path.push_str(&format!("_:c14n{c}"));
-                    } else {
-                        if issuer_copy.get(related).is_none() {
-                            recursion.push(related);
-                        }
-                        path.push_str(&format!("_:b{}", issuer_copy.issue(related)));
+                    if issuer_copy.get(related).is_none() {
+                        recursion.push(related);
                     }
-                    if longer(&path, &chosen_path) {
-                        skip = true;
-                        break;
-                    }
+                    path.push_str(&format!("_:b{}", issuer_copy.issue(related)));
                 }
-                if skip {
-                    continue;
-                }
-                for related in recursion {
-                    // Issued above; the recursion keeps it.
-                    let issued = issuer_copy.issue(related);
-                    let (result_hash, result_issuer) = self.hash_n_degree(related, issuer_copy);
-                    path.push_str(&format!("_:b{issued}<{result_hash}>"));
-                    issuer_copy = result_issuer;
-                    if longer(&path, &chosen_path) {
-                        skip = true;
-                        break;
-                    }
-                }
-                if skip {
-                    continue;
-                }
-                if chosen_path.is_empty() || path < chosen_path {
-                    chosen_path = path;
-                    chosen_issuer = Some(issuer_copy);
+                if longer(&path, &g.chosen_path) {
+                    skip = true;
+                    break;
                 }
             }
-            md.update(chosen_path.as_bytes());
-            if let Some(chosen) = chosen_issuer {
-                issuer = chosen;
+            if !skip {
+                g.attempt = Some(Attempt {
+                    issuer: issuer_copy,
+                    path,
+                    todo: recursion.into_iter(),
+                    issued: 0,
+                });
             }
         }
-        (hex(&md.finalize()), issuer)
     }
 }
 
@@ -1032,5 +1189,65 @@ mod tests {
         let mut b = a.clone();
         b["@id"] = json!(seal(&a).unwrap());
         assert_eq!(seal(&a).unwrap(), seal(&b).unwrap());
+    }
+
+    /// An RDF graph of `n` identical empty objects under each of two
+    /// identical parents: the canonicaliser permutes the `n` of each, so the
+    /// work is factorial in `n`.
+    fn identical_siblings(n: usize) -> Value {
+        let kids: Vec<Value> = (0..n).map(|_| json!({})).collect();
+        json!({
+            "@context": PFLOW_CONTEXT_URL,
+            "@type": "PetriNet",
+            "junk": [{"k": kids.clone()}, {"k": kids}],
+        })
+    }
+
+    #[test]
+    fn the_work_is_counted_and_a_small_budget_refuses() {
+        let doc = identical_siblings(7);
+        let quads = to_rdf(&doc).unwrap();
+        let whole = canonicalize(&quads).unwrap();
+        // Enough budget gives the same answer as the default, and a small one
+        // refuses with the code, not with a different canonical form.
+        assert_eq!(canonicalize_within(&quads, 10_000_000).unwrap(), whole);
+        let err = canonicalize_within(&quads, 100_000)
+            .unwrap_err()
+            .to_string();
+        assert!(err.starts_with("[DOCUMENT_TOO_COMPLEX] "), "{err}");
+        // Eight siblings (40320 permutations of each group) are refused by
+        // the default budget: seconds, not the half a minute they cost before.
+        let err = seal(&identical_siblings(8)).unwrap_err().to_string();
+        assert!(err.starts_with("[DOCUMENT_TOO_COMPLEX] "), "{err}");
+    }
+
+    #[test]
+    fn a_long_list_is_refused_not_overflowed() {
+        // 3000 elements: the cells of an `@list` look alike, so the hash walks
+        // the chain to its end from each of them. Recursing on the call stack
+        // aborted the process (a test thread has 2 MiB) before the work, which
+        // is quadratic, was counted; on the heap it is only slow.
+        let items: Vec<Value> = (0..3000)
+            .map(|i| json!({"source": format!("p{i}")}))
+            .collect();
+        let doc = json!({"@context": PFLOW_CONTEXT_URL, "@type": "PetriNet", "arcs": items});
+        let err = seal(&doc).unwrap_err().to_string();
+        assert!(err.starts_with("[DOCUMENT_TOO_COMPLEX] "), "{err}");
+    }
+
+    #[test]
+    fn a_list_within_the_budget_still_seals_to_the_same_cid() {
+        // 40 elements: the iterative walk and a second run agree, and the CID
+        // does not depend on the budget (parity with pflow.xyz is tests/cid.rs).
+        let items: Vec<Value> = (0..40)
+            .map(|i| json!({"source": format!("p{i}")}))
+            .collect();
+        let doc = json!({"@context": PFLOW_CONTEXT_URL, "@type": "PetriNet", "arcs": items});
+        let quads = to_rdf(&doc).unwrap();
+        assert_eq!(
+            canonicalize_within(&quads, 2_000_000).unwrap(),
+            canonicalize_within(&quads, 20_000_000).unwrap()
+        );
+        assert!(seal(&doc).unwrap().starts_with('z'));
     }
 }
