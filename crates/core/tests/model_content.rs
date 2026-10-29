@@ -3954,3 +3954,74 @@ fn a_model_id_with_a_name_after_it_does_not_resolve() {
         "{e}"
     );
 }
+
+// ------------------------------------------------------------ the library carries its checks
+
+/// A finding about the model is checkable, and a checkable finding carries its check: the library
+/// tests run whichever checks exist and count them from the document itself, so a finding whose
+/// check was dropped would leave every one of them green. This pins which findings have none, with
+/// the reason, and the counts as literals, so a check lost (or added) is a decision in this file.
+#[test]
+fn library_findings_carry_their_checks_and_the_counts_are_pinned() {
+    use std::collections::BTreeMap;
+    let census = |id: &str| -> (BTreeMap<String, usize>, Vec<String>, usize) {
+        let lib = content::library_entry(id).unwrap_or_else(|| panic!("no library {id}"));
+        let mut by_kind: BTreeMap<String, usize> = BTreeMap::new();
+        let mut unchecked = vec![];
+        for e in &lib.content.entries {
+            if e.check.is_some() {
+                *by_kind.entry(e.kind.clone()).or_default() += 1;
+            } else if e.kind == "finding" {
+                unchecked.push(e.id.clone());
+            }
+        }
+        (by_kind, unchecked, lib.content.checks().len())
+    };
+    let kinds = |pairs: &[(&str, usize)]| -> BTreeMap<String, usize> {
+        pairs.iter().map(|(k, n)| (k.to_string(), *n)).collect()
+    };
+
+    let (by_kind, unchecked, total) = census("orders");
+    // Five findings have evidence that is not in the registry (docs/composition-documents.md
+    // §3.4): a different wiring a check may not build (capacity), a reading of a paper (wiring
+    // diagrams), an external checker's run (Chyp, the go-pflow cross-check) and a drawing's
+    // token-identity rule (the Process steps). Any other finding without a check is a check lost.
+    assert_eq!(
+        unchecked,
+        [
+            "find-capacity-check-is-post-firing",
+            "find-wiring-diagrams-are-undirected",
+            "find-chyp-proves-link-order-irrelevant",
+            "lens-agrees-with-gopflow",
+            "process-steps-chain",
+        ]
+    );
+    assert_eq!(total, 91, "the orders library ships 91 checks");
+    assert_eq!(
+        by_kind,
+        kinds(&[
+            ("finding", 30),
+            ("caveat", 27),
+            ("note", 21),
+            ("convention-example", 7),
+            ("scenario", 4),
+            ("judgment", 2),
+        ])
+    );
+
+    let (by_kind, unchecked, total) = census("connect4");
+    assert!(
+        unchecked.is_empty(),
+        "every Connect-4 finding has a check: {unchecked:?}"
+    );
+    assert_eq!(total, 41, "the Connect-4 library ships 41 checks");
+    assert_eq!(
+        by_kind,
+        kinds(&[
+            ("note", 31),
+            ("convention-example", 5),
+            ("finding", 4),
+            ("caveat", 1),
+        ])
+    );
+}
