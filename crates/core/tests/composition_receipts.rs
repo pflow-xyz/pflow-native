@@ -1815,6 +1815,113 @@ fn putting_a_document_again_repairs_an_altered_file_of_the_checked_kinds_only() 
     );
 }
 
+/// One saga instance of `n` steps (no moves) and a content document for it: a declared scenario
+/// that runs every step and commits, and a finding whose check runs it. The saga flattens to a
+/// Bundle whose arcs are a list `n` long, which is what sealing it is quadratic in.
+fn saga_doc(n: usize) -> Value {
+    let steps: Vec<Value> = (0..n)
+        .map(|i| {
+            json!({"id": format!("s{i}"), "name": format!("step {i}"),
+            "compensation": format!("undo {i}"), "moves": []})
+        })
+        .collect();
+    json!({"@context": "https://pflow.xyz/schema", "@type": "PatternComposition", "name": "t",
+        "instances": [{"id": "payment", "pattern": "saga", "params": {
+            "id": "payment",
+            "accounts": {"customer": {"initial": 1, "shared": false},
+                         "merchant": {"initial": 0, "shared": false}},
+            "steps": steps}}],
+        "links": []})
+}
+
+fn saga_content(n: usize) -> Value {
+    let mut script: Vec<Value> = (0..n).map(|i| json!(format!("payment/do_s{i}"))).collect();
+    script.push(json!("payment/commit"));
+    json!({
+        "@context": "https://pflow.xyz/schema", "@type": "ModelContent", "name": "saga",
+        "subject": {"kind": "composition", "name": "t"},
+        "entries": [
+            declared("all", "Every step runs", json!(script), json!([
+                {"place": "payment/completed", "op": "==", "n": 1, "says": "the saga completes"},
+            ])),
+            {"id": "completes", "kind": "finding", "order": 1, "text": "The saga completes.",
+             "about": ["scenario:all"],
+             "check": run_check("the run completes", "all", json!([
+                {"path": "/completed", "op": "==", "value": true},
+             ]))},
+        ],
+    })
+}
+
+/// `command` in `s`, and how many seals it performed.
+fn counted(s: &mut Session, command: &str, args: Value) -> (Value, u64) {
+    let before = cid::seals_on_this_thread();
+    let out = run(s, command, args);
+    (out, seals_since(before))
+}
+
+/// Receipts, their verification and the state of a composition with content attached name it by
+/// its recipe and its content and never seal the Bundle it flattens to, which is the one costly
+/// seal (the cost of a net is its size squared). A saga of 10 steps flattens to a Bundle that
+/// needs 153 thousand steps to seal; the limit is set below that, so a command that sealed it
+/// would be refused, and the seals each command performs are counted, like `dump_state`'s: the
+/// document's CID and the content's, and no more.
+#[test]
+fn receipts_their_verification_and_the_state_never_seal_the_flattened_bundle() {
+    world();
+    let n = 10;
+    let mut s = Session::default();
+    run(
+        &mut s,
+        "bundle.load",
+        json!({"document": saga_doc(n), "content": saga_content(n)}),
+    );
+    let plain = run(&mut s, "bundle.export", json!({"form": "bundle"}))["document"].clone();
+    cid::limit_work_on_this_thread(Some(50_000));
+    assert!(
+        cid::is_too_complex(&cid::seal(&plain).unwrap_err()),
+        "the premise: the flattened Bundle is past the limit"
+    );
+
+    let (state, seals) = counted(&mut s, "bundle.state", Value::Null);
+    assert_eq!(state["content"]["entries"], 2, "{state}");
+    assert_eq!(seals, 0, "bundle.state seals nothing");
+
+    let (run_receipt, seals) = counted(&mut s, "bundle.receipt", json!({"scenario": "all"}));
+    assert_eq!(seals, 2, "the document's CID and the content's");
+    let (verdict, seals) = counted(
+        &mut s,
+        "provenance.verify_receipt",
+        json!({"receipt": run_receipt["receipt"]}),
+    );
+    assert_valid(&verdict);
+    assert_eq!(seals, 2, "the replay names the document and the content");
+
+    let (check_receipt, seals) = counted(&mut s, "content.receipt", json!({"entry": "completes"}));
+    assert_eq!(
+        seals, 4,
+        "the recipe and the content, a few times over; no Bundle"
+    );
+    let (verdict, seals) = counted(
+        &mut s,
+        "provenance.verify_receipt",
+        json!({"receipt": check_receipt["receipt"]}),
+    );
+    assert_valid(&verdict);
+    assert_eq!(seals, 4);
+
+    let (content_receipt, seals) = counted(&mut s, "content.receipt", json!({}));
+    assert_eq!(seals, 4);
+    let (verdict, seals) = counted(
+        &mut s,
+        "provenance.verify_receipt",
+        json!({"receipt": content_receipt["receipt"]}),
+    );
+    assert_valid(&verdict);
+    assert_eq!(seals, 4);
+    cid::limit_work_on_this_thread(None);
+}
+
 // ------------------------------------------------------------ signature-only verification
 
 fn verify_signature_only(s: &mut Session, receipt: &Value) -> Value {
