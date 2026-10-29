@@ -128,8 +128,11 @@ content checks seal the recipe only, which is small however large the net it bui
 has `bundle_cid: null` and a `bundle_cid_error` (`[DOCUMENT_TOO_COMPLEX] …`); the composition still loads and has
 its `cid`. Sealing is bounded: URDNA2015 is superlinear (a long `@list` is quadratic in its length, groups of
 identical sibling objects are factorial), so `cid::seal` counts its steps and refuses a document that needs more
-than `cid::MAX_SEAL_WORK` (2 million; the largest parity fixture needs 0.4 million, a 200-place ring net 1.6
-million, a saga of 40 steps flattened 2.4 million) with `[DOCUMENT_TOO_COMPLEX]`, the same on every platform.
+than `cid::seal_work_limit` with `[DOCUMENT_TOO_COMPLEX]`, the same on every platform. What an honest document
+needs is about its blank nodes squared (a net's arcs are one long list; 0.4 to 0.95 times the square for the
+nets of `examples/`: tic-tac-toe 0.4 million steps, connect-3 2.9 million, connect-4 37 million, a saga of 40
+steps flattened 2.4 million), so the limit is twice the square of the document's blank nodes, between 2 million
+(`MIN_SEAL_WORK`: what any small document, however it is built, may spend) and 80 million (`MAX_SEAL_WORK`).
 A raw Bundle that cannot be sealed cannot be given a CID, so `bundle.load` and `store.put` refuse it with that
 code. A document is refused for its keys, its caps or its cites before it is sealed. A
 PatternComposition has no part CIDs, so it is its own `@type` with CID = seal(doc); `tests/composition_documents.rs`
@@ -528,9 +531,10 @@ The `why` strings of a run are pflow-metamodel's, so a receipt is bound to the p
   `tests/fixtures/model/` load to their sealed and model CIDs and export unchanged, a sealed `params` string is
   never rewritten, an edit keeps the keys and parts it did not touch.
 * The bounds and the guards (added after review): `cid.rs` unit tests (a long list is refused, not overflowed;
-  identical siblings are refused; the work is counted); `tests/composition_documents.rs` (a hostile document is
+  identical siblings are refused; the work is counted; the limit grows with the document and the examples
+  fit it); `tests/cid.rs` (connect-3 still seals); `tests/composition_documents.rs` (a hostile document is
   `[DOCUMENT_TOO_COMPLEX]` and opens nothing; a document refused for its keys is not sealed first; a saga whose
-  Bundle is too large to seal still loads, and `dump_state` seals the recipe once; a parameter past 2^40; a
+  Bundle is too large to seal (the limit lowered for the test) still loads, and `dump_state` seals the recipe once; a parameter past 2^40; a
   replaced part does not keep the cid it replaced; the link rename and the raw Bundle's link cap round trip);
   `tests/model_content.rs` (the library's findings carry their checks, pinned; `model:x` does not resolve;
   scripts and expected rows are bounded; content refused is not sealed); `tests/composition_receipts.rs` (a store
@@ -548,7 +552,10 @@ Recorded because the acceptance criteria say what they relax.
    are byte-identical to main and pass.
 2. **`cid.rs` is bounded, not changed in what it computes.** The work counter, the `[DOCUMENT_TOO_COMPLEX]`
    refusal and the heap stack for the N-degree hash (§1.3) turn a document that took half a minute, or aborted
-   the process on a long list, into an error. Every CID of `tests/cid.rs` and `tests/model.rs` is unchanged.
+   the process on a long list, into an error. Every CID of `tests/cid.rs` and `tests/model.rs` is unchanged,
+   and the nets of `examples/` still seal (connect-3 is a test; connect-4 needs 37 million steps and fits
+   the limit its 6260 blank nodes give). A net or Bundle past 80 million steps (about 9000 blank nodes of
+   arcs, which main sealed in minutes if its stack held) is refused and cannot be given a CID.
 3. **Existing commands that now read the open composition's content.** `bundle.scenarios`, `bundle.run`,
    `bundle.scenario`, `bundle.step`, `bundle.game` and the lens read the open composition's declared scenarios;
    main always used the orders four. A composition without them has none (`NO_SCENARIOS` in `missing`), and the
