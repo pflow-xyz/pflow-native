@@ -632,4 +632,69 @@ mod tests {
         ok(&mut e, "edit.undo", Value::Null);
         assert!(e.execute_json("plan.state", "").is_err());
     }
+
+    /// Composition and content documents in the browser's engine: load a raw Bundle with content,
+    /// store both in the engine's memory store, save the state as the page does, restore it into a
+    /// new engine, and open the stored documents again by CID: the same documents, the same CIDs,
+    /// and a receipt issued before verifies after.
+    #[test]
+    fn composition_documents_content_and_receipts_survive_the_pages_save_and_restore() {
+        let cafe: Value = serde_json::from_str(include_str!(
+            "../../core/tests/fixtures/bundle/cafe.bundle.json"
+        ))
+        .unwrap();
+        let content: Value = serde_json::from_str(include_str!(
+            "../../core/tests/fixtures/content/cafe.content.json"
+        ))
+        .unwrap();
+        let mut e = Engine::new();
+        let loaded = ok(
+            &mut e,
+            "bundle.load",
+            json!({"document": cafe, "content": content}),
+        );
+        let cid = loaded["cid"].as_str().unwrap().to_string();
+        assert_eq!(loaded["form"], "bundle");
+        assert_eq!(
+            loaded["content"]["scenarios"],
+            json!(["espresso-order", "latte-order"])
+        );
+        let put = ok(
+            &mut e,
+            "store.put",
+            json!({"composition": true, "content": true}),
+        );
+        assert_eq!(put["cid"], cid);
+        let content_cid = put["content"]["cid"].as_str().unwrap().to_string();
+        let receipt = ok(
+            &mut e,
+            "bundle.receipt",
+            json!({"scenario": "espresso-order"}),
+        );
+
+        let saved = e.dump_state_json().unwrap();
+        let mut f = Engine::new();
+        f.restore_state_json(&saved).unwrap();
+        // The open composition came back with its content, and the store with both documents.
+        let st = ok(&mut f, "bundle.state", Value::Null);
+        assert_eq!(st["content"]["source"], "loaded");
+        assert_eq!(st["document"]["origin"], "bundle");
+        let listed = ok(&mut f, "store.list", json!({"about": cid}));
+        assert_eq!(listed["rows"][0]["cid"], json!(content_cid));
+        let mut g = Engine::new();
+        g.restore_state_json(&saved).unwrap();
+        ok(&mut g, "bundle.close", Value::Null);
+        let again = ok(&mut g, "bundle.load", json!({"cid": cid}));
+        assert_eq!(again["cid"], json!(cid));
+        assert_eq!(ok(&mut g, "bundle.export", Value::Null)["document"], cafe);
+        // And the receipt verifies from the store alone.
+        ok(&mut g, "bundle.close", Value::Null);
+        let v = ok(
+            &mut g,
+            "provenance.verify_receipt",
+            json!({"receipt": receipt["receipt"]}),
+        );
+        assert_eq!(v["verdict"], "valid", "{v}");
+        assert_eq!(v["modelFrom"], "store");
+    }
 }
