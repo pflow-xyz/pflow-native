@@ -663,6 +663,11 @@ impl Store {
     /// `note` in the result when that CID is not a stored composition or
     /// bundle. The result is `put_model`'s, plus `kind` when the index
     /// records one and `about` for content.
+    ///
+    /// A file already stored under the CID that is not a document of that CID (a composition,
+    /// bundle or content file altered in place, which [`Store::get_model`] refuses) is written
+    /// over from the document put: the result is `existed: true, repaired: true`, with a note.
+    /// A net's file is left as it is.
     pub fn put_document(
         &self,
         doc: &Value,
@@ -741,14 +746,41 @@ impl Store {
             }
             dedup.insert(p.clone())
         });
-        if self.backend.get(&model_key(&cid))?.is_none() {
+        let key = model_key(&cid);
+        let text = || {
             let mut text = serde_json::to_string_pretty(&v).expect("json");
             text.push('\n');
-            self.backend.put(&model_key(&cid), text.as_bytes())?;
-            // What was just written for a document that sealed to `cid` seals to it.
-            if kind != DocKind::Net {
-                self.remember_sealed(&cid, Sha256::digest(&text).into());
+            text
+        };
+        let mut repaired = false;
+        match self.backend.get(&key)? {
+            None => {
+                let text = text();
+                self.backend.put(&key, text.as_bytes())?;
+                // What was just written for a document that sealed to `cid` seals to it.
+                if kind != DocKind::Net {
+                    self.remember_sealed(&cid, Sha256::digest(&text).into());
+                }
             }
+            // A net is as it was stored. The other kinds are read by content
+            // ([`Store::get_model`]), so a file there that does not seal to its name is a file
+            // that cannot be served: the document being put is the proof of what the name stands
+            // for, and it is written over the file. (Bytes equal to what would be written seal
+            // by construction.)
+            Some(have) if kind != DocKind::Net => {
+                let text = text();
+                if have == text.as_bytes() || self.file_seals(&cid, &have) {
+                    self.remember_sealed(&cid, Sha256::digest(&have).into());
+                } else {
+                    self.backend.put(&key, text.as_bytes())?;
+                    self.remember_sealed(&cid, Sha256::digest(&text).into());
+                    repaired = true;
+                    notes.push(format!(
+                        "the stored file for {cid} did not seal to it (the store file had been altered); it was rewritten from this document"
+                    ));
+                }
+            }
+            Some(_) => {}
         }
         // Read from the snapshot above, so a composition this same command
         // stored a moment ago counts.
@@ -800,6 +832,9 @@ impl Store {
             out["kind"] = json!(k);
         }
         out["existed"] = json!(existed);
+        if repaired {
+            out["repaired"] = json!(true);
+        }
         out["title"] = json!(meta.title);
         out["parents"] = json!(meta.parents);
         out["created"] = json!(meta.created);
@@ -865,6 +900,12 @@ impl Store {
         }
         self.remember_sealed(cid, digest);
         Ok(())
+    }
+
+    /// Whether `bytes` are a document that seals to `cid` ([`Store::check_sealed`], yes or no).
+    fn file_seals(&self, cid: &str, bytes: &[u8]) -> bool {
+        serde_json::from_slice::<Value>(bytes)
+            .is_ok_and(|v| self.check_sealed(cid, bytes, &v).is_ok())
     }
 
     fn remember_sealed(&self, cid: &str, digest: [u8; 32]) {

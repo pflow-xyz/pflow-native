@@ -1738,6 +1738,83 @@ fn a_part_the_store_refuses_is_reported_with_its_cause_not_as_missing() {
     assert!(!e.contains("is not in the local store"), "{e}");
 }
 
+/// Putting a document whose file is already there is idempotent, except for a file of the kinds
+/// the store checks on read that does not seal to its name: the document being put is the proof
+/// of what the name stands for, so the file is written over (`existed: true, repaired: true`)
+/// and reads again. An intact file is left alone and costs no more than the first put did, and
+/// a net's file is left as it is.
+#[test]
+fn putting_a_document_again_repairs_an_altered_file_of_the_checked_kinds_only() {
+    let mem = world();
+    let mut s = Session::default();
+    run(&mut s, "bundle.open", json!({}));
+    let cafe: Value =
+        serde_json::from_str(include_str!("fixtures/bundle/cafe.bundle.json")).unwrap();
+    let content = content_document(&content());
+    let puts = [
+        ("composition", json!({"composition": true})),
+        ("bundle", json!({"document": cafe})),
+        ("content", json!({"document": content})),
+    ];
+    for (what, args) in puts {
+        let before = cid::seals_on_this_thread();
+        let first = run(&mut s, "store.put", args.clone());
+        let cost = seals_since(before);
+        let cid = cid_of(&first);
+        assert_eq!(first["existed"], false, "{what}: {first}");
+        assert!(first.get("repaired").is_none(), "{what}: {first}");
+
+        // Again, untouched: nothing to repair, and no seal of the file already there.
+        let before = cid::seals_on_this_thread();
+        let again = run(&mut s, "store.put", args.clone());
+        assert_eq!(again["existed"], true, "{what}: {again}");
+        assert!(again.get("repaired").is_none(), "{what}: {again}");
+        assert_eq!(
+            seals_since(before),
+            cost,
+            "{what}: the file is not sealed to be left alone"
+        );
+
+        // Altered in place: refused on read, and put over by the document.
+        tamper(&mem, &cid, |v| v["name"] = json!("TAMPERED"));
+        let e = err(&mut s, "store.get", json!({"cid": cid}));
+        assert!(e.starts_with("[STORE_ALTERED] "), "{what}: {e}");
+        let fixed = run(&mut s, "store.put", args.clone());
+        assert_eq!(fixed["cid"], cid, "{what}: {fixed}");
+        assert_eq!(fixed["existed"], true, "{what}: {fixed}");
+        assert_eq!(fixed["repaired"], true, "{what}: {fixed}");
+        assert!(
+            fixed["notes"][0].as_str().unwrap().contains("did not seal"),
+            "{what}: says so: {fixed}"
+        );
+        let got = run(&mut s, "store.get", json!({"cid": cid}));
+        assert_ne!(
+            got["name"], "TAMPERED",
+            "{what}: the file is the document again"
+        );
+        // And a handle that never saw the file reads it.
+        second_handle(&mem);
+        store::open()
+            .get_model(&cid)
+            .unwrap_or_else(|e| panic!("{what}: {e}"));
+        let last = run(&mut s, "store.put", args);
+        assert!(last.get("repaired").is_none(), "{what}: {last}");
+    }
+
+    // A net's file is left as it is: it is not checked on read, so there is nothing to repair.
+    let mut n = Session::default();
+    run(&mut n, "file.open_example", json!({"name": "sir"}));
+    let net = cid_of(&run(&mut n, "store.put", json!({})));
+    tamper(&mem, &net, |v| v["x-altered"] = json!(true));
+    let again = run(&mut n, "store.put", json!({}));
+    assert_eq!(again["existed"], true, "{again}");
+    assert!(again.get("repaired").is_none(), "{again}");
+    assert_eq!(
+        run(&mut n, "store.get", json!({"cid": net}))["x-altered"],
+        true
+    );
+}
+
 // ------------------------------------------------------------ signature-only verification
 
 fn verify_signature_only(s: &mut Session, receipt: &Value) -> Value {
