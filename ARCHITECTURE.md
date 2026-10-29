@@ -65,9 +65,11 @@ A restore checks every part before it changes any (the store's files against
 their content ids), and refuses to overwrite a store on disk. Results are the one
 part it does not hold to that: a result it cannot read back (JSON has no NaN, so a
 diverging run saves null) is dropped and named, as its command recomputes it. The
-document, marking, selection and history are not part of it. The open composition,
-the open search plan and which composition view is shown are (parts `composition`,
-`plan`, `composition_view`).
+document, marking, selection and history are not part of it. The open composition
+(as its document, in either form, with its content when that is not the library's,
+beside the older `instances` + `links` of catalog ids), the open search plan and
+which composition view is shown are (parts `composition`, `plan`,
+`composition_view`).
 
 ## One command registry
 
@@ -110,11 +112,12 @@ CommandSpec {
 | `data.*` | event logs, conformance, conformance stream, calibrate, mining (5) |
 | `opt.*` | param heatmap, optimize/Pareto, fit (3, 5) |
 | `compose.*` | components, compose, extend, diff, bind, systems, pipelines (6) |
-| `store.*`, `remote.*` | local CID store, sim.pflow.xyz bridge (publish, collections, links, prove, LLM prompt) (7) |
+| `store.*`, `remote.*` | local CID store (one store for nets, composition documents, raw Bundles and model content: `kind` in the index, a net's entry unchanged), sim.pflow.xyz bridge (publish, collections, links, prove, LLM prompt) (7) |
 | `export.*` | json/svg/csv (1), png (app), artifact export in every format (3+) |
 | `macro.*` | record/stop/play/list/get/delete (1) |
 | `command.*` | batch, list (1) |
-| `bundle.*`, `plan.*` | the composition views' state: an open composition of pattern instances (link verdicts, drag candidates, flatten, scenario runs, a token game on the flat net, lens test, ontology facts) and an open search plan (slots incl. `root`, a Connect-4 game played by hand) (`crates/core/src/composition/`, `lens.rs`, `search_plan.rs`, `plan_game.rs`); `diagram.transition_layout`: diagram-viewer.js's layout (`string_diagram.rs`) for the string view |
+| `bundle.*`, `plan.*` | the composition views' state: an open composition of pattern instances (link verdicts, drag candidates, flatten, scenario runs, a token game on the flat net, lens test, ontology facts) and an open search plan (slots incl. `root`, a Connect-4 game played by hand) (`crates/core/src/composition/`, `lens.rs`, `search_plan.rs`, `plan_game.rs`); `bundle.load` / `bundle.export` read and write a composition as a document in two forms (a `PatternComposition` of pattern instances, or a raw `PetriNetBundle`), `bundle.receipt` signs a run (`docs/composition-documents.md`); `diagram.transition_layout`: diagram-viewer.js's layout (`string_diagram.rs`) for the string view |
+| `content.*` | model content (D11): findings, judgments, caveats, declared scenarios and per-view convention examples keyed by a model's element ids, each finding with the registry check that backs it; library content for the orders example and the Connect-4 plan; `content.receipt` signs a check or the whole content (`composition/content.rs`, `checks.rs`, `receipt.rs`; `docs/composition-documents.md` §3) |
 | `session.*` | dump_state/restore_state: what outlives one document, for the browser's storage |
 
 ## Artifacts → views

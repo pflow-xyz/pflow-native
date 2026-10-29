@@ -1,6 +1,6 @@
 # Composition documents, model content, storage and receipts
 
-Status: implemented in `feat/composition-documents-store` (one PR). Design context: pflow-xyz PR #124,
+Status: implemented in `feat/composition-documents` (one PR). Design context: pflow-xyz PR #124,
 `docs/design/models-first.md` §1.4 (model format), §1.5 and D11 (curated content), D12 (store and
 receipts). This file is the contract for `bundle.load`, `bundle.export`, the `content.*` commands,
 `store.put` for documents, and composition receipts. It is also the spec the tests are written against.
@@ -126,25 +126,33 @@ receipting that document, not the identity of a model. This feature changes no n
 
 ## 2. What each form can and cannot draw
 
-The views read `bundle.state`, which now carries `document` (form, origin, name, cid), `capabilities`
-and `missing` (a list of `{code, text}` written for a person). A view that cannot draw something shows
-the `missing` text instead.
+The views read `bundle.state`, which now carries `document` (`form`, `origin`, `name`, `description`,
+`preserved_keys`, `edited`; the CID is `bundle.load`'s and `bundle.export`'s), `capabilities`, `missing` (a
+list of `{code, text}` written for a person), `content` (a summary) and, for a catalog-built composition only,
+`params_note`. A view that cannot draw something shows the `missing` text instead.
 
 | Capability | PatternComposition | Raw Bundle |
 |---|---|---|
 | Flatten, flat net, wires, fused groups, incidence, token game | yes | yes |
 | `bundle.validate` report | yes | yes |
 | Port schema colours, `pattern_port` ontology keys | yes | only if the subnets declare ports; no ontology keys (`NO_PATTERN`) |
-| Snap-together candidates, `bundle.add_link` verdicts | yes | for the ports it declares; cafe declares none (`NO_PORTS`), so only existing links are drawn |
+| Snap-together candidates, `bundle.add_link` verdicts | yes | for the ports it declares, between two subnets that declare some (`snap_together`); cafe's `pantry` declares one (`beans`) and the other two none (`NO_PORTS`) |
 | Idiom and cq/13 lighting, pool-leak flag (`idiom_of`) | yes (by pattern) | no (`NO_PATTERN`) |
 | Operad holes, pattern hovers | yes | no |
-| Scenario runs, Process view | the scenarios its content declares | same; none declared → `NO_SCENARIOS` ("no scenario declared") |
-| Lens test | strict test always; fixes and the commit/refund reading when `commit` and `refund` are declared | strict test when scenarios are declared, else `NO_SCENARIOS` |
-| Findings, notes, convention examples | its content, else `NO_CONTENT` | same |
+| Scenario runs, token game (`bundle.scenario`, `bundle.step`), Flat chips, Process view | the scenarios its content declares (the same list for all of them) | same; none declared → `NO_SCENARIOS`, and the Process canvas says so rather than draw another model's runs |
+| Lens test | the strict test, fixes and the commit/refund reading, all of which read a declared `commit` scenario as the forward pass | same; no `commit` declared → no verdict (the strict test would hold vacuously on an empty forward pass), said by cause: the view tells "does not flatten" from "declares no commit scenario" |
+| Findings, notes, convention examples | its content, else `NO_CONTENT`; read by the panel (§3.6), and by the Flat view's conservation box | same |
+| Links drawn between ports (Cospans, Spiders, Operad, String) | yes | only links whose ends are ports; links that end on places or transitions (cafe's seven) are not anchored there, and each of those views says how many in its caption and in the notes under it. Flat net, Boundaries, Laws and Incidence read them through Flatten |
 | Layout | computed by the views (neither form stores positions: `NO_LAYOUT`) | same |
 
-`missing` codes: `NO_PATTERN`, `NO_PORTS`, `NO_SCENARIOS`, `NO_CONTENT`, `NO_LAYOUT`, `FLATTEN_FAILED`,
-`KEYS_PRESERVED` (the document has keys this build keeps but does not interpret).
+`missing` codes: `NO_PATTERN`, `NO_PORTS`, `NO_SCENARIOS`, `DORMANT` (content entries that name elements the
+model does not have), `NO_CONTENT`, `NO_LAYOUT`, `FLATTEN_FAILED`, `KEYS_PRESERVED` (the document has keys
+this build writes back but does not interpret; read from what the next export carries, so an edit that removes
+the part or link holding a key drops it from the list).
+
+The two forms are not interchangeable on export: a PatternComposition exported as a Bundle
+(`bundle.export {form: "bundle"}`) drops each subnet's `pattern`/`params` recipe, so it cannot be rebuilt as
+form (a) from that Bundle.
 
 ## 3. Model content (D11)
 
@@ -181,12 +189,16 @@ bare and says so (`NO_CONTENT`).
 | `kind` | yes | `finding` (a claim a check can back), `judgment` (the author's choice, labelled as such), `caveat` (a limit the reader must know), `scenario` (a declared firing script), `convention-example` (the text a view shows for this model in its convention panel), `note` (a hover note on an element) |
 | `text` | yes (except `scenario`, where it is optional) | prose |
 | `title` | no | one line |
-| `order` | no | integer; sorts entries (the hash does not preserve array order, so authored order is a scalar) |
+| `order` | no | integer (a string or a fraction is refused); sorts entries (the hash does not preserve array order, so authored order is a scalar) |
 | `about` | yes, ≥ 1 | element ids (§3.2) the entry is attached to; model-wide is `["model:"]` |
 | `views` | no | view ids that show it (`cospan spiders operad string flat boundaries lens incidence process laws`); `convention-example` needs exactly one |
-| `cites` | no | `{repo, rev, path, from, to, note}` (a source cite) or `{bib: "<key>"}` (a key of the ontology's `bib`) |
+| `cites` | no | `{repo, path, rev?, from?, to?, note?}` (a source cite: `repo` is a project name, `from`/`to` positive line numbers in order) or `{bib: "<key>"}` (a key of the ontology's `bib`, alone); anything else is `CITE_INVALID`; at most 64 |
 | `check` | no | canonical-JSON string of a check (§3.4) |
-| `scenario` | `scenario` kind only | canonical-JSON string of `{script: ["<subnet>/<transition>", …], expect: [{place, op, n, says}], note?}`; `op` is `==` `!=` `<` `<=` `>` `>=` |
+| `scenario` | `scenario` kind only (on another kind: `CONTENT_FIELD`) | canonical-JSON string of `{script: ["<subnet>/<transition>", …], expect: [{place, op, n, says}], note?}`; `op` is `==` `!=` `<` `<=` `>` `>=` |
+
+Any other key, `by` included, is `CONTENT_FIELD`: it would not survive an export. A top-level `@id` is accepted
+when it is the document's own CID (what `store.get` returns) and an export drops it. `text` that is only
+whitespace is no text.
 
 ### 3.2 Element ids (`about`)
 
@@ -221,12 +233,22 @@ message}`:
 | `ENTRY_DUPLICATE`, `ENTRY_ID`, `ENTRY_KIND`, `ENTRY_ABOUT_EMPTY` | error | structure |
 | `ENTRY_VIEW` | error | an unknown view id; a `convention-example` without exactly one view |
 | `ID_UNRESOLVED` | error under `strict` (the default for an explicit load), warning otherwise (the entry is dormant: views skip it) | an `about` id that does not resolve against the composition |
+| `CHECK_REF_UNRESOLVED` | error under `strict`, warning otherwise | a check's `args.scenario` the content does not declare, or an `args.script` member the model lacks |
 | `ID_SYNTAX` | error | not `<type>:<ref>`, or an unknown type |
-| `SCENARIO_INVALID` | error | the `scenario` JSON does not parse, a member or place is not in the net, an unknown `op` |
-| `CITE_BIB_UNKNOWN` | error | a `bib` key the ontology does not have |
+| `SCENARIO_INVALID` | error | the `scenario` JSON does not parse, an unknown `op`, or (under `strict`) a member or place that is not in the net |
+| `SCENARIO_UNRESOLVED` | warning, when not `strict` | a scenario's member or place the model lacks: the scenario is dormant but still listed and run, and stops where the member is missing (the prototype's behaviour, which the parity goldens depend on) |
+| `CITE_INVALID`, `CITE_BIB_UNKNOWN` | error | a cite of the wrong shape (§3.1); a `bib` key the ontology does not have |
+| `CONVENTION_DUPLICATE` | warning | a second `convention-example` for one view: both are drawn |
 | `CHECK_INVALID`, `CHECK_COMMAND_FORBIDDEN` | error | §3.4 |
 | `COMPOSITION_CID_STALE` | warning | `composition` names a CID other than the open composition's |
-| `CONTENT_LIMIT` | error | more than 1000 entries, or an entry with more than 32 KiB of text or more than 512 `about` ids (a check's 16-step cap is `CHECK_INVALID`; a document over 4 MiB is refused `[DOCUMENT_TOO_LARGE]` before it is read) |
+| `CONTENT_LIMIT` | error | more than 1000 entries; an entry with more than 32 KiB of text, a title over 512 bytes, more than 512 `about` ids or more than 64 cites; checks totalling more than 1024 steps (a check's own 16-step cap is `CHECK_INVALID`; a document over 4 MiB is refused `[DOCUMENT_TOO_LARGE]` before it is read) |
+
+The refusals around the document itself: `[COMPOSITION_FIELD]` (a form (a) key or value of the wrong shape, an
+unknown key, an `@id` that is not the document's CID), `[COMPOSITION_LIMIT]` (more than 128 instances or
+subnets, or 1000 links), `[DOCUMENT_CONTEXT]` (either form), `[DOCUMENT_TYPE]`, `[DOCUMENT_KIND]` (the store
+keeps no document of that kind), `[BUNDLE_PARSE]` (pflow-compose cannot read it), `[CONTENT_REFUSED]` (content
+that does not validate; its codes follow), `[CONTENT_SUBJECT_UNSUPPORTED]` (plan content cannot attach to a
+composition), `[NO_CONTENT]`, `[NO_COMPOSITION]`.
 
 ### 3.4 Checks
 
@@ -242,9 +264,19 @@ A finding that the registry can decide carries the check that decides it, and a 
     "expect": [{"path": "/invariants/0/holds", "op": "==", "value": true}]}]}
 ```
 
-* `command` must be a registry command in the `bundle.` or `plan.` namespace that is a query
-  (`journal: false`); `content.*` and every editing command are refused (`CHECK_COMMAND_FORBIDDEN`), so a
-  document from outside cannot run anything but a read of the model.
+* `command` must be one of `checks::READS`: the registered `bundle.` and `plan.` queries that read the
+  model. `content.*`, every editing command, and the two queries that are not reads, `bundle.receipt` (it
+  signs with the local receipt key) and `bundle.export` (it writes a document), are refused
+  (`CHECK_COMMAND_FORBIDDEN`), so a document from outside cannot run anything but a read of the model. A test
+  makes a new `bundle.*` / `plan.*` query a decision.
+* Names a check uses must exist: `args.scenario` must be declared by the content, `args.script` members must
+  be transitions of the model (`CHECK_REF_UNRESOLVED`). A document's checks run at most 1024 steps in all.
+* A check runs on a clone and may not build a variant composition, so a finding about what a *different*
+  wiring does (the pool-share configuration of `find-capacity-check-is-post-firing`) cannot carry one. The
+  orders library's findings without a check are those whose evidence is not in the registry: an external
+  checker's run (`find-chyp-proves-link-order-irrelevant`, `lens-agrees-with-gopflow`), a reading of a paper
+  (`find-wiring-diagrams-are-undirected`), a drawing's token-identity rule (`process-steps-chain`), and the
+  variant wiring above. A finding with no check is a claim the author makes, not one the registry decides.
 * `expect[].path` is an RFC 6901 JSON Pointer into the command's result; `op` is `==`, `!=`, `<`, `<=`,
   `>`, `>=`, `contains` (string or array), `exists` or `absent`.
 * Checks run on a scratch `Session` that holds a clone of the composition (and plan), so they leave the
@@ -259,9 +291,10 @@ A finding that the registry can decide carries the check that decides it, and a 
 | `orders` | the orders/workers/payment composition | `Composition::open` is given a set of instances that includes `orders`, `workers` and `payment` (so `bundle.open` with defaults) |
 | `connect4` | the Connect-4 search plan | `plan.open` (read through `content.get {subject: "plan"}`) |
 
-`content.library` lists them. Library content is attached to a catalog-opened composition, and to a loaded
-PatternComposition whose exported CID is the one the content was written against (the example, reloaded);
-any other loaded document (an edited example, a raw Bundle) is bare unless the call passes `content`.
+`content.library` lists them. Library content is attached to a catalog-opened composition, and to any loaded
+document (either form; `bundle.load {document}` or `{cid}`, `store.open`) whose exported CID is the one the
+content was written against (the example, reloaded); any other loaded document (an edited example, a raw
+Bundle) is bare unless the call passes `content`, and says so (`NO_CONTENT`).
 The statics `comp::scenarios()` and `comp::scenario(id)` are now derived from `orders` content (parsed
 once), so the four orders scenarios have one source.
 
@@ -278,6 +311,18 @@ Process view and the lens test draw it). "Run checks" hands back one `content.ch
 stored, so the panel never edits the session. The panel is outside the parity manifest: the goldens do not
 change.
 
+**What the views read from content, and what they do not yet.** Read from the model, so a different model
+draws its own or nothing: the declared scenarios (the Flat view's chips and token game, the Process view's
+runs, `bundle.run`, the lens test), the model-content panel (convention example, findings, caveats,
+judgments, notes), and the Flat view's "Conservation is not liveness" box (the entry
+`flat-conservation-not-liveness`). Still written in the view code, per example (`*_orders` / `*_c4`), and
+*not* read from content: the hover and caption prose of the ten views that names orders elements (the saga
+and pool caveats of the Process view, the spiders' pool-leak hover, the Flat view's "why the worker does not
+return" narration and idiom caveat, the Laws view's sync-spiders reading, the Cospans view's "Add payment2…"
+hint), the prototype's per-view `convention.summary` / `convention.honesty` paragraphs, and the cites attached
+to them. Most duplicate a content entry and should be read from it; that is the remaining work of D11, not
+done here.
+
 ## 4. Commands
 
 Arguments and results are JSON. `Json` arguments accept the value or a string holding it.
@@ -286,13 +331,16 @@ Arguments and results are JSON. `Json` arguments accept the value or a string ho
 
 `document` (Json, a form (a) or (b) document) **or** `cid` (a stored document), optional `content`
 (Json, a ModelContent document; or `library: "<id>"`), optional `strict` (default true).
-Result: `{form: "composition"|"bundle", name, cid, bundle_cid?, instances, links, validation,
-flatten: {ok, error?}, missing, content: {source, entries, unresolved}}`. Replaces any open composition.
+Result: `{form: "composition"|"bundle", name, cid, bundle_cid?, model_cid, reduced, parts, model_error?,
+instances, links, validation, flatten: {ok, error?}, missing, content: {source, entries, kinds, unresolved,
+warnings, dormant, scenarios}}`. `cid` is the seal of the document as written (as received, for a raw Bundle
+and for a form (a) `params` string); `model_cid`, `reduced` and `parts` are `model_id`'s reading of it (§1.3).
+Replaces any open composition.
 
 ### `bundle.export` (query, stores a Report artifact)
 
 `form` (`auto` default: the form it was loaded or built as; `composition`, `bundle`), `content` (bool).
-Result: `{form, document, cid, bundle_cid?, content?: {document, cid}}`. `composition` from a
+Result: `{form, document, cid, bundle_cid?, model_cid, reduced, parts, content?: {document, cid}}`. `composition` from a
 composition with any `pattern: ""` instance is refused `[EXPORT_NEEDS_PATTERNS]`. `bundle` from a
 raw-loaded, unedited composition returns the loaded JSON; otherwise the Bundle pflow-compose serialises
 (with `@context`/`@type`). The built-in orders example exports as form (a) and reloads identically.
@@ -301,9 +349,9 @@ raw-loaded, unedited composition returns the loaded JSON; otherwise the Bundle p
 
 | Command | Journal | Does |
 |---|---|---|
-| `content.library` | no | the library entries: `{id, subject, title, entries, checks}` |
-| `content.get` | no | `{source, subject, entries, unresolved}` for the open composition (default) or `subject: "plan"`; filters `kind`, `about` (an element id), `view`; resolved entries only unless `all: true` |
-| `content.load` | yes | `document` (Json) or `library`; `strict` (default true); attaches to the open composition |
+| `content.library` | no | `{library: [{id, subject, name, entries, checks, scenarios, anchors}]}` |
+| `content.get` | no | `{source, subject, name, entries, total, dormant}` for the open composition (default) or `subject: "plan"`; filters `kind`, `about` (an element id), `view`; resolved entries only unless `all: true` |
+| `content.load` | yes | `document` (Json) or `library`; `strict` (default true); attaches to the open composition. Result: the content summary of `bundle.state` plus `cid` (of the normalised document, §5) and `received_cid` when the document as received seals to another CID |
 | `content.export` | no | `{document, cid}` (stores a Report) |
 | `content.clear` | yes | back to bare |
 | `content.validate` | no | the §3.3 report (stores a Report) |
@@ -319,14 +367,19 @@ journaled), return `{result, receipt, report}` as `sim.receipt` does and store t
 
 ### Changes to existing commands
 
-* `bundle.state` gains `document`, `capabilities`, `missing`, `content` (a summary). Link ends gain
-  `place`/`transition` when a link names those instead of a port. Nothing is removed.
+* `bundle.state` gains `document`, `capabilities`, `missing`, `content` (a summary) and, for a catalog-built
+  composition, `params_note`. Link ends gain `place`/`transition` when a link names those instead of a port.
+  Nothing is removed.
 * `bundle.scenarios` returns the open composition's declared scenarios, else (no composition open) the
-  `orders` library's; the element shape is unchanged. `bundle.run {scenario}` resolves a declared
-  scenario of the open composition.
+  `orders` library's; the element shape is unchanged. `bundle.run {scenario}`, `bundle.scenario {id}` and
+  `bundle.step` resolve a declared scenario of the open composition (one it does not declare is refused,
+  naming those it does).
 * `store.put` takes `composition: true` (the open composition's document; `form` as in `bundle.export`),
   `content: true` (its content, stored with `about` = the composition's CID), or `document` (any
-  document `store::kind_of` knows). `store.open` opens by kind; `store.list` shows `kind` and `about`.
+  document `store::kind_of` knows). `store.open` opens by kind; `store.list` shows `kind` and `about` and takes
+  `about` to find the content stored for a composition.
+* `file.open` of a PetriNetBundle, PatternComposition or ModelContent file is refused `[DOCUMENT_TYPE]` with a
+  pointer to `bundle.load` / `content.load`; it opens nets.
 * `provenance.verify_receipt` replays `composition-run`, `composition-check` and `composition-content` receipts (§6).
 
 ## 5. The store (D12)
@@ -347,7 +400,17 @@ both), or any `document` of a kind above. `store.open` opens by kind: a net as t
 or bundle as `bundle.load {cid}` does (one undo step, and the library's content comes back when the CID is
 the library example's); content attaches strictly to the open composition (`[NO_COMPOSITION]` when none is
 open). `store.list {kind}` filters. Documents are opened from `Store::get_sealed`, the stored document
-without the `@id` the store added, because the loaders refuse a key they do not know. `replace_all` refuses
+without the `@id` the store added, because the loaders refuse a key they do not know. A document's own `@id`
+other than its CID (a raw Bundle may carry one) is replaced by the CID in the store and not given back by
+`store.open`; `store.put` says so.
+
+A **content** document is stored as its normalised form (`check` and `scenario` as canonical text, nothing the
+build does not read), the document `content.export` writes, so one CID names it everywhere: the store, `about`,
+a receipt's `content`. `store.put` says what the document as received seals to when that differs, as
+`content.load` does (`received_cid`). A document that does not parse as content is stored as given, with a
+note, and `store.open` refuses it. **Plan content** (the Connect-4 library's) is library-only: `store.put`
+accepts it as a document of kind content, but it can attach only to a composition, so `store.open` refuses it,
+and `content.receipt` takes no subject, so its checks cannot be receipted. `replace_all` refuses
 a state whose index gives a model another kind than its document has, or holds a file of no kind the store
 keeps.
 
@@ -394,6 +457,10 @@ a net receipt (`kind`, `modelFrom` and, for a check or content receipt, `content
   `current`), a library entry, or a stored document (`store`). The
   check or the content runs against it (its declared scenarios are what `bundle.run {scenario}` reads),
   not against whatever content is attached now. None found: `uncheckable`.
+* **The labels are bound.** A replay runs the check or the script *in the receipt*, so once the content is
+  found the receipt's check must be that entry's check there, and a run's script and expectations those of the
+  declared scenario of that id; a difference is `bindingError` and the receipt is `invalid`. A run receipt whose
+  content cannot be found stays `valid` and carries a `bindingNote` that its declaration is unchecked.
 * **The replay** is the run on the flat net, the check on a scratch session (§3.4, so only `bundle.*`
   and `plan.*` queries run, whatever the receipt says), or the strict validation plus every check.
   A bad signature, or a replay that does not reproduce `resultHash`, is `invalid`.
@@ -429,4 +496,11 @@ The `why` strings of a run are pflow-metamodel's, so a receipt is bound to the p
 * `crates/app/tests/model_content_panel.rs`: the panel drawn headless: the convention example first, the
   lacks section above the groups, a raw Bundle that says it is bare, both examples, the cache key, a check that
   goes red marked as failed, the plan's checks run with `subject: "plan"`, and no trace left in the session.
+* `crates/app/tests/loaded_documents.rs`: the ten views on the cafe Bundle, with and without content: the
+  Process and Flat views draw the scenarios it declares, a model with none says so, the port-anchored views say
+  how many links they cannot anchor instead of claiming there are none, the lens says why it has no verdict, the
+  Flat view's conservation box is read from content.
+* `tests/composition_documents.rs` also pins the identity rules of §1.2-§1.3: the four by-reference vectors of
+  `tests/fixtures/model/` load to their sealed and model CIDs and export unchanged, a sealed `params` string is
+  never rewritten, an edit keeps the keys and parts it did not touch.
 * The existing `views_*` and `compose` tests pass unchanged.

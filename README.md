@@ -104,10 +104,10 @@ Each result exports as JSON, CSV or SVG. The **Workbench** tab lists every simul
 
 | Area | Commands |
 |---|---|
-| Local store | `store.put / get / open / list / delete` (keyed by the pflow.xyz CID, under `<data_dir>/store`), `store.link / edges / neighbors / query` (sim's predicate registry and query language), collections, irrevocable licenses, `store.supersede` / migration offers, content-addressed maps, `store.graph` |
+| Local store | `store.put / get / open / list / delete` (keyed by the pflow.xyz CID, under `<data_dir>/store`; nets, and also composition documents, raw Bundles and model content, each with its `kind`), `store.link / edges / neighbors / query` (sim's predicate registry and query language), collections, irrevocable licenses, `store.supersede` / migration offers, content-addressed maps, `store.graph` |
 | pflow.xyz | `remote.pflow.save / list / delete`, `remote.pflow.share` (page, `/img/{cid}.svg`, badge), `remote.gist` |
 | sim.pflow.xyz | `remote.sim.tools`, `remote.sim.call` and wrappers (`create_model`, `publish`, `publish_app`, `prompt`, `prove`, `check_witness`) over MCP |
-| Provenance | `sim.receipt` / `provenance.verify_receipt` (Ed25519, sim's receipt format, verified by replay), `provenance.check_witness` (traces, invariant certificates, morphism maps), `zk.setup / prove_fire / prove_trace / verify` (Groth16 via pflow-zk-arkworks; opt-in: `make build-zk`, since the upstream circuit does not yet prove enabledness) |
+| Provenance | `sim.receipt` / `provenance.verify_receipt` (Ed25519, sim's receipt format, verified by replay; also a composition run, a content check and a content, from `bundle.receipt` / `content.receipt`, see [docs/composition-documents.md](docs/composition-documents.md)), `provenance.check_witness` (traces, invariant certificates, morphism maps), `zk.setup / prove_fire / prove_trace / verify` (Groth16 via pflow-zk-arkworks; opt-in: `make build-zk`, since the upstream circuit does not yet prove enabledness) |
 
 **Nothing leaves the machine by accident.** Every remote write returns a preview of the exact request, with credentials redacted, unless it is called with `"send": true`. In the app, a preview opens a confirmation window, and only **Send** sends. Credentials come from environment variables or `<data_dir>/credentials.json`, never from documents or the journal; `remote.credentials` shows which are configured. They are:
 - `PFLOW_XYZ_TOKEN`: a GitHub token with `read:user`.
