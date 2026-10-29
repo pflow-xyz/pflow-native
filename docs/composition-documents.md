@@ -565,7 +565,8 @@ The `why` strings of a run are pflow-metamodel's, so a receipt is bound to the p
   scripts and expected rows are bounded; content refused is not sealed); `tests/composition_receipts.rs` (a store
   file of the composition, bundle and content kinds that is not its name's document is refused on every read
   and sealed once per handle for the same bytes; a net is read without a seal; `store.supersede` seals nothing; a
-  bundle part the store refuses is reported with the cause; putting again repairs an altered file; a forged
+  bundle part the store refuses is reported with the cause; putting again repairs an altered file; a stored
+  composition or content in another spelling is not the document a receipt names; a forged
   receipt is invalid without a replay for each kind; the receipt, verify and state commands never seal the
   flattened Bundle); `tests/composition_documents.rs` (`bundle_cid` is absent unless asked for and sealed once
   by the command that was); `tests/composition_store.rs` (a content document's `@id` must be its CID); `tests/session_state.rs` (a restored composition keeps its origin).
