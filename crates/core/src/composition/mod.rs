@@ -1399,6 +1399,9 @@ pub struct Run {
     pub expect: Vec<ExpectResult>,
 }
 
+/// Most members one run fires ([`run`]); declared scripts are validated against it.
+pub const MAX_SCRIPT_STEPS: usize = 1000;
+
 /// Fires `script` from the flat net's initial marking through
 /// `pflow_metamodel::Model::enabled_why_not` / `fire`, stopping at the
 /// first member that is not in the net or cannot fire; then evaluates
@@ -1412,6 +1415,11 @@ pub fn run(flat: &Flat, id: &str, title: &str, script: &[String], expect: &[Expe
     for (i, member) in script.iter().enumerate() {
         let t = flat.transition_of(member).map(str::to_string);
         let why = match &t {
+            // A run keeps the marking after every step, and a transition with no input arc is
+            // enabled for ever: the script is as long as it is allowed to be, no longer.
+            _ if i >= MAX_SCRIPT_STEPS => Some(format!(
+                "the script is longer than the {MAX_SCRIPT_STEPS} members a run fires"
+            )),
             None => Some(format!("no member {member:?} in the composition")),
             Some(t) => flat
                 .model

@@ -3801,3 +3801,122 @@ fn content_that_is_refused_is_refused_before_it_is_sealed() {
         "nothing was sealed"
     );
 }
+
+/// A script and the rows a scenario or a check step expects are bounded: a run keeps the marking
+/// after every step, and a transition with no input arc is enabled for ever, so a few hundred
+/// kilobytes of repeated members were a 23 MB result.
+#[test]
+fn a_script_and_the_rows_it_expects_are_bounded() {
+    let script = |n: usize| json!(vec!["orders/dequeue"; n]);
+    let rows = |n: usize| {
+        json!(vec![
+            json!({"place": "orders/items", "op": ">=", "n": 0});
+            n
+        ])
+    };
+    let scenario = |script: Value, expect: Value| {
+        report(&doc(vec![scenario_entry("s", script, expect)]), false)
+    };
+    // At the bounds a scenario is valid, one past either and it is refused.
+    assert!(scenario(
+        script(content::MAX_SCRIPT_STEPS),
+        rows(content::MAX_EXPECT_ROWS)
+    )
+    .valid());
+    let r = scenario(script(content::MAX_SCRIPT_STEPS + 1), json!([]));
+    assert_only_error(&r, "CONTENT_LIMIT", Some("s"));
+    assert!(
+        r.errors[0].message.contains("1001 members"),
+        "{:?}",
+        r.errors
+    );
+    let r = scenario(script(1), rows(content::MAX_EXPECT_ROWS + 1));
+    assert_only_error(&r, "CONTENT_LIMIT", Some("s"));
+
+    // A check step that fires a script, and one that expects rows, the same.
+    let fires = |n: usize| {
+        finding_with(json!({"check": check_of(json!([
+            step_with("bundle.run", json!({"script": script(n)}))]))}))
+    };
+    let r = report(&doc(vec![fires(content::MAX_SCRIPT_STEPS + 1)]), false);
+    assert_eq!(
+        codes(&r.errors).first().copied(),
+        Some("CONTENT_LIMIT"),
+        "{:?}",
+        r.errors
+    );
+    let expecting = |n: usize| {
+        let mut st = step_with("bundle.state", json!({}));
+        st["expect"] = json!(vec![json!({"path": "", "op": "exists"}); n]);
+        finding_with(json!({"check": check_of(json!([st]))}))
+    };
+    assert!(report(&doc(vec![expecting(content::MAX_EXPECT_ROWS)]), false).valid());
+    let r = report(&doc(vec![expecting(content::MAX_EXPECT_ROWS + 1)]), false);
+    assert_only_error(&r, "CONTENT_LIMIT", Some("f"));
+
+    // The loader refuses a long scenario whole; the run is cut off where it is allowed to be.
+    let mut s = orders();
+    let long = doc(vec![scenario_entry(
+        "s",
+        script(content::MAX_SCRIPT_STEPS + 1),
+        json!([]),
+    )]);
+    let e = refused(&mut s, "content.load", json!({"document": long}));
+    assert!(
+        e.starts_with("[CONTENT_REFUSED]") && e.contains("[CONTENT_LIMIT]"),
+        "{e}"
+    );
+    let mut c = cafe();
+    // counter/order has no input arc: it is enabled for ever.
+    let forever = vec!["counter/order"; 3 * content::MAX_SCRIPT_STEPS];
+    let r = run(&mut c, "bundle.run", json!({"script": forever}));
+    assert_eq!(r["completed"], false, "{r}");
+    assert_eq!(r["stopped_at"], content::MAX_SCRIPT_STEPS, "{r}");
+    assert_eq!(
+        r["steps"].as_array().unwrap().len(),
+        content::MAX_SCRIPT_STEPS + 1
+    );
+    assert!(
+        r["steps"][content::MAX_SCRIPT_STEPS]["why"]
+            .as_str()
+            .unwrap()
+            .contains("longer than the 1000 members"),
+        "{r}"
+    );
+}
+
+/// `session.restore_state` reads content back through the parser alone, so the bounds are applied
+/// there: a state with content past them is refused, and one within them restores.
+#[test]
+fn restore_state_applies_the_content_bounds() {
+    let mut s = cafe();
+    run(&mut s, "bundle.add_instance", json!({"id": "orders"})); // an edit, so the state is not just the document
+    let state = run(&mut s, "session.dump_state", Value::Null);
+    assert!(state["composition"]["content"].is_object(), "{state}");
+    let mut t = session();
+    run(
+        &mut t,
+        "session.restore_state",
+        json!({"state": state.clone()}),
+    );
+
+    let mut hostile = state.clone();
+    let long: Vec<Value> = (0..=content::MAX_SCRIPT_STEPS)
+        .map(|_| json!("counter/order"))
+        .collect();
+    // (A state keeps a scenario as its canonical text, as an export does.)
+    let at = state["composition"]["content"]["entries"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .position(|e| e["kind"] == "scenario")
+        .expect("the cafe content declares scenarios");
+    hostile["composition"]["content"]["entries"][at]["scenario"] =
+        json!(json!({"script": long, "expect": []}).to_string());
+    let mut u = session();
+    let e = refused(&mut u, "session.restore_state", json!({"state": hostile}));
+    assert!(
+        e.contains("CONTENT_REFUSED") || e.contains("CONTENT_LIMIT"),
+        "{e}"
+    );
+}

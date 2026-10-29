@@ -939,7 +939,14 @@ pub fn restore_part(v: &Value, resolve: PartResolver) -> Result<Composition> {
         c.doc.content = Some(lib.content.clone());
         c.doc.content_source = ContentSource::Library(id.to_string());
     } else if let Some(k) = v.get("content").filter(|k| !k.is_null()) {
-        c.doc.content = Some(ModelContent::parse(k)?);
+        let k = ModelContent::parse(k)?;
+        // A saved state is not trusted more than a document: the bounds hold, element ids need not
+        // (content whose ids no longer resolve is attached dormant).
+        let report = content::limit_report(&k);
+        if !report.valid() {
+            return Err(refuse("CONTENT_REFUSED", report.refusal()));
+        }
+        c.doc.content = Some(k);
         c.doc.content_source = ContentSource::Loaded;
     }
     Ok(c)

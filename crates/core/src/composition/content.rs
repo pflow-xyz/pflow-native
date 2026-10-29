@@ -55,6 +55,12 @@ pub const MAX_CITE_FIELD_BYTES: usize = 2 * 1024;
 /// Most registry queries all the checks of one document may run (the library's 278 fit with room):
 /// `content.check`, `content.receipt` and a verifier's replay each run every one.
 pub const MAX_CHECK_STEPS: usize = 1024;
+/// Most members a declared scenario's `script` (or a check step's `args.script`) fires, and most
+/// predicates it expects. A run keeps the marking after every step and `comp::run` stops at
+/// [`super::MAX_SCRIPT_STEPS`], so a script of a transition with no input arc, repeated, cost time
+/// and memory in proportion to a 4 MiB document. The library's longest is 6 members.
+pub const MAX_SCRIPT_STEPS: usize = super::MAX_SCRIPT_STEPS;
+pub const MAX_EXPECT_ROWS: usize = 256;
 
 // ------------------------------------------------------------ types
 
@@ -952,6 +958,100 @@ pub fn validate_plan(content: &ModelContent, strict: bool) -> Report {
     r
 }
 
+/// The bounds on a content document (`CONTENT_LIMIT`): how many entries, how long a title, text,
+/// cite list, `about` list, script or list of expected rows, and how many check steps in all.
+/// Nothing here needs the model, so `session.restore_state` applies it to content it reads back
+/// too ([`limit_report`]).
+fn check_limits(content: &ModelContent, r: &mut Report) {
+    let mut limit = |entry: Option<&str>, message: String| {
+        r.errors
+            .push(Issue::new("CONTENT_LIMIT", entry, None, message))
+    };
+    if content.entries.len() > MAX_ENTRIES {
+        limit(
+            None,
+            format!(
+                "{} entries; at most {MAX_ENTRIES} are accepted",
+                content.entries.len()
+            ),
+        );
+    }
+    let steps: usize = content
+        .entries
+        .iter()
+        .filter_map(|e| e.check.as_ref()?.get("steps")?.as_array().map(Vec::len))
+        .sum();
+    if steps > MAX_CHECK_STEPS {
+        limit(
+            None,
+            format!("the checks have {steps} steps in all; at most {MAX_CHECK_STEPS} are accepted"),
+        );
+    }
+    for e in &content.entries {
+        let id = Some(e.id.as_str());
+        if e.title.len() > MAX_TITLE_BYTES || e.cites.len() > MAX_CITES {
+            limit(
+                id,
+                format!(
+                    "a title of {} bytes and {} cites; at most {MAX_TITLE_BYTES} bytes and {MAX_CITES} cites",
+                    e.title.len(),
+                    e.cites.len()
+                ),
+            );
+        }
+        if e.text.len() > MAX_TEXT_BYTES || e.about.len() > MAX_ABOUT {
+            limit(
+                id,
+                format!(
+                    "text of {} bytes and {} about ids; at most {MAX_TEXT_BYTES} bytes and {MAX_ABOUT} ids",
+                    e.text.len(),
+                    e.about.len()
+                ),
+            );
+        }
+        let len = |v: Option<&Value>| v.and_then(Value::as_array).map_or(0, Vec::len);
+        if let Some(sc) = &e.scenario {
+            let (script, expect) = (len(sc.get("script")), len(sc.get("expect")));
+            if script > MAX_SCRIPT_STEPS || expect > MAX_EXPECT_ROWS {
+                limit(
+                    id,
+                    format!(
+                        "a scenario of {script} members and {expect} expected rows; at most {MAX_SCRIPT_STEPS} members and {MAX_EXPECT_ROWS} rows"
+                    ),
+                );
+            }
+        }
+        for (i, st) in e
+            .check
+            .as_ref()
+            .and_then(|c| c.get("steps")?.as_array())
+            .into_iter()
+            .flatten()
+            .enumerate()
+        {
+            let (script, rows) = (
+                len(st.get("args").and_then(|a| a.get("script"))),
+                len(st.get("expect")),
+            );
+            if script > MAX_SCRIPT_STEPS || rows > MAX_EXPECT_ROWS {
+                limit(
+                    id,
+                    format!(
+                        "check step {i} fires {script} members and expects {rows} rows; at most {MAX_SCRIPT_STEPS} members and {MAX_EXPECT_ROWS} rows"
+                    ),
+                );
+            }
+        }
+    }
+}
+
+/// The report of [`check_limits`] alone: what `session.restore_state` refuses content for.
+pub fn limit_report(content: &ModelContent) -> Report {
+    let mut r = Report::default();
+    check_limits(content, &mut r);
+    r
+}
+
 /// The checks that do not depend on the subject: structure, kinds, views,
 /// cites, check syntax; `resolve` decides the element ids.
 pub fn validate_entries(
@@ -962,56 +1062,9 @@ pub fn validate_entries(
 ) {
     let bib = bib_keys();
     let mut seen = BTreeSet::new();
-    if content.entries.len() > MAX_ENTRIES {
-        r.errors.push(Issue::new(
-            "CONTENT_LIMIT",
-            None,
-            None,
-            format!(
-                "{} entries; at most {MAX_ENTRIES} are accepted",
-                content.entries.len()
-            ),
-        ));
-    }
-    let steps: usize = content
-        .entries
-        .iter()
-        .filter_map(|e| e.check.as_ref()?.get("steps")?.as_array().map(Vec::len))
-        .sum();
-    if steps > MAX_CHECK_STEPS {
-        r.errors.push(Issue::new(
-            "CONTENT_LIMIT",
-            None,
-            None,
-            format!("the checks have {steps} steps in all; at most {MAX_CHECK_STEPS} are accepted"),
-        ));
-    }
+    check_limits(content, r);
     let mut conventions: BTreeMap<&str, &str> = BTreeMap::new();
     for e in &content.entries {
-        if e.title.len() > MAX_TITLE_BYTES || e.cites.len() > MAX_CITES {
-            r.errors.push(Issue::new(
-                "CONTENT_LIMIT",
-                Some(&e.id),
-                None,
-                format!(
-                    "a title of {} bytes and {} cites; at most {MAX_TITLE_BYTES} bytes and {MAX_CITES} cites",
-                    e.title.len(),
-                    e.cites.len()
-                ),
-            ));
-        }
-        if e.text.len() > MAX_TEXT_BYTES || e.about.len() > MAX_ABOUT {
-            r.errors.push(Issue::new(
-                "CONTENT_LIMIT",
-                Some(&e.id),
-                None,
-                format!(
-                    "text of {} bytes and {} about ids; at most {MAX_TEXT_BYTES} bytes and {MAX_ABOUT} ids",
-                    e.text.len(),
-                    e.about.len()
-                ),
-            ));
-        }
         let id = Some(e.id.as_str());
         let ok_id = !e.id.is_empty()
             && e.id
