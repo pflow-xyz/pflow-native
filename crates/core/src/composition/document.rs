@@ -391,18 +391,6 @@ impl Composition {
                 format!("@type must be {TYPE_COMPOSITION:?}"),
             ));
         }
-        if let Some(id) = m.get("@id") {
-            // `store.get` returns the document with the `@id` the store
-            // added; the seal ignores a top-level `@id`, so accept the one
-            // that is this document's CID (an export drops it).
-            let want = crate::cid::seal(doc)?;
-            if id.as_str() != Some(want.as_str()) {
-                return Err(refuse(
-                    "COMPOSITION_FIELD",
-                    format!("document: \"@id\" must be the CID of the document ({want}) or absent"),
-                ));
-            }
-        }
         only_keys(
             m,
             &[
@@ -425,6 +413,21 @@ impl Composition {
         within("instances", insts.len(), MAX_INSTANCES)?;
         if let Some(links) = m.get("links").and_then(Value::as_array) {
             within("links", links.len(), MAX_LINKS)?;
+        }
+        // After every refusal that costs nothing: sealing the received JSON is
+        // the expensive step, and a document that is refused for its keys or
+        // its size must not be canonicalised first.
+        if let Some(id) = m.get("@id") {
+            // `store.get` returns the document with the `@id` the store
+            // added; the seal ignores a top-level `@id`, so accept the one
+            // that is this document's CID (an export drops it).
+            let want = crate::cid::seal(doc)?;
+            if id.as_str() != Some(want.as_str()) {
+                return Err(refuse(
+                    "COMPOSITION_FIELD",
+                    format!("document: \"@id\" must be the CID of the document ({want}) or absent"),
+                ));
+            }
         }
         let mut c = Composition::open(&[], &[]).map_err(Error::Invalid)?;
         for inst in insts {
@@ -952,8 +955,12 @@ pub struct Exported {
     pub form: Form,
     pub document: Value,
     pub cid: String,
-    /// Form (a) only: the seal of the plain Bundle it flattens to.
+    /// Form (a) only, and only from [`Composition::export_with_bundle_cid`]:
+    /// the seal of the plain Bundle it flattens to.
     pub bundle_cid: Option<String>,
+    /// Why `bundle_cid` is missing from an export that asked for it: the
+    /// flattened Bundle is too large to seal (`[DOCUMENT_TOO_COMPLEX]`).
+    pub bundle_cid_error: Option<String>,
 }
 
 impl Composition {
@@ -967,31 +974,42 @@ impl Composition {
         }
     }
 
+    /// The document and its CID. Sealing is the cost: a form (a) document
+    /// holds its parameters as text and seals in a moment, a Bundle is
+    /// sealed whole (and refused with `[DOCUMENT_TOO_COMPLEX]` past
+    /// [`crate::cid::MAX_SEAL_WORK`]). `bundle_cid` is left to
+    /// [`Composition::export_with_bundle_cid`].
     pub fn export(&self, form: Option<Form>) -> Result<Exported> {
         let form = form.unwrap_or_else(|| self.natural_form());
-        match form {
-            Form::Composition => {
-                let document = self.to_composition_document()?;
-                let cid = crate::cid::seal(&document)?;
-                let bundle_cid = crate::cid::seal(&self.to_bundle_document()).ok();
-                Ok(Exported {
-                    form,
-                    document,
-                    cid,
-                    bundle_cid,
-                })
-            }
-            Form::Bundle => {
-                let document = self.to_bundle_document();
-                let cid = crate::cid::seal(&document)?;
-                Ok(Exported {
-                    form,
-                    document,
-                    cid,
-                    bundle_cid: None,
-                })
+        let document = match form {
+            Form::Composition => self.to_composition_document()?,
+            Form::Bundle => self.to_bundle_document(),
+        };
+        let cid = crate::cid::seal(&document)?;
+        Ok(Exported {
+            form,
+            document,
+            cid,
+            bundle_cid: None,
+            bundle_cid_error: None,
+        })
+    }
+
+    /// [`Composition::export`] and, for form (a), the seal of the Bundle it
+    /// flattens to. That seal is the expensive one (a saga's flattened arcs
+    /// are a long list), only a person reading the result wants it, and
+    /// `bundle.load`, `bundle.export` and `store.put` are the commands that
+    /// show it: the CID receipts name, the autosave and the content checks
+    /// ([`Composition::document_cid`], [`dump_part`]) do not pay for it.
+    pub fn export_with_bundle_cid(&self, form: Option<Form>) -> Result<Exported> {
+        let mut e = self.export(form)?;
+        if e.form == Form::Composition {
+            match crate::cid::seal(&self.to_bundle_document()) {
+                Ok(cid) => e.bundle_cid = Some(cid),
+                Err(err) => e.bundle_cid_error = Some(err.to_string()),
             }
         }
+        Ok(e)
     }
 
     /// The CID `receipts` and the store name this composition by.

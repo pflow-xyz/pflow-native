@@ -3764,3 +3764,40 @@ fn a_connect4_check_that_reads_the_open_plan_goes_red_when_the_plan_is_edited() 
     );
     assert_eq!(r["passed"], 1, "{r}");
 }
+
+// ------------------------------------------------------------ the cost of identity
+
+/// A content document is validated before it is sealed: one that is refused for an unknown key, or
+/// whose cites are not cites, is refused without being canonicalised (a cite is arbitrary JSON to
+/// the parser, and identical nested objects cost factorial time to seal).
+#[test]
+fn content_that_is_refused_is_refused_before_it_is_sealed() {
+    let mut s = cafe();
+    let before = cid::seals_on_this_thread();
+
+    let mut junk_key = cafe_content();
+    junk_key["junk"] = json!([{"k": [{}, {}, {}]}, {"k": [{}, {}, {}]}]);
+    let err = refused(&mut s, "content.load", json!({"document": junk_key}));
+    assert!(
+        err.starts_with("[CONTENT_FIELD]") && err.contains("unknown key"),
+        "{err}"
+    );
+
+    let nest = |n: usize| json!({"k": (0..n).map(|_| json!({})).collect::<Vec<_>>()});
+    let mut hostile_cites = cafe_content();
+    // (A document that names its composition has that composition's CID compared with the open
+    // one's: a seal of the composition, which is not what is under test.)
+    hostile_cites.as_object_mut().unwrap().remove("composition");
+    hostile_cites["entries"][0]["cites"] = json!([nest(9), nest(9)]);
+    let err = refused(&mut s, "content.load", json!({"document": hostile_cites}));
+    assert!(
+        err.starts_with("[CONTENT_REFUSED]") && err.contains("CITE_INVALID"),
+        "{err}"
+    );
+
+    assert_eq!(
+        cid::seals_on_this_thread() - before,
+        0,
+        "nothing was sealed"
+    );
+}

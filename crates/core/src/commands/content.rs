@@ -257,12 +257,13 @@ fn get(sess: &mut Session, a: &Value) -> Result<Value> {
 
 fn load(sess: &mut Session, a: &Value) -> Result<Value> {
     let strict = b(a, "strict").unwrap_or(true);
-    let mut received_cid = None;
+    let mut received = None;
     let (mc, src) = match (a.get("document").filter(|v| !v.is_null()), s(a, "library")) {
         (Some(d), None) => {
-            let received = value_arg(d, "document")?;
-            received_cid = crate::cid::seal(&received).ok();
-            (ModelContent::parse(&received)?, ContentSource::Loaded)
+            let doc = value_arg(d, "document")?;
+            let mc = ModelContent::parse(&doc)?;
+            received = Some(doc);
+            (mc, ContentSource::Loaded)
         }
         (None, Some(id)) => (
             content::library_entry(id)
@@ -275,19 +276,26 @@ fn load(sess: &mut Session, a: &Value) -> Result<Value> {
         ),
         _ => return Err(Error::BadArgs("pass `document` or `library`".into())),
     };
-    let cid = mc.cid()?;
     sess.edit("load content", |sess| {
         let c = sess.composition.as_mut().ok_or_else(|| {
             Error::Invalid("no composition is open (bundle.open, bundle.load)".into())
         })?;
+        // Sealing comes after every refusal: a document that is refused for its keys, its ids or
+        // its size is not canonicalised first.
+        let normal = mc.to_document();
         crate::commands::bundle_doc::attach(c, mc, strict)?;
         c.doc.content_source = src;
+        let cid = crate::cid::seal(&normal)?;
         Ok(document::content_json(c).tap(|v| {
             v["cid"] = json!(cid);
             // The CID is the seal of the normalised document (`check` and `scenario` as canonical
             // text, nothing the build does not read): the one `content.export`, `store.put` and the
             // receipts name. A document received in another spelling seals to another CID, said here.
-            if let Some(r) = received_cid.filter(|r| *r != cid) {
+            if let Some(r) = received
+                .filter(|r| *r != normal)
+                .and_then(|r| crate::cid::seal(&r).ok())
+                .filter(|r| *r != cid)
+            {
                 v["received_cid"] = json!(r);
             }
         }))

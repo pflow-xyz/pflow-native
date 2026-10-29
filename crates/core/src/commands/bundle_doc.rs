@@ -111,7 +111,7 @@ pub fn identity_into(out: &mut Value, doc: &Value) {
 
 /// What `bundle.load` returns for a composition just built.
 pub fn load_result(c: &Composition, form: Form) -> Result<Value> {
-    let exp = c.export(Some(form))?;
+    let exp = c.export_with_bundle_cid(Some(form))?;
     let flat = comp::flatten(&c.bundle).err();
     let mut out = json!({
         "form": form.name(),
@@ -125,6 +125,9 @@ pub fn load_result(c: &Composition, form: Form) -> Result<Value> {
         "missing": document::missing(c),
         "content": document::content_json(c),
     });
+    if let Some(why) = &exp.bundle_cid_error {
+        out["bundle_cid_error"] = json!(why);
+    }
     identity_into(&mut out, &exp.document);
     Ok(out)
 }
@@ -205,13 +208,16 @@ fn export(sess: &mut Session, a: &Value) -> Result<Value> {
             )))
         }
     };
-    let exp = c.export(form)?;
+    let exp = c.export_with_bundle_cid(form)?;
     let mut out = json!({
         "form": exp.form.name(),
         "document": exp.document,
         "cid": exp.cid,
         "bundle_cid": exp.bundle_cid,
     });
+    if let Some(why) = &exp.bundle_cid_error {
+        out["bundle_cid_error"] = json!(why);
+    }
     identity_into(&mut out, &exp.document);
     if b(a, "content").unwrap_or(false) {
         out["content"] = match &c.doc.content {

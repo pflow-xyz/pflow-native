@@ -128,7 +128,19 @@ pub fn pflow_context() -> Value {
 /// The document's CID (`z…`, base58btc CIDv1 dag-json sha2-256). Any
 /// top-level `@id` is ignored, so `seal(d) == seal(d with @id = seal(d))`.
 pub fn seal(doc: &Value) -> Result<String> {
+    SEALS.with(|n| n.set(n.get() + 1));
     Ok(cid_of_nquads(&nquads(doc)?))
+}
+
+thread_local! {
+    static SEALS: std::cell::Cell<u64> = const { std::cell::Cell::new(0) };
+}
+
+/// How many times [`seal`] has run on this thread, finished or refused. Sealing is the cost of
+/// identity, so a test pins the commands that must not pay for it (the autosave, a receipt's
+/// document id) by counting, not by timing.
+pub fn seals_on_this_thread() -> u64 {
+    SEALS.with(std::cell::Cell::get)
 }
 
 /// The canonical (URDNA2015) N-Quads `seal` hashes, for debugging a CID
@@ -757,6 +769,13 @@ fn too_complex(limit: u64) -> Error {
          (many identical sibling objects, or a very long list, make URDNA2015 superlinear); \
          remove the repeated structure or split the document"
     ))
+}
+
+/// Whether `e` is `seal`'s refusal of a document it would take too long to
+/// canonicalise (`[DOCUMENT_TOO_COMPLEX]`), which a caller that stores or
+/// loads "as given" should pass on, not retry as another kind of document.
+pub fn is_too_complex(e: &Error) -> bool {
+    matches!(e, Error::Invalid(m) if m.starts_with("[DOCUMENT_TOO_COMPLEX] "))
 }
 
 fn canonicalize(quads: &[Quad]) -> Result<String> {

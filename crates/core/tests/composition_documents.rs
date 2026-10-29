@@ -2759,3 +2759,111 @@ fn a_shape_the_identity_rule_refuses_loads_and_reports_model_error() {
         "{ok}"
     );
 }
+
+// ------------------------------------------------------------ the cost of identity
+
+/// One saga instance of `n` steps (no moves): the flattened Bundle's arcs are a list `n` long, and
+/// sealing it is quadratic in that.
+fn saga_steps_doc(n: usize) -> Value {
+    let steps: Vec<Value> = (0..n)
+        .map(|i| {
+            json!({"id": format!("s{i}"), "name": format!("step {i}"),
+            "compensation": format!("undo {i}"), "moves": []})
+        })
+        .collect();
+    doc(
+        json!([{"id": "payment", "pattern": "saga", "params": {
+            "id": "payment",
+            "accounts": {"customer": {"initial": 1, "shared": false},
+                         "merchant": {"initial": 0, "shared": false}},
+            "steps": steps}}]),
+        json!([]),
+    )
+}
+
+/// The Bundle a composition flattens to is sealed for the commands that show `bundle_cid` and for
+/// none other: the autosave and a receipt's document id name the composition by its recipe, which
+/// seals in a moment however large the net it builds. A saga of 50 steps flattens to a Bundle past
+/// `cid::MAX_SEAL_WORK`: it loads, has its CID, and says why it has no `bundle_cid`.
+#[test]
+fn a_composition_whose_bundle_is_too_large_to_seal_loads_and_is_named_by_its_recipe() {
+    let mut s = session();
+    let out = run(
+        &mut s,
+        "bundle.load",
+        json!({"document": saga_steps_doc(50)}),
+    );
+    assert_eq!(out["form"], "composition", "{out}");
+    assert!(out["cid"].as_str().unwrap().starts_with('z'), "{out}");
+    assert_eq!(out["bundle_cid"], Value::Null, "{out}");
+    assert_code(
+        out["bundle_cid_error"].as_str().unwrap(),
+        "DOCUMENT_TOO_COMPLEX",
+    );
+    // A composition that does seal has no such member.
+    let mut t = session();
+    let ok = run(&mut t, "bundle.load", json!({"document": small_doc()}));
+    assert!(ok["bundle_cid"].is_string(), "{ok}");
+    assert!(ok.get("bundle_cid_error").is_none(), "{ok}");
+
+    // The autosave seals the recipe once and never the Bundle.
+    let before = cid::seals_on_this_thread();
+    let dumped = run(&mut s, "session.dump_state", Value::Null);
+    assert_eq!(
+        cid::seals_on_this_thread() - before,
+        1,
+        "dump_state seals the document, not the Bundle it flattens to"
+    );
+    let mut r = session();
+    let restored = run(&mut r, "session.restore_state", json!({"state": dumped}));
+    assert_eq!(restored["composition"], 1, "{restored}");
+    assert_eq!(
+        run(&mut r, "bundle.export", Value::Null)["cid"],
+        out["cid"],
+        "the recipe restores to the same document"
+    );
+}
+
+/// A document refused for its keys or its size is refused before anything is sealed: the seal of
+/// received JSON is the costly step, and its `@id` is only worth checking in a document that is
+/// otherwise acceptable.
+#[test]
+fn a_document_refused_for_its_keys_is_refused_before_it_is_sealed() {
+    let mut d = small_doc();
+    d["@id"] = json!("z4EBG9jDsuUdvVN4bUXRHxoDG3p274FfhcJd8BiruRcE1jLCHi8");
+    d["junk"] = json!([{"k": [{}, {}, {}]}, {"k": [{}, {}, {}]}]);
+    let before = cid::seals_on_this_thread();
+    let err = load_err(&d);
+    assert_code(&err, "COMPOSITION_FIELD");
+    assert!(err.contains("unknown key") && err.contains("junk"), "{err}");
+    assert_eq!(
+        cid::seals_on_this_thread() - before,
+        0,
+        "nothing was sealed"
+    );
+}
+
+/// Documents that ask for more than a seal can do are refused with a code, in bounded time, and
+/// nothing is opened: identical sibling objects (factorial work) in a raw Bundle's unknown keys,
+/// which an unedited export hands back and so must be sealed, and in `store.put`.
+#[test]
+fn a_hostile_document_is_refused_as_too_complex_and_opens_nothing() {
+    let kids: Vec<Value> = (0..9).map(|_| json!({})).collect();
+    let mut bundle = cafe();
+    bundle["junk"] = json!([{"k": kids.clone()}, {"k": kids}]);
+    let mut s = orders_session();
+    let before = state(&mut s);
+    let err = refused(&mut s, "bundle.load", json!({"document": bundle.clone()}));
+    assert_code(&err, "DOCUMENT_TOO_COMPLEX");
+    assert_eq!(state(&mut s), before, "the open composition is untouched");
+    // The store refuses it too, and writes nothing.
+    let err = refused(&mut s, "store.put", json!({"document": bundle}));
+    assert_code(&err, "DOCUMENT_TOO_COMPLEX");
+    assert_eq!(
+        run(&mut s, "store.list", json!({}))["rows"]
+            .as_array()
+            .map_or(0, Vec::len),
+        0,
+        "nothing was stored"
+    );
+}

@@ -514,7 +514,7 @@ fn put_composition(sess: &Session, a: &Value, composition: bool, content: bool) 
     };
     let st = store::open();
     let (mut out, about) = if composition {
-        let exp = c.export(form)?;
+        let exp = c.export_with_bundle_cid(form)?;
         let kind = match exp.form {
             Form::Composition => DocKind::Composition,
             Form::Bundle => DocKind::Bundle,
@@ -529,6 +529,9 @@ fn put_composition(sess: &Session, a: &Value, composition: bool, content: bool) 
         )?;
         if let Some(bc) = &exp.bundle_cid {
             out["bundle_cid"] = json!(bc);
+        }
+        if let Some(why) = &exp.bundle_cid_error {
+            out["bundle_cid_error"] = json!(why);
         }
         // Content the user attached is part of the model's meaning; the library's is the build's
         // and needs no storing. Say when it was left out.
@@ -591,13 +594,19 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
             let (stored, normalised) = match ModelContent::parse(&doc) {
                 Ok(mc) => {
                     let normal = mc.to_document();
-                    let (got, want) = (crate::cid::seal(&doc).ok(), crate::cid::seal(&normal).ok());
-                    let said = (got != want).then(|| {
-                        format!(
-                            "stored as the normalised document (check and scenario as canonical text), which is what content.export writes and receipts name; the document as received seals to {}",
-                            got.unwrap_or_default()
-                        )
-                    });
+                    // A document already in the normal form seals to the same CID: one seal, and
+                    // none for a document that cannot be sealed (put_document refuses it).
+                    let said = if doc == normal {
+                        None
+                    } else {
+                        let (got, want) = (crate::cid::seal(&doc).ok(), crate::cid::seal(&normal)?);
+                        (got.as_deref() != Some(want.as_str())).then(|| {
+                            format!(
+                                "stored as the normalised document (check and scenario as canonical text), which is what content.export writes and receipts name; the document as received seals to {}",
+                                got.unwrap_or_default()
+                            )
+                        })
+                    };
                     (normal, said)
                 }
                 Err(e) => (
@@ -621,13 +630,19 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
             let (counts, canonical, mut note) =
                 match document::load(&bare, &bundle_doc::from_store) {
                     Ok(l) => {
-                        let exp = l.composition.export(Some(l.form)).ok();
+                        let exp = match l.composition.export_with_bundle_cid(Some(l.form)) {
+                            Ok(e) => Some(e),
+                            // A document that cannot be sealed cannot be stored: no second try.
+                            Err(e) if crate::cid::is_too_complex(&e) => return Err(e),
+                            Err(_) => None,
+                        };
                         (
                             flat_counts(&l.composition),
                             exp,
                             None,
                         )
                     }
+                    Err(e) if crate::cid::is_too_complex(&e) => return Err(e),
                     Err(e) => (
                         (0, 0),
                         None,
@@ -653,6 +668,9 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
             if let Some(exp) = canonical {
                 if let Some(bc) = &exp.bundle_cid {
                     out["bundle_cid"] = json!(bc);
+                }
+                if let Some(why) = &exp.bundle_cid_error {
+                    out["bundle_cid_error"] = json!(why);
                 }
                 if out["cid"] != json!(exp.cid) {
                     note = Some(format!(
