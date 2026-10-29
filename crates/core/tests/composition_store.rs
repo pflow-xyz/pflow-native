@@ -210,7 +210,11 @@ fn put_get_list_open_delete_of_every_kind() {
         flat["places"].as_array().unwrap().len(),
         flat["transitions"].as_array().unwrap().len(),
     );
-    let exported = run(&mut s, "bundle.export", json!({"content": true}));
+    let exported = run(
+        &mut s,
+        "bundle.export",
+        json!({"content": true, "bundle_cid": true}),
+    );
 
     // A net, the open composition with its content, and a raw bundle.
     run(&mut s, "file.open_example", json!({"name": "sir"}));
@@ -218,9 +222,13 @@ fn put_get_list_open_delete_of_every_kind() {
     let comp = run(
         &mut s,
         "store.put",
-        json!({"composition": true, "content": true, "title": "Orders"}),
+        json!({"composition": true, "content": true, "title": "Orders", "bundle_cid": true}),
     );
-    let bundle = run(&mut s, "store.put", json!({"document": cafe()}));
+    let bundle = run(
+        &mut s,
+        "store.put",
+        json!({"document": cafe(), "bundle_cid": true}),
+    );
 
     assert_eq!(comp["kind"], "composition");
     assert_eq!(comp["existed"], false);
@@ -230,6 +238,7 @@ fn put_get_list_open_delete_of_every_kind() {
         comp["cid"], exported["cid"],
         "the CID is the exported document's"
     );
+    assert!(exported["bundle_cid"].is_string(), "{exported}");
     assert_eq!(comp["bundle_cid"], exported["bundle_cid"]);
     assert_ne!(comp["bundle_cid"], comp["cid"]);
     assert_eq!(comp["content"]["cid"], exported["content"]["cid"]);
@@ -493,7 +502,7 @@ fn a_composition_stored_as_a_bundle_is_a_bundle_entry() {
     let as_comp = run(
         &mut s,
         "store.put",
-        json!({"composition": true, "form": "composition"}),
+        json!({"composition": true, "form": "composition", "bundle_cid": true}),
     );
     assert_eq!(as_bundle["kind"], "bundle");
     assert_eq!(as_comp["kind"], "composition");
@@ -872,7 +881,11 @@ fn a_document_that_will_not_load_or_is_not_canonical_says_so() {
         let p: Value = serde_json::from_str(inst["params"].as_str().unwrap()).unwrap();
         inst["params"] = p;
     }
-    let put = run(&mut s, "store.put", json!({"document": loose}));
+    let put = run(
+        &mut s,
+        "store.put",
+        json!({"document": loose, "bundle_cid": true}),
+    );
     assert_eq!(put["kind"], "composition");
     assert_ne!(
         put["cid"],

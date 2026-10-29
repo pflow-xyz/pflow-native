@@ -36,7 +36,9 @@ pub const SET: &[CommandSpec] = &[
                PatternComposition or ModelContent document you pass. Idempotent by CID: storing the \
                same document again returns existed: true and keeps the first metadata. `parents` \
                records provenance (a net defaults to its own `parents`). A bundle, composition or \
-               content result carries `kind`; a net's result is as it always was.",
+               content result carries `kind`; a net's result is as it always was. `bundle_cid: true` \
+               also gives a PatternComposition's `bundle_cid`, the seal of the plain Bundle it \
+               flattens to (costly, so off by default).",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -75,6 +77,7 @@ pub const SET: &[CommandSpec] = &[
                 Json,
                 "any PetriNet, PetriNetBundle, PatternComposition or ModelContent document (or a string holding it)",
             ),
+            bundle_doc::BUNDLE_CID,
         ],
         enabled: always,
         run: put,
@@ -97,10 +100,11 @@ pub const SET: &[CommandSpec] = &[
         help: "Open a stored document by its kind (undoable). A net becomes the open net (it has no \
                file path); a composition or bundle becomes the open composition, as bundle.load \
                {cid} does; content attaches to the open composition (refused when none is open, \
-               or when an element id does not resolve).",
+               or when an element id does not resolve). `bundle_cid: true` also gives a composition's \
+               `bundle_cid`, as bundle.load does.",
         menu: MENU,
         shortcut: None,
-        args: &[arg("cid", Str, "model CID")],
+        args: &[arg("cid", Str, "model CID"), bundle_doc::BUNDLE_CID],
         enabled: always,
         run: open,
         journal: true,
@@ -514,7 +518,7 @@ fn put_composition(sess: &Session, a: &Value, composition: bool, content: bool) 
     };
     let st = store::open();
     let (mut out, about) = if composition {
-        let exp = c.export_with_bundle_cid(form)?;
+        let exp = bundle_doc::export_for(c, form, a)?;
         let kind = match exp.form {
             Form::Composition => DocKind::Composition,
             Form::Bundle => DocKind::Bundle,
@@ -527,12 +531,7 @@ fn put_composition(sess: &Session, a: &Value, composition: bool, content: bool) 
             None,
             flat_counts(c),
         )?;
-        if let Some(bc) = &exp.bundle_cid {
-            out["bundle_cid"] = json!(bc);
-        }
-        if let Some(why) = &exp.bundle_cid_error {
-            out["bundle_cid_error"] = json!(why);
-        }
+        bundle_doc::bundle_cid_into(&mut out, &exp, a);
         // Content the user attached is part of the model's meaning; the library's is the build's
         // and needs no storing. Say when it was left out.
         if !content && c.doc.content_source == document::ContentSource::Loaded {
@@ -630,7 +629,7 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
             let (counts, canonical, mut note) =
                 match document::load(&bare, &bundle_doc::from_store) {
                     Ok(l) => {
-                        let exp = match l.composition.export_with_bundle_cid(Some(l.form)) {
+                        let exp = match bundle_doc::export_for(&l.composition, Some(l.form), a) {
                             Ok(e) => Some(e),
                             // A document that cannot be sealed cannot be stored: no second try.
                             Err(e) if crate::cid::is_too_complex(&e) => return Err(e),
@@ -666,12 +665,7 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
                 });
             }
             if let Some(exp) = canonical {
-                if let Some(bc) = &exp.bundle_cid {
-                    out["bundle_cid"] = json!(bc);
-                }
-                if let Some(why) = &exp.bundle_cid_error {
-                    out["bundle_cid_error"] = json!(why);
-                }
+                bundle_doc::bundle_cid_into(&mut out, &exp, a);
                 if out["cid"] != json!(exp.cid) {
                     note = Some(format!(
                         "this is not the form bundle.export writes (that is {}); bundle.load it and bundle.export for the canonical document",
@@ -696,7 +690,7 @@ fn open(sess: &mut Session, a: &Value) -> Result<Value> {
     let v = store::open().get_model(cid)?;
     match store::require_kind(&v)? {
         DocKind::Net => open_net(sess, cid, &v),
-        DocKind::Composition | DocKind::Bundle => open_composition(sess, cid),
+        DocKind::Composition | DocKind::Bundle => open_composition(sess, a),
         DocKind::Content => open_content(sess, cid),
         DocKind::Unknown => unreachable!("require_kind refused it"),
     }
@@ -717,9 +711,10 @@ fn open_net(sess: &mut Session, cid: &str, v: &Value) -> Result<Value> {
 
 /// A stored composition or bundle becomes the open composition, exactly as
 /// `bundle.load {cid}` opens it.
-fn open_composition(sess: &mut Session, cid: &str) -> Result<Value> {
+fn open_composition(sess: &mut Session, a: &Value) -> Result<Value> {
+    let cid = s(a, "cid").unwrap();
     let (c, form) = bundle_doc::build(&json!({ "cid": cid }))?;
-    let mut out = bundle_doc::load_result(&c, form)?;
+    let mut out = bundle_doc::load_result(&c, form, a)?;
     out["kind"] = json!(form.name());
     sess.edit("open composition from store", |s| {
         s.composition = Some(c);

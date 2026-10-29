@@ -984,8 +984,9 @@ pub struct Exported {
     pub form: Form,
     pub document: Value,
     pub cid: String,
-    /// Form (a) only, and only from [`Composition::export_with_bundle_cid`]:
-    /// the seal of the plain Bundle it flattens to.
+    /// Form (a) only, and only from [`Composition::export_with_bundle_cid`]
+    /// (the commands ask for it with `bundle_cid: true`): the seal of the
+    /// plain Bundle it flattens to.
     pub bundle_cid: Option<String>,
     /// Why `bundle_cid` is missing from an export that asked for it: the
     /// flattened Bundle is too large to seal (`[DOCUMENT_TOO_COMPLEX]`).
@@ -1026,10 +1027,12 @@ impl Composition {
 
     /// [`Composition::export`] and, for form (a), the seal of the Bundle it
     /// flattens to. That seal is the expensive one (a saga's flattened arcs
-    /// are a long list), only a person reading the result wants it, and
-    /// `bundle.load`, `bundle.export` and `store.put` are the commands that
-    /// show it: the CID receipts name, the autosave and the content checks
-    /// ([`Composition::document_cid`], [`dump_part`]) do not pay for it.
+    /// are a long list: 8 to 11 s for a hundred steps in a release build),
+    /// only a person who wants to compare with a Bundle-reading tool needs it,
+    /// and it is made only when asked for: `bundle_cid: true` on `bundle.load`,
+    /// `bundle.export`, `store.put` and `store.open`. The CID receipts name, the
+    /// autosave and the content checks ([`Composition::document_cid`],
+    /// [`dump_part`]) never pay for it.
     pub fn export_with_bundle_cid(&self, form: Option<Form>) -> Result<Exported> {
         let mut e = self.export(form)?;
         if e.form == Form::Composition {

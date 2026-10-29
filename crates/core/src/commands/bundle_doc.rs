@@ -33,7 +33,9 @@ pub const SET: &[CommandSpec] = &[
                (loaded as written; views say what it lacks). Or `cid`, a document in the local store. \
                `content` (a ModelContent document) or `library` (\"orders\") attaches model content, refused \
                when an element id does not resolve unless `strict` is false. Returns the form, the document's \
-               CID, the Bundle validation, whether it flattens, and what is missing. One undo step.",
+               CID, the Bundle validation, whether it flattens, and what is missing. `bundle_cid: true` also \
+               gives a PatternComposition's `bundle_cid`, the seal of the plain Bundle it flattens to (costly, \
+               quadratic in the flattened arcs, so off by default). One undo step.",
         menu: "Compose",
         shortcut: None,
         args: &[
@@ -42,6 +44,7 @@ pub const SET: &[CommandSpec] = &[
             opt("content", Json, "a ModelContent document to attach"),
             opt("library", Str, "library content to attach (content.library)"),
             opt("strict", Bool, "refuse content whose element ids do not resolve (default true)"),
+            BUNDLE_CID,
         ],
         enabled: always,
         run: load,
@@ -54,19 +57,53 @@ pub const SET: &[CommandSpec] = &[
                composition (PatternComposition; refused for a raw Bundle's subnets, which have no pattern) or \
                bundle (the PetriNetBundle: the loaded JSON while a raw load is unedited, else what \
                pflow-compose serialises). Returns the document and its CID (pflow's seal of exactly that \
-               JSON); form composition also gives `bundle_cid`, the seal of the plain Bundle it flattens to. \
-               `content: true` adds the attached content document. Stores a report.",
+               JSON). `content: true` adds the attached content document. `bundle_cid: true` also gives, \
+               for form composition, `bundle_cid`: the seal of the plain Bundle it flattens to (what a \
+               Bundle-reading tool hashes; costly, quadratic in the flattened arcs, so off by default). \
+               Stores a report.",
         menu: "Compose",
         shortcut: None,
         args: &[
             opt("form", Str, "auto (default), composition or bundle"),
             opt("content", Bool, "also export the attached content"),
+            BUNDLE_CID,
         ],
         enabled: need,
         run: export,
         journal: false,
     },
 ];
+
+/// The argument that asks for `bundle_cid` (`bundle.load`, `bundle.export`, `store.put`,
+/// `store.open`).
+pub const BUNDLE_CID: crate::registry::ArgSpec = opt(
+    "bundle_cid",
+    Bool,
+    "also give bundle_cid, the seal of the plain Bundle a PatternComposition flattens to (costly: quadratic in its flattened arcs; default false)",
+);
+
+/// [`Composition::export`], and with `bundle_cid: true` in `a` the seal of the flattened Bundle
+/// too ([`Composition::export_with_bundle_cid`]): at most one such seal per command.
+pub fn export_for(c: &Composition, form: Option<Form>, a: &Value) -> Result<document::Exported> {
+    if b(a, "bundle_cid").unwrap_or(false) {
+        c.export_with_bundle_cid(form)
+    } else {
+        c.export(form)
+    }
+}
+
+/// Adds `bundle_cid` (null, with `bundle_cid_error`, when the Bundle is too large to seal) to a
+/// result whose command was asked for it. A Bundle document is its own plain Bundle, whose seal
+/// is `cid`, so there is nothing to add for one.
+pub fn bundle_cid_into(out: &mut Value, exp: &document::Exported, a: &Value) {
+    if !b(a, "bundle_cid").unwrap_or(false) || exp.form != Form::Composition {
+        return;
+    }
+    out["bundle_cid"] = json!(exp.bundle_cid);
+    if let Some(why) = &exp.bundle_cid_error {
+        out["bundle_cid_error"] = json!(why);
+    }
+}
 
 fn source(id: &str, a: &Value) -> Step {
     Step {
@@ -118,15 +155,15 @@ pub fn identity_into(out: &mut Value, doc: &Value) {
     }
 }
 
-/// What `bundle.load` returns for a composition just built.
-pub fn load_result(c: &Composition, form: Form) -> Result<Value> {
-    let exp = c.export_with_bundle_cid(Some(form))?;
+/// What `bundle.load` returns for a composition just built (`a` is the command's arguments:
+/// `bundle_cid`).
+pub fn load_result(c: &Composition, form: Form, a: &Value) -> Result<Value> {
+    let exp = export_for(c, Some(form), a)?;
     let flat = comp::flatten(&c.bundle).err();
     let mut out = json!({
         "form": form.name(),
         "name": c.bundle.name,
         "cid": exp.cid,
-        "bundle_cid": exp.bundle_cid,
         "instances": c.specs.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
         "links": c.links_json(),
         "validation": validation_json(c),
@@ -134,9 +171,7 @@ pub fn load_result(c: &Composition, form: Form) -> Result<Value> {
         "missing": document::missing(c),
         "content": document::content_json(c),
     });
-    if let Some(why) = &exp.bundle_cid_error {
-        out["bundle_cid_error"] = json!(why);
-    }
+    bundle_cid_into(&mut out, &exp, a);
     identity_into(&mut out, &exp.document);
     Ok(out)
 }
@@ -195,7 +230,7 @@ pub fn attach(c: &mut Composition, mc: ModelContent, strict: bool) -> Result<()>
 
 fn load(sess: &mut Session, a: &Value) -> Result<Value> {
     let (c, form) = build(a)?;
-    let out = load_result(&c, form)?;
+    let out = load_result(&c, form, a)?;
     sess.edit("load composition", |s| {
         s.composition = Some(c);
         Ok(())
@@ -217,16 +252,13 @@ fn export(sess: &mut Session, a: &Value) -> Result<Value> {
             )))
         }
     };
-    let exp = c.export_with_bundle_cid(form)?;
+    let exp = export_for(c, form, a)?;
     let mut out = json!({
         "form": exp.form.name(),
         "document": exp.document,
         "cid": exp.cid,
-        "bundle_cid": exp.bundle_cid,
     });
-    if let Some(why) = &exp.bundle_cid_error {
-        out["bundle_cid_error"] = json!(why);
-    }
+    bundle_cid_into(&mut out, &exp, a);
     identity_into(&mut out, &exp.document);
     if b(a, "content").unwrap_or(false) {
         out["content"] = match &c.doc.content {

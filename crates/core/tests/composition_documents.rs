@@ -187,7 +187,7 @@ fn with_object_params(d: &Value) -> Value {
 fn orders_exports_as_a_pattern_composition_and_reloads_identically() {
     let mut a = session();
     run(&mut a, "bundle.open", json!({}));
-    let exp = run(&mut a, "bundle.export", json!({}));
+    let exp = run(&mut a, "bundle.export", json!({"bundle_cid": true}));
     assert_eq!(
         exp["form"], "composition",
         "the built-in example is form (a)"
@@ -201,7 +201,11 @@ fn orders_exports_as_a_pattern_composition_and_reloads_identically() {
     );
 
     let mut b = session();
-    let loaded = run(&mut b, "bundle.load", json!({"document": exp["document"]}));
+    let loaded = run(
+        &mut b,
+        "bundle.load",
+        json!({"document": exp["document"], "bundle_cid": true}),
+    );
     assert_eq!(loaded["form"], "composition");
     assert_eq!(loaded["cid"], ORDERS_CID);
     assert_eq!(loaded["bundle_cid"], ORDERS_BUNDLE_CID);
@@ -236,7 +240,7 @@ fn orders_exports_as_a_pattern_composition_and_reloads_identically() {
         run(&mut b, "bundle.incidence", Value::Null)
     );
 
-    let again = run(&mut b, "bundle.export", json!({}));
+    let again = run(&mut b, "bundle.export", json!({"bundle_cid": true}));
     assert_eq!(again["document"], exp["document"], "identical re-export");
     assert_eq!(again["cid"], ORDERS_CID);
     assert_eq!(again["bundle_cid"], ORDERS_BUNDLE_CID);
@@ -304,7 +308,11 @@ fn the_orders_golden_fixture_is_what_the_code_exports_and_loads_to_its_pinned_ci
     // And it loads to the pinned CID whether it arrives as a value or as the file's text.
     for document in [golden.clone(), json!(text)] {
         let mut s = session();
-        let out = run(&mut s, "bundle.load", json!({"document": document}));
+        let out = run(
+            &mut s,
+            "bundle.load",
+            json!({"document": document, "bundle_cid": true}),
+        );
         assert_eq!(out["cid"], ORDERS_CID);
         assert_eq!(out["bundle_cid"], ORDERS_BUNDLE_CID);
         assert_eq!(run(&mut s, "bundle.export", json!({}))["document"], golden);
@@ -324,16 +332,21 @@ fn extras_survive_the_round_trip_and_keep_their_flag() {
         "bundle.add_link",
         json!({"kind": "token", "from": "orders:out", "to": "orders2:in"}),
     );
-    let exp = run(&mut a, "bundle.export", json!({}));
+    let exp = run(&mut a, "bundle.export", json!({"bundle_cid": true}));
     assert_eq!(exp["form"], "composition");
     assert_eq!(exp["document"]["instances"].as_array().unwrap().len(), 6);
     assert_eq!(exp["document"]["links"].as_array().unwrap().len(), 4);
     assert_ne!(exp["cid"], ORDERS_CID);
 
     let mut b = session();
-    let loaded = run(&mut b, "bundle.load", json!({"document": exp["document"]}));
+    let loaded = run(
+        &mut b,
+        "bundle.load",
+        json!({"document": exp["document"], "bundle_cid": true}),
+    );
     assert_eq!(loaded["cid"], exp["cid"]);
     assert_eq!(loaded["bundle_cid"], exp["bundle_cid"]);
+    assert!(exp["bundle_cid"].is_string(), "{exp}");
     let sb = state(&mut b);
     let flags: Vec<(String, bool)> = sb["subnets"]
         .as_array()
@@ -494,7 +507,11 @@ fn reordering_instances_and_links_keeps_the_cid() {
 
     // ...so the loader agrees, and the text keeps the order it was given.
     let mut s = session();
-    let out = run(&mut s, "bundle.load", json!({"document": shuffled}));
+    let out = run(
+        &mut s,
+        "bundle.load",
+        json!({"document": shuffled, "bundle_cid": true}),
+    );
     assert_eq!(out["cid"], ORDERS_CID);
     assert_eq!(out["bundle_cid"], ORDERS_BUNDLE_CID);
     assert_eq!(out["instances"], json!(["payment", "workers", "orders"]));
@@ -550,8 +567,16 @@ fn reordering_a_sagas_steps_changes_the_params_text_and_the_cid() {
     );
     // The loader closes it: params leave as canonical text, which the hash covers byte for byte.
     let (mut f, mut b) = (session(), session());
-    let lf = run(&mut f, "bundle.load", json!({"document": forward}));
-    let lb = run(&mut b, "bundle.load", json!({"document": backward}));
+    let lf = run(
+        &mut f,
+        "bundle.load",
+        json!({"document": forward, "bundle_cid": true}),
+    );
+    let lb = run(
+        &mut b,
+        "bundle.load",
+        json!({"document": backward, "bundle_cid": true}),
+    );
     assert_eq!(
         lf["cid"], ORDERS_CID,
         "object form canonicalises to the golden text"
@@ -560,6 +585,7 @@ fn reordering_a_sagas_steps_changes_the_params_text_and_the_cid() {
         lf["cid"], lb["cid"],
         "reordered steps are a different document"
     );
+    assert!(lf["bundle_cid"].is_string() && lb["bundle_cid"].is_string());
     assert_ne!(lf["bundle_cid"], lb["bundle_cid"], "and a different net");
 
     let ef = run(&mut f, "bundle.export", json!({}));
@@ -776,14 +802,17 @@ fn a_composition_carrying_its_own_cid_as_at_id_loads_and_exports_without_it() {
 #[test]
 fn cafe_loads_as_a_raw_bundle_and_says_what_it_lacks() {
     let mut s = session();
-    let out = run(&mut s, "bundle.load", json!({"document": cafe()}));
+    let out = run(
+        &mut s,
+        "bundle.load",
+        json!({"document": cafe(), "bundle_cid": true}),
+    );
     assert_eq!(out["form"], "bundle");
     assert_eq!(out["name"], "cafe-bundle");
     assert_eq!(out["cid"], CAFE_CID);
-    assert_eq!(
-        out["bundle_cid"],
-        Value::Null,
-        "only form (a) has a second CID"
+    assert!(
+        out.get("bundle_cid").is_none(),
+        "only form (a) has a second CID, asked for or not: {out}"
     );
     assert_eq!(out["instances"], json!(["counter", "pantry", "staff"]));
     assert_eq!(out["flatten"], json!({"ok": true}));
@@ -1329,10 +1358,14 @@ fn a_subnet_replaced_under_the_same_id_does_not_inherit_the_cid_of_the_one_it_re
 fn orders_as_a_bundle_loads_raw_flattens_alike_and_loses_only_its_patterns() {
     let mut a = session();
     run(&mut a, "bundle.open", json!({}));
-    let as_composition = run(&mut a, "bundle.export", json!({}));
-    let as_bundle = run(&mut a, "bundle.export", json!({"form": "bundle"}));
+    let as_composition = run(&mut a, "bundle.export", json!({"bundle_cid": true}));
+    let as_bundle = run(
+        &mut a,
+        "bundle.export",
+        json!({"form": "bundle", "bundle_cid": true}),
+    );
     assert_eq!(as_bundle["form"], "bundle");
-    assert_eq!(as_bundle["bundle_cid"], Value::Null);
+    assert!(as_bundle.get("bundle_cid").is_none(), "{as_bundle}");
     assert_eq!(
         as_bundle["cid"], as_composition["bundle_cid"],
         "bundle_cid is the seal of the Bundle the composition flattens to"
@@ -2166,7 +2199,7 @@ fn bundle_export_stores_a_report_artifact_and_edits_nothing() {
     let journal = s.journal.len();
     assert!(s.artifacts.is_empty());
 
-    let exp = run(&mut s, "bundle.export", json!({}));
+    let exp = run(&mut s, "bundle.export", json!({"bundle_cid": true}));
     let id = exp["artifact"].as_str().expect("an artifact id");
     let a = s.artifact(id).expect("stored in the session");
     assert_eq!(a.title, "Composition document (composition)");
@@ -2177,6 +2210,7 @@ fn bundle_export_stores_a_report_artifact_and_edits_nothing() {
             assert_eq!(r["cid"], exp["cid"]);
             assert_eq!(r["form"], "composition");
             assert_eq!(r["document"], exp["document"]);
+            assert!(r["bundle_cid"].is_string());
             assert_eq!(r["bundle_cid"], exp["bundle_cid"]);
         }
         other => panic!("not a report: {other:?}"),
@@ -2882,12 +2916,13 @@ fn saga_steps_doc(n: usize) -> Value {
     )
 }
 
-/// The Bundle a composition flattens to is sealed for the commands that show `bundle_cid` and for
-/// none other: the autosave and a receipt's document id name the composition by its recipe, which
-/// seals in a moment however large the net it builds. A saga of 10 steps flattens to a Bundle that
-/// needs 153 thousand steps to seal; with the limit set below that (a test stands in for a Bundle
-/// past the real limit, which costs seconds to find), it loads, has its CID, and says why it has
-/// no `bundle_cid`.
+/// The Bundle a composition flattens to is sealed only when a command is asked for `bundle_cid`:
+/// the CID a receipt names, the autosave and a plain load name the composition by its recipe,
+/// which seals in a moment however large the net it builds. A saga of 10 steps flattens to a
+/// Bundle that needs 153 thousand steps to seal; with the limit set below that (a test stands in
+/// for a Bundle past the real limit, which costs seconds to find), it loads and has its CID with
+/// no error, because nothing tried to seal the Bundle; asked for `bundle_cid` it says why it has
+/// none.
 #[test]
 fn a_composition_whose_bundle_is_too_large_to_seal_loads_and_is_named_by_its_recipe() {
     let mut s = session();
@@ -2899,13 +2934,32 @@ fn a_composition_whose_bundle_is_too_large_to_seal_loads_and_is_named_by_its_rec
     );
     assert_eq!(out["form"], "composition", "{out}");
     assert!(out["cid"].as_str().unwrap().starts_with('z'), "{out}");
-    assert_eq!(out["bundle_cid"], Value::Null, "{out}");
-    assert_code(
-        out["bundle_cid_error"].as_str().unwrap(),
-        "DOCUMENT_TOO_COMPLEX",
+    assert!(
+        out.get("bundle_cid").is_none() && out.get("bundle_cid_error").is_none(),
+        "the Bundle was not asked for, so it was not sealed, so it was not refused: {out}"
     );
     let exported = run(&mut s, "bundle.export", Value::Null);
     assert_eq!(exported["cid"], out["cid"]);
+    assert!(
+        exported.get("bundle_cid").is_none() && exported.get("bundle_cid_error").is_none(),
+        "{exported}"
+    );
+
+    // Asked for, the Bundle is sealed, and is refused for its size.
+    let asked = run(
+        &mut s,
+        "bundle.load",
+        json!({"document": saga_steps_doc(10), "bundle_cid": true}),
+    );
+    assert_eq!(asked["cid"], out["cid"], "{asked}");
+    assert_eq!(asked["bundle_cid"], Value::Null, "{asked}");
+    assert_code(
+        asked["bundle_cid_error"].as_str().unwrap(),
+        "DOCUMENT_TOO_COMPLEX",
+    );
+    let exported = run(&mut s, "bundle.export", json!({"bundle_cid": true}));
+    assert_eq!(exported["cid"], out["cid"]);
+    assert_eq!(exported["bundle_cid"], Value::Null, "{exported}");
     assert_code(
         exported["bundle_cid_error"].as_str().unwrap(),
         "DOCUMENT_TOO_COMPLEX",
@@ -2931,10 +2985,108 @@ fn a_composition_whose_bundle_is_too_large_to_seal_loads_and_is_named_by_its_rec
 
     // With the real limit the same composition seals, and so does a small one: no error member.
     for d in [saga_steps_doc(10), small_doc()] {
-        let ok = run(&mut session(), "bundle.load", json!({"document": d}));
+        let ok = run(
+            &mut session(),
+            "bundle.load",
+            json!({"document": d, "bundle_cid": true}),
+        );
         assert!(ok["bundle_cid"].is_string(), "{ok}");
         assert!(ok.get("bundle_cid_error").is_none(), "{ok}");
     }
+}
+
+/// `command` in `s`, and how many seals it performed.
+fn counted(s: &mut Session, command: &str, args: Value) -> (Value, u64) {
+    let before = cid::seals_on_this_thread();
+    let out = run(s, command, args);
+    (out, cid::seals_on_this_thread() - before)
+}
+
+/// `bundle_cid` is opt-in: with no argument `bundle.load`, `bundle.export`, `store.put` and
+/// `store.open` carry neither `bundle_cid` nor `bundle_cid_error` and seal nothing of the
+/// flattened Bundle (a hundred-step saga's takes seconds in a release build, and a plain load
+/// has no use for it); with `bundle_cid: true` they carry the seal of the plain Bundle the
+/// composition exports as, and the Bundle is sealed once by the command, not twice.
+#[test]
+fn bundle_cid_is_opt_in_and_the_bundle_is_sealed_once_by_the_command_that_was_asked() {
+    let doc = saga_steps_doc(10);
+    let mut s = session();
+    run(&mut s, "bundle.load", json!({"document": doc.clone()}));
+    let plain = run(&mut s, "bundle.export", json!({"form": "bundle"}))["document"].clone();
+    let want = cid::seal(&plain).unwrap();
+    let none = |out: &Value, what: &str| {
+        assert!(
+            out.get("bundle_cid").is_none() && out.get("bundle_cid_error").is_none(),
+            "{what}: {out}"
+        );
+    };
+
+    let (out, plain_seals) = counted(&mut s, "bundle.load", json!({"document": doc.clone()}));
+    none(&out, "bundle.load");
+    let (out, asked_seals) = counted(
+        &mut s,
+        "bundle.load",
+        json!({"document": doc.clone(), "bundle_cid": true}),
+    );
+    assert_eq!(out["bundle_cid"], want, "bundle.load: {out}");
+    assert_eq!(
+        asked_seals,
+        plain_seals + 1,
+        "bundle.load seals the Bundle once"
+    );
+
+    let (out, plain_seals) = counted(&mut s, "bundle.export", json!({}));
+    none(&out, "bundle.export");
+    let (out, asked_seals) = counted(&mut s, "bundle.export", json!({"bundle_cid": true}));
+    assert_eq!(out["bundle_cid"], want, "bundle.export: {out}");
+    assert_eq!(
+        asked_seals,
+        plain_seals + 1,
+        "bundle.export seals the Bundle once"
+    );
+
+    let (out, plain_seals) = counted(&mut s, "store.put", json!({"composition": true}));
+    none(&out, "store.put {composition}");
+    let (out, asked_seals) = counted(
+        &mut s,
+        "store.put",
+        json!({"composition": true, "bundle_cid": true}),
+    );
+    assert_eq!(out["bundle_cid"], want, "store.put {{composition}}: {out}");
+    assert_eq!(
+        asked_seals,
+        plain_seals + 1,
+        "store.put seals the Bundle once"
+    );
+    let stored = out["cid"].as_str().unwrap().to_string();
+
+    let (out, plain_seals) = counted(&mut s, "store.put", json!({"document": doc.clone()}));
+    none(&out, "store.put {document}");
+    let (out, asked_seals) = counted(
+        &mut s,
+        "store.put",
+        json!({"document": doc, "bundle_cid": true}),
+    );
+    assert_eq!(out["bundle_cid"], want, "store.put {{document}}: {out}");
+    assert_eq!(
+        asked_seals,
+        plain_seals + 1,
+        "store.put {{document}} seals the Bundle once"
+    );
+
+    let (out, plain_seals) = counted(&mut s, "store.open", json!({"cid": stored}));
+    none(&out, "store.open");
+    let (out, asked_seals) = counted(
+        &mut s,
+        "store.open",
+        json!({"cid": stored, "bundle_cid": true}),
+    );
+    assert_eq!(out["bundle_cid"], want, "store.open: {out}");
+    assert_eq!(
+        asked_seals,
+        plain_seals + 1,
+        "store.open seals the Bundle once"
+    );
 }
 
 /// A document refused for its keys or its size is refused before anything is sealed: the seal of
