@@ -110,8 +110,8 @@ pub const SET: &[CommandSpec] = &[
         label: "List Stored Models",
         help: "Stored models, newest first, with title, kind (net, bundle, composition or content), \
                size, created (ms), collections, license, successor and, for content, the \
-               composition it is about. `query` filters by title or CID substring, `kind` by kind. \
-               Stores a table artifact.",
+               composition it is about. `query` filters by title or CID substring, `kind` by kind, \
+               `about` to the content stored about that composition CID. Stores a table artifact.",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -121,6 +121,7 @@ pub const SET: &[CommandSpec] = &[
                 "case-insensitive substring of the title or CID",
             ),
             opt("kind", Str, "only this kind: net, bundle, composition or content"),
+            opt("about", Str, "only content about this composition CID"),
             opt("limit", Int, "at most this many rows (default 100)"),
         ],
         enabled: always,
@@ -529,6 +530,17 @@ fn put_composition(sess: &Session, a: &Value, composition: bool, content: bool) 
         if let Some(bc) = &exp.bundle_cid {
             out["bundle_cid"] = json!(bc);
         }
+        // Content the user attached is part of the model's meaning; the library's is the build's
+        // and needs no storing. Say when it was left out.
+        if !content && c.doc.content_source == document::ContentSource::Loaded {
+            add_note(
+                &mut out,
+                Some(
+                    "this composition has content attached that was not stored; store.put {content: true} stores it, about this composition"
+                        .into(),
+                ),
+            );
+        }
         (Some(out), exp.cid)
     } else {
         (None, c.export(None)?.cid)
@@ -572,8 +584,32 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
                 ),
                 None => (None, None),
             };
-            let mut out = st.put_document(&doc, kind, title, parents, about, (0, 0))?;
+            // Stored as the document every other consumer names (`content.export`, `about`, a
+            // receipt's `content`): the normalised one, `check` and `scenario` as canonical text.
+            // A document that does not parse is stored as given, as a composition that does not
+            // load is, and `store.open` refuses it until it does.
+            let (stored, normalised) = match ModelContent::parse(&doc) {
+                Ok(mc) => {
+                    let normal = mc.to_document();
+                    let (got, want) = (crate::cid::seal(&doc).ok(), crate::cid::seal(&normal).ok());
+                    let said = (got != want).then(|| {
+                        format!(
+                            "stored as the normalised document (check and scenario as canonical text), which is what content.export writes and receipts name; the document as received seals to {}",
+                            got.unwrap_or_default()
+                        )
+                    });
+                    (normal, said)
+                }
+                Err(e) => (
+                    doc.clone(),
+                    Some(format!(
+                        "the document does not parse as model content ({e}); it is stored as given, and store.open refuses it until it does"
+                    )),
+                ),
+            };
+            let mut out = st.put_document(&stored, kind, title, parents, about, (0, 0))?;
             add_note(&mut out, note);
+            add_note(&mut out, normalised);
             Ok(out)
         }
         DocKind::Composition | DocKind::Bundle => {
@@ -601,6 +637,16 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
                     ),
                 };
             let mut out = st.put_document(&doc, kind, title, parents, None, counts)?;
+            // The store writes the CID as `@id` and the loaders are given the document without it,
+            // so an `@id` of the author's does not come back with the document.
+            if let Some(own) = doc.get("@id").filter(|own| **own != out["cid"]) {
+                note = Some(match note {
+                    Some(n) => n,
+                    None => format!(
+                        "the document's own @id {own} is replaced by its CID in the store, and store.open gives the document without it"
+                    ),
+                });
+            }
             if let Some(exp) = canonical {
                 if let Some(bc) = &exp.bundle_cid {
                     out["bundle_cid"] = json!(bc);
@@ -696,6 +742,7 @@ fn list(sess: &mut Session, a: &Value) -> Result<Value> {
     let q = s(a, "query").unwrap_or("").to_lowercase();
     let limit = n(a, "limit").map_or(100, |l| l.max(0.0) as usize);
     let kind = s(a, "kind").filter(|k| !k.is_empty());
+    let about = s(a, "about").filter(|k| !k.is_empty());
     if let Some(k) = kind {
         if !["net", "bundle", "composition", "content"].contains(&k) {
             return Err(Error::BadArgs(format!(
@@ -711,6 +758,7 @@ fn list(sess: &mut Session, a: &Value) -> Result<Value> {
             q.is_empty() || cid.to_lowercase().contains(&q) || m.title.to_lowercase().contains(&q)
         })
         .filter(|(_, m)| kind.is_none_or(|k| kind_name(m) == k))
+        .filter(|(_, m)| about.is_none_or(|a| m.about.as_deref() == Some(a)))
         .collect();
     all.sort_by(|x, y| y.1.created.cmp(&x.1.created).then(x.0.cmp(y.0)));
     let total = all.len();
@@ -901,7 +949,27 @@ fn license(_: &mut Session, a: &Value) -> Result<Value> {
 }
 
 fn supersede(_: &mut Session, a: &Value) -> Result<Value> {
-    store::open().supersede(s(a, "old").unwrap(), s(a, "new").unwrap())
+    let (old, new) = (s(a, "old").unwrap(), s(a, "new").unwrap());
+    let mut out = store::open().supersede(old, new)?;
+    // A net replaced by a composition (or content by a net) is allowed, since the chain is about
+    // what replaces what; say it, because the usual case is a document of the same kind.
+    let kind = |cid: &str| {
+        store::open()
+            .get_model(cid)
+            .ok()
+            .map(|v| store::kind_of(&v).name())
+    };
+    if let (Some(a), Some(b)) = (kind(old), kind(new)) {
+        if a != b {
+            add_note(
+                &mut out,
+                Some(format!(
+                    "the superseded document is a {a} and its successor a {b}"
+                )),
+            );
+        }
+    }
+    Ok(out)
 }
 
 fn migration_offers(sess: &mut Session, a: &Value) -> Result<Value> {

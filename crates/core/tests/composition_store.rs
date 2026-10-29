@@ -82,7 +82,13 @@ fn orders_with_content() -> Session {
 /// (opened from the catalog, or loaded from a document).
 fn shape(state: &Value) -> Value {
     let mut v = state.clone();
-    for k in ["document", "content", "capabilities", "missing"] {
+    for k in [
+        "document",
+        "content",
+        "capabilities",
+        "missing",
+        "params_note",
+    ] {
         v.as_object_mut().unwrap().remove(k);
     }
     v
@@ -1293,4 +1299,105 @@ fn a_filesystem_store_keeps_every_kind_across_handles() {
         "{on_disk:?}"
     );
     std::fs::remove_dir_all(&dir).ok();
+}
+
+#[test]
+fn content_stored_for_a_composition_can_be_found_from_it_and_left_out_content_is_noted() {
+    let mut s = orders_with_content();
+    // Composition alone: the attached content is user-made (not the library's), so say it was left out.
+    let put = run(&mut s, "store.put", json!({"composition": true}));
+    assert!(
+        put["note"]
+            .as_str()
+            .unwrap()
+            .contains("content attached that was not stored"),
+        "{put}"
+    );
+    let comp_cid = put["cid"].as_str().unwrap().to_string();
+    // With the content, no such note, and the content is listed by the composition it is about.
+    let both = run(
+        &mut s,
+        "store.put",
+        json!({"composition": true, "content": true}),
+    );
+    assert!(both.get("note").is_none(), "{both}");
+    let by_about = run(&mut s, "store.list", json!({"about": comp_cid}));
+    let rows = by_about["rows"].as_array().unwrap();
+    assert_eq!(rows.len(), 1, "{by_about}");
+    assert_eq!(rows[0]["kind"], "content");
+    assert_eq!(rows[0]["cid"], both["content"]["cid"]);
+    assert_eq!(rows[0]["about"], json!(comp_cid));
+    // Another composition's content is not in it.
+    let none = run(&mut s, "store.list", json!({"about": CAFE_CID}));
+    assert_eq!(none["rows"].as_array().unwrap().len(), 0, "{none}");
+    // The library's content is a name, so it needs no storing and draws no note.
+    let mut lib = session();
+    run(&mut lib, "bundle.open", json!({}));
+    let put = run(&mut lib, "store.put", json!({"composition": true}));
+    assert!(put.get("note").is_none(), "{put}");
+}
+
+#[test]
+fn a_bundle_with_an_id_of_its_own_is_stored_under_its_cid_and_says_the_id_goes() {
+    let mut s = session();
+    let mut b = cafe();
+    b["@id"] = json!("urn:example:cafe");
+    let put = run(&mut s, "store.put", json!({"document": b}));
+    // The seal ignores a top-level @id: the CID is the cafe's.
+    assert_eq!(put["cid"], CAFE_CID);
+    assert!(
+        put["note"].as_str().unwrap().contains("urn:example:cafe"),
+        "{put}"
+    );
+    // Opened from the store it is the Bundle without the author's @id.
+    let mut t = fresh();
+    run(&mut t, "store.open", json!({"cid": CAFE_CID}));
+    assert_eq!(
+        run(&mut t, "bundle.export", Value::Null)["document"],
+        cafe()
+    );
+    // A bundle with none says nothing.
+    let mut u = session();
+    let put = run(&mut u, "store.put", json!({"document": cafe()}));
+    assert!(put.get("note").is_none(), "{put}");
+}
+
+#[test]
+fn superseding_across_kinds_is_allowed_and_says_so() {
+    let mut s = orders_with_content();
+    let net = {
+        run(&mut s, "file.open_example", json!({"name": "sir"}));
+        run(&mut s, "store.put", json!({}))
+    };
+    let comp = {
+        run(&mut s, "bundle.open", json!({}));
+        run(&mut s, "store.put", json!({"composition": true}))
+    };
+    let across = run(
+        &mut s,
+        "store.supersede",
+        json!({"old": comp["cid"], "new": net["cid"]}),
+    );
+    assert!(
+        across["note"]
+            .as_str()
+            .unwrap()
+            .contains("the superseded document is a composition and its successor a net"),
+        "{across}"
+    );
+    // Same kind: nothing to say.
+    run(&mut s, "bundle.add_instance", json!({"id": "payment2"}));
+    let comp2 = run(&mut s, "store.put", json!({"composition": true}));
+    let same = run(
+        &mut s,
+        "store.supersede",
+        json!({"old": comp["cid"], "new": comp2["cid"]}),
+    );
+    assert!(
+        !same["note"]
+            .as_str()
+            .unwrap_or("")
+            .contains("the superseded document is a"),
+        "{same}"
+    );
 }
