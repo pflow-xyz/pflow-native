@@ -973,12 +973,14 @@ fn supersede(_: &mut Session, a: &Value) -> Result<Value> {
     let (old, new) = (s(a, "old").unwrap(), s(a, "new").unwrap());
     let mut out = store::open().supersede(old, new)?;
     // A net replaced by a composition (or content by a net) is allowed, since the chain is about
-    // what replaces what; say it, because the usual case is a document of the same kind.
+    // what replaces what; say it, because the usual case is a document of the same kind. The
+    // kind is the index's: reading the documents to name it would seal them.
     let kind = |cid: &str| {
         store::open()
-            .get_model(cid)
+            .model_meta(cid)
             .ok()
-            .map(|v| store::kind_of(&v).name())
+            .flatten()
+            .map(|m| DocKind::from_index(m.kind.as_deref()).name())
     };
     if let (Some(a), Some(b)) = (kind(old), kind(new)) {
         if a != b {

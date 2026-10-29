@@ -72,6 +72,7 @@ use std::sync::{Arc, Mutex};
 
 use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 
 pub use backend::{FsBackend, MemoryBackend, StoreBackend};
 pub use kind::{kind_of, require_kind, DocKind};
@@ -556,13 +557,22 @@ impl Chain {
 pub struct Store {
     backend: Box<dyn StoreBackend>,
     write: Mutex<()>,
+    /// The documents of the kinds [`Store::get_model`] checks that sealed to their name, by CID,
+    /// with the digest of the file bytes that did: a second read of the same bytes is not sealed
+    /// again. Per handle (this process's), never persisted, and keyed by the bytes, so a file
+    /// changed since is read, and sealed, afresh.
+    sealed: Mutex<BTreeMap<String, [u8; 32]>>,
 }
+
+/// Most entries `Store::sealed` keeps; past it the memo starts over (a read then seals once more).
+const MAX_SEALED_MEMO: usize = 4096;
 
 impl Store {
     pub fn new(backend: impl StoreBackend + 'static) -> Self {
         Self {
             backend: Box::new(backend),
             write: Mutex::new(()),
+            sealed: Mutex::new(BTreeMap::new()),
         }
     }
 
@@ -735,6 +745,10 @@ impl Store {
             let mut text = serde_json::to_string_pretty(&v).expect("json");
             text.push('\n');
             self.backend.put(&model_key(&cid), text.as_bytes())?;
+            // What was just written for a document that sealed to `cid` seals to it.
+            if kind != DocKind::Net {
+                self.remember_sealed(&cid, Sha256::digest(&text).into());
+            }
         }
         // Read from the snapshot above, so a composition this same command
         // stored a moment ago counts.
@@ -801,26 +815,64 @@ impl Store {
         Ok(out)
     }
 
-    /// The stored document (with `@id` = its CID). The store is addressed by content, so what is
-    /// read is what the name says: the document is sealed again and a file that seals to another
-    /// CID is refused (`[STORE_ALTERED]`) rather than served as `cid` (to `bundle.load {cid}`, to
-    /// a bundle's `cid` subnets, to `store.open`, to a receipt's replay). One seal per read.
+    /// The stored document (with `@id` = its CID).
+    ///
+    /// A net is parsed and nothing more, as it always was: sealing one costs its size squared
+    /// (connect-4's takes tens of seconds) and every net the editor opens is read here. A
+    /// composition, a bundle or a content document is addressed by its content and read as that:
+    /// it is sealed again and a file that seals to another CID is refused (`[STORE_ALTERED]`)
+    /// rather than served as `cid` (to `bundle.load {cid}`, to a bundle's `cid` subnets, to
+    /// `store.open`, to a receipt's replay). The seal is paid once per handle for the same bytes
+    /// ([`Store::sealed`]); a document `put_document` wrote is known to seal already.
     pub fn get_model(&self, cid: &str) -> Result<Value> {
         let bytes = self.backend.get(&model_key(cid))?.ok_or_else(|| {
             Error::NotFound(format!("no model {cid} in the local store (store.list)"))
         })?;
         let v: Value = serde_json::from_slice(&bytes)
             .map_err(|e| Error::Parse(format!("stored model {cid}: {e}")))?;
-        let sealed = crate::cid::seal(&v)?;
-        if sealed != cid {
-            return Err(crate::composition::document::refuse(
-                "STORE_ALTERED",
-                format!(
-                    "the stored document under {cid} is a different document (it seals to {sealed}); the store file was altered"
-                ),
-            ));
+        if kind_of(&v) != DocKind::Net {
+            self.check_sealed(cid, &bytes, &v)?;
         }
         Ok(v)
+    }
+
+    /// `[STORE_ALTERED]` unless `v`, parsed from `bytes`, seals to `cid`; once per handle for the
+    /// same bytes. A document too large to seal is refused as such, not as altered.
+    fn check_sealed(&self, cid: &str, bytes: &[u8], v: &Value) -> Result<()> {
+        let digest: [u8; 32] = Sha256::digest(bytes).into();
+        if self
+            .sealed
+            .lock()
+            .unwrap_or_else(|e| e.into_inner())
+            .get(cid)
+            == Some(&digest)
+        {
+            return Ok(());
+        }
+        let altered = |what: String| {
+            crate::composition::document::refuse(
+                "STORE_ALTERED",
+                format!(
+                    "the stored document under {cid} is a different document ({what}); the store file was altered"
+                ),
+            )
+        };
+        match crate::cid::seal(v) {
+            Ok(sealed) if sealed == cid => {}
+            Ok(sealed) => return Err(altered(format!("it seals to {sealed}"))),
+            Err(e) if crate::cid::is_too_complex(&e) => return Err(e),
+            Err(e) => return Err(altered(format!("it does not seal: {e}"))),
+        }
+        self.remember_sealed(cid, digest);
+        Ok(())
+    }
+
+    fn remember_sealed(&self, cid: &str, digest: [u8; 32]) {
+        let mut memo = self.sealed.lock().unwrap_or_else(|e| e.into_inner());
+        if memo.len() >= MAX_SEALED_MEMO && !memo.contains_key(cid) {
+            memo.clear();
+        }
+        memo.insert(cid.to_string(), digest);
     }
 
     /// The stored document as it was sealed: [`Store::get_model`] without

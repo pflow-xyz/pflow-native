@@ -681,14 +681,18 @@ fn a_tampered_model_cid_is_invalid_or_uncheckable() {
     );
     assert_verdict(&v, "uncheckable");
 
-    // A net put there by hand is no more that CID's document: the store refuses to read it.
+    // A net put there by hand is no composition. (The store does not seal a net it reads, as it
+    // never did: a net's seal costs its size squared, so what refuses it here is its kind.)
     let mut other = Session::default();
     run(&mut other, "file.open_example", json!({"name": "sir"}));
     let net = other.export_doc().to_value();
     plant(&mem, bogus, &net);
     let v = verify(&mut s, &renamed);
     assert!(
-        v["replayError"].as_str().unwrap().contains("STORE_ALTERED"),
+        v["replayError"]
+            .as_str()
+            .unwrap()
+            .contains("is a net document in the store, not a composition"),
         "{v}"
     );
     assert_verdict(&v, "uncheckable");
@@ -1518,7 +1522,9 @@ fn a_store_file_that_is_not_the_document_its_name_says_is_refused_on_every_read(
         assert!(e.contains(&named), "{command} names the CID: {e}");
     }
 
-    // A part named by cid: the tampered net is not the part.
+    // A part named by cid is a net, and a net is read as it always was (see
+    // `a_stored_net_is_read_without_sealing_it`). A file there that is another kind of document
+    // and does not seal to the name is not served as the part.
     let maker = model_fixture("part-maker.jsonld");
     let taker = model_fixture("part-taker.jsonld");
     let part = run(&mut s, "store.put", json!({"document": maker}))["cid"]
@@ -1528,9 +1534,169 @@ fn a_store_file_that_is_not_the_document_its_name_says_is_refused_on_every_read(
     run(&mut s, "store.put", json!({"document": taker}));
     let handoff = model_fixture("compose-handoff.jsonld");
     run(&mut s, "bundle.load", json!({"document": handoff.clone()}));
-    tamper(&mem, &part, |v| v["places"] = json!({}));
+    plant(&mem, &part, &orders_document());
     let e = err(&mut s, "bundle.load", json!({"document": handoff}));
     assert!(e.contains("BUNDLE_PART_UNRESOLVED"), "{e}");
+}
+
+/// A second handle on the same files: what another window, or the next run, has. It has not
+/// sealed anything yet.
+fn second_handle(mem: &Arc<MemoryBackend>) {
+    store::set_thread_store(Some(Arc::new(Store::new(Shared(mem.clone())))));
+}
+
+fn cid_of(v: &Value) -> String {
+    v["cid"].as_str().unwrap().to_string()
+}
+
+fn seals_since(before: u64) -> u64 {
+    cid::seals_on_this_thread() - before
+}
+
+/// A net is read as it always was: parsed, and not sealed. A net seals in time that grows with
+/// the square of its arcs (connect-4's takes tens of seconds), and every net the editor opens
+/// comes through the store's read. `store.get`, `store.open`, a bundle's `cid` part and
+/// `store.supersede` pay nothing for the name being a seal, and a net file changed in place is
+/// read like any other net (the other kinds are checked: the next test).
+#[test]
+fn a_stored_net_is_read_without_sealing_it() {
+    let mem = world();
+    let mut s = Session::default();
+    run(&mut s, "file.open_example", json!({"name": "sir"}));
+    let net = cid_of(&run(&mut s, "store.put", json!({})));
+
+    let before = cid::seals_on_this_thread();
+    store::open().get_model(&net).unwrap();
+    run(&mut s, "store.get", json!({"cid": net}));
+    run(&mut s, "store.open", json!({"cid": net}));
+    assert_eq!(seals_since(before), 0, "reading a net seals nothing");
+
+    // Naming nets as the parts of a Bundle: the one seal is the Bundle's own CID.
+    let maker = model_fixture("part-maker.jsonld");
+    let taker = model_fixture("part-taker.jsonld");
+    run(&mut s, "store.put", json!({"document": maker}));
+    run(&mut s, "store.put", json!({"document": taker}));
+    let before = cid::seals_on_this_thread();
+    run(
+        &mut s,
+        "bundle.load",
+        json!({"document": model_fixture("compose-handoff.jsonld")}),
+    );
+    assert_eq!(
+        seals_since(before),
+        2,
+        "the Bundle's own CID twice (its export, its model identity), and its parts not at all"
+    );
+
+    tamper(&mem, &net, |v| v["x-altered"] = json!(true));
+    let before = cid::seals_on_this_thread();
+    let got = run(&mut s, "store.get", json!({"cid": net}));
+    assert_eq!(got["x-altered"], true, "a net file is served as it is");
+    assert_eq!(seals_since(before), 0);
+}
+
+/// A composition, a bundle and a content document are addressed by their content and read as
+/// that: a file that does not seal to its name is refused (`[STORE_ALTERED]`). The seal is paid
+/// once per handle for the same bytes, so a document read twice, or by `store.open` after
+/// `bundle.load {cid}`, is sealed once; a document the handle put is known to seal; and a file
+/// that changed is sealed again, whatever the handle remembers of the bytes before.
+#[test]
+fn the_other_kinds_are_sealed_once_per_handle_and_again_when_the_bytes_change() {
+    let mem = world();
+    let mut s = Session::default();
+    run(&mut s, "bundle.open", json!({}));
+    let comp = cid_of(&run(&mut s, "store.put", json!({"composition": true})));
+    let bundle = cid_of(&run(
+        &mut s,
+        "store.put",
+        json!({"document": serde_json::from_str::<Value>(include_str!(
+            "fixtures/bundle/cafe.bundle.json"
+        )).unwrap()}),
+    ));
+    let content = cid_of(&run(
+        &mut s,
+        "store.put",
+        json!({"document": content_document(&content())}),
+    ));
+    let kinds = [
+        ("composition", &comp),
+        ("bundle", &bundle),
+        ("content", &content),
+    ];
+
+    // The handle that put them knows they seal.
+    let before = cid::seals_on_this_thread();
+    for (what, cid) in kinds {
+        store::open()
+            .get_model(cid)
+            .unwrap_or_else(|e| panic!("{what}: {e}"));
+    }
+    assert_eq!(
+        seals_since(before),
+        0,
+        "what this handle put is not sealed again"
+    );
+
+    // Another handle has to look once, and once is enough, whichever way it reads.
+    second_handle(&mem);
+    for (what, cid) in kinds {
+        let before = cid::seals_on_this_thread();
+        store::open().get_model(cid).unwrap();
+        store::open().get_sealed(cid).unwrap();
+        assert_eq!(seals_since(before), 1, "{what}: one seal for two reads");
+    }
+    // `store.open` of a composition reads it twice (its kind, then its document): the check is
+    // one seal on a handle that has not seen the file, and none on one that has.
+    let open_it = || {
+        let before = cid::seals_on_this_thread();
+        run(&mut Session::default(), "store.open", json!({"cid": comp}));
+        seals_since(before)
+    };
+    second_handle(&mem);
+    let (first, second) = (open_it(), open_it());
+    assert_eq!(first, second + 1, "store.open checks the composition once");
+
+    // A changed file is read afresh, refused, and the refusal is not remembered.
+    for (what, cid) in kinds {
+        tamper(&mem, cid, |v| v["name"] = json!("TAMPERED"));
+        for _ in 0..2 {
+            let before = cid::seals_on_this_thread();
+            let e = store::open().get_model(cid).unwrap_err().to_string();
+            assert!(
+                e.starts_with("[STORE_ALTERED] ") && e.contains("different document"),
+                "{what}: {e}"
+            );
+            assert_eq!(
+                seals_since(before),
+                1,
+                "{what}: sealed again, refused again"
+            );
+        }
+    }
+}
+
+/// `store.supersede` names the kinds of the two documents from the index: reading them to do it
+/// would seal them.
+#[test]
+fn store_supersede_names_the_kinds_without_reading_the_documents() {
+    let mem = world();
+    let mut s = Session::default();
+    run(&mut s, "file.open_example", json!({"name": "sir"}));
+    let net = cid_of(&run(&mut s, "store.put", json!({})));
+    run(&mut s, "bundle.open", json!({}));
+    let comp = cid_of(&run(&mut s, "store.put", json!({"composition": true})));
+    second_handle(&mem);
+
+    let before = cid::seals_on_this_thread();
+    let out = run(&mut s, "store.supersede", json!({"old": net, "new": comp}));
+    assert_eq!(seals_since(before), 0, "{out}");
+    assert!(
+        out["note"]
+            .as_str()
+            .unwrap()
+            .ends_with("the superseded document is a net and its successor a composition"),
+        "{out}"
+    );
 }
 
 // ------------------------------------------------------------ signature-only verification
