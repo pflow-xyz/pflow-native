@@ -1447,6 +1447,82 @@ fn a_stored_content_file_that_is_not_the_document_its_name_says_is_not_trusted()
     assert_valid(&verify(&mut fresh, &receipt["receipt"]));
 }
 
+/// A stored document that seals to its name is not for that reason the document a receipt names.
+/// A receipt names `Composition::document_cid`, the seal of what `bundle.export` writes; a
+/// composition stored in another spelling (`params` as objects) seals to its own CID, the store
+/// serves it (nothing was altered: the check that refuses an altered file passes), and it exports
+/// as another CID. The verifier does not take it for the model, and does not blame the file.
+#[test]
+fn a_stored_composition_in_another_spelling_is_not_the_document_a_receipt_names() {
+    let mem = world();
+    let mut s = session();
+    let out = run(&mut s, "bundle.receipt", json!({"scenario": "commit"}));
+    let mut loose = orders_document();
+    for inst in loose["instances"].as_array_mut().unwrap() {
+        let p: Value = serde_json::from_str(inst["params"].as_str().unwrap()).unwrap();
+        inst["params"] = p;
+    }
+    let spelled = stash(&mem, &loose);
+    assert_ne!(spelled, out["receipt"]["model"].as_str().unwrap());
+    store::open()
+        .get_model(&spelled)
+        .expect("it seals to its name: the store serves it");
+
+    let renamed = resign(&out["receipt"], |r| r.model = spelled.clone());
+    let v = verify(&mut Session::default(), &renamed);
+    assert_eq!(v["replayed"], false, "{v}");
+    let why = v["replayError"].as_str().unwrap();
+    assert!(why.contains("exports as"), "{v}");
+    assert!(!why.contains("altered"), "the file is intact: {v}");
+    assert_verdict(&v, "uncheckable");
+}
+
+/// The same for content: a receipt names the CID of the normalised document (`check` and
+/// `scenario` as canonical text). The content as received, with its checks as objects, parses and
+/// seals to its own CID; the store serves it, and it is not the content the receipt names.
+#[test]
+fn stored_content_in_another_spelling_is_not_the_content_a_receipt_names() {
+    let mem = world();
+    let mut s = session();
+    let receipt = run(&mut s, "content.receipt", json!({}));
+    stash(&mem, &run(&mut s, "bundle.export", json!({}))["document"]);
+    let spelled = stash(&mem, &content());
+    assert_ne!(spelled, content_cid(&content()));
+    store::open()
+        .get_model(&spelled)
+        .expect("it seals to its name: the store serves it");
+
+    let renamed = resign(&receipt["receipt"], |r| {
+        r.scenario["content"] = json!(spelled.clone());
+    });
+    let v = verify(&mut Session::default(), &renamed);
+    assert_eq!(v["replayed"], false, "{v}");
+    let why = v["replayError"].as_str().unwrap();
+    assert!(why.contains("normal form"), "{v}");
+    assert!(!why.contains("altered"), "the file is intact: {v}");
+    assert_verdict(&v, "uncheckable");
+    // The CID of a document of another kind is no content at all.
+    let model = receipt["receipt"]["model"].as_str().unwrap().to_string();
+    let wrong = resign(&receipt["receipt"], |r| {
+        r.scenario["content"] = json!(model.clone());
+    });
+    let v = verify(&mut Session::default(), &wrong);
+    assert!(
+        v["replayError"]
+            .as_str()
+            .unwrap()
+            .contains("is a composition document in the store, not content"),
+        "{v}"
+    );
+    // Named by its normal form, the same content verifies.
+    plant(
+        &mem,
+        &content_cid(&content()),
+        &content_document(&content()),
+    );
+    assert_valid(&verify(&mut Session::default(), &receipt["receipt"]));
+}
+
 /// A check cannot sign: `bundle.receipt` is a query but not a read of the model.
 #[test]
 fn a_check_that_asks_for_a_receipt_is_refused_at_load() {

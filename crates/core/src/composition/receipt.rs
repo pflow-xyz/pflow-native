@@ -325,8 +325,10 @@ pub fn find_composition(
         .composition;
     match c.document_cid() {
         Ok(cid) if cid == model => Ok(("store".into(), c)),
+        // The store has checked that the file is the document its name says; this is a document
+        // in another spelling (`params` as objects, say), which exports as another CID.
         Ok(cid) => Err(format!(
-            "the stored document under {model} is a different document (it exports as {cid}); the store file was altered"
+            "the stored document under {model} exports as {cid}, and a receipt names the document bundle.export writes: store.put that form"
         )),
         Err(e) => Err(format!("the stored document {model}: {e}")),
     }
@@ -368,9 +370,12 @@ pub fn find_content(
         ));
     }
     let mc = ModelContent::parse(&v).map_err(|e| format!("the stored content {cid}: {e}"))?;
+    // The store has checked that the file is the document its name says; a receipt names the
+    // normal form (`check` and `scenario` as canonical text), which this document is not.
     if !is(&mc) {
         return Err(format!(
-            "the stored document under {cid} is a different document; the store file was altered"
+            "the stored content {cid} is not in the normal form content.export writes (that is {}), and a receipt names the normal form: store.put that form",
+            mc.cid().unwrap_or_default()
         ));
     }
     Ok(("store".into(), mc))
