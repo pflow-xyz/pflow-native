@@ -801,12 +801,26 @@ impl Store {
         Ok(out)
     }
 
-    /// The stored document (with `@id` = its CID).
+    /// The stored document (with `@id` = its CID). The store is addressed by content, so what is
+    /// read is what the name says: the document is sealed again and a file that seals to another
+    /// CID is refused (`[STORE_ALTERED]`) rather than served as `cid` (to `bundle.load {cid}`, to
+    /// a bundle's `cid` subnets, to `store.open`, to a receipt's replay). One seal per read.
     pub fn get_model(&self, cid: &str) -> Result<Value> {
         let bytes = self.backend.get(&model_key(cid))?.ok_or_else(|| {
             Error::NotFound(format!("no model {cid} in the local store (store.list)"))
         })?;
-        serde_json::from_slice(&bytes).map_err(|e| Error::Parse(format!("stored model {cid}: {e}")))
+        let v: Value = serde_json::from_slice(&bytes)
+            .map_err(|e| Error::Parse(format!("stored model {cid}: {e}")))?;
+        let sealed = crate::cid::seal(&v)?;
+        if sealed != cid {
+            return Err(crate::composition::document::refuse(
+                "STORE_ALTERED",
+                format!(
+                    "the stored document under {cid} is a different document (it seals to {sealed}); the store file was altered"
+                ),
+            ));
+        }
+        Ok(v)
     }
 
     /// The stored document as it was sealed: [`Store::get_model`] without

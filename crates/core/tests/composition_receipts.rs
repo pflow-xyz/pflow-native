@@ -681,11 +681,22 @@ fn a_tampered_model_cid_is_invalid_or_uncheckable() {
     );
     assert_verdict(&v, "uncheckable");
 
-    // A net under the CID is not a composition either.
+    // A net put there by hand is no more that CID's document: the store refuses to read it.
     let mut other = Session::default();
     run(&mut other, "file.open_example", json!({"name": "sir"}));
-    plant(&mem, bogus, &other.export_doc().to_value());
+    let net = other.export_doc().to_value();
+    plant(&mem, bogus, &net);
     let v = verify(&mut s, &renamed);
+    assert!(
+        v["replayError"].as_str().unwrap().contains("STORE_ALTERED"),
+        "{v}"
+    );
+    assert_verdict(&v, "uncheckable");
+
+    // A net under its own CID is a net, and not a composition either.
+    let net_cid = stash(&mem, &net);
+    let named_net = resign(&out["receipt"], |r| r.model = net_cid.clone());
+    let v = verify(&mut s, &named_net);
     assert!(
         v["replayError"]
             .as_str()
@@ -1457,4 +1468,67 @@ fn a_check_that_asks_for_a_receipt_is_refused_at_load() {
         e.contains("[CHECK_COMMAND_FORBIDDEN]") && e.contains("not a read"),
         "{e}"
     );
+}
+
+// ------------------------------------------------------------ the store is addressed by content
+
+fn model_fixture(name: &str) -> Value {
+    let p = format!(
+        "{}/tests/fixtures/model/fixtures/{name}",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    serde_json::from_slice(&std::fs::read(&p).unwrap_or_else(|e| panic!("{p}: {e}"))).unwrap()
+}
+
+/// Edits the stored file for `cid` in place (its name stays the same).
+fn tamper(mem: &MemoryBackend, cid: &str, edit: impl FnOnce(&mut Value)) {
+    let key = format!("models/{cid}.jsonld");
+    let mut v: Value = serde_json::from_slice(&mem.get(&key).unwrap().unwrap()).unwrap();
+    edit(&mut v);
+    mem.put(&key, serde_json::to_string_pretty(&v).unwrap().as_bytes())
+        .unwrap();
+}
+
+/// A file in the store that no longer seals to its name is not served as that CID: not by
+/// `store.get`, `store.open`, `bundle.load {cid}`, nor as a part named by `cid` (where a tampered
+/// net would otherwise stand in for the one the document names).
+#[test]
+fn a_store_file_that_is_not_the_document_its_name_says_is_refused_on_every_read() {
+    let mem = world();
+    let mut s = Session::default();
+    run(&mut s, "bundle.open", json!({}));
+    let put = run(&mut s, "store.put", json!({"composition": true}));
+    let named = put["cid"].as_str().unwrap().to_string();
+
+    // Untouched, it reads.
+    run(&mut s, "store.get", json!({"cid": named}));
+    run(&mut s, "bundle.load", json!({"cid": named}));
+
+    tamper(&mem, &named, |v| v["name"] = json!("TAMPERED"));
+    for (command, args) in [
+        ("store.get", json!({"cid": named})),
+        ("store.open", json!({"cid": named})),
+        ("bundle.load", json!({"cid": named})),
+    ] {
+        let e = err(&mut s, command, args);
+        assert!(
+            e.starts_with("[STORE_ALTERED] ") && e.contains("different document"),
+            "{command}: {e}"
+        );
+        assert!(e.contains(&named), "{command} names the CID: {e}");
+    }
+
+    // A part named by cid: the tampered net is not the part.
+    let maker = model_fixture("part-maker.jsonld");
+    let taker = model_fixture("part-taker.jsonld");
+    let part = run(&mut s, "store.put", json!({"document": maker}))["cid"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    run(&mut s, "store.put", json!({"document": taker}));
+    let handoff = model_fixture("compose-handoff.jsonld");
+    run(&mut s, "bundle.load", json!({"document": handoff.clone()}));
+    tamper(&mem, &part, |v| v["places"] = json!({}));
+    let e = err(&mut s, "bundle.load", json!({"document": handoff}));
+    assert!(e.contains("BUNDLE_PART_UNRESOLVED"), "{e}");
 }
