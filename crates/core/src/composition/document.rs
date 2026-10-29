@@ -789,7 +789,7 @@ pub fn restore_part(v: &Value, resolve: PartResolver) -> Result<Composition> {
             .as_array()
             .into_iter()
             .flatten()
-            .map(|l| parse_link_value(l))
+            .map(parse_link_value)
             .collect::<Result<Vec<_>>>()?;
         return Composition::open(&ids, &links).map_err(Error::Invalid);
     }
