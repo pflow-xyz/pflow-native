@@ -850,10 +850,10 @@
       "claim": "the heuristics slot takes Heuristic pieces; static_eval is refused in exact mode and as not built in play mode",
       "steps": [
         {"command": "plan.pieces", "args": {}, "expect": [
-          {"path": "/slots/3/id", "op": "==", "value": "heuristics"},
-          {"path": "/slots/3/accepts", "op": "==", "value": "Heuristic"},
-          {"path": "/slots/3/field", "op": "==", "value": "heuristics"},
-          {"path": "/slots/3/designed", "op": "==", "value": false}]},
+          {"path": "/slots/4/id", "op": "==", "value": "heuristics"},
+          {"path": "/slots/4/accepts", "op": "==", "value": "Heuristic"},
+          {"path": "/slots/4/field", "op": "==", "value": "heuristics"},
+          {"path": "/slots/4/designed", "op": "==", "value": false}]},
         {"command": "plan.check", "args": {"plan": {"heuristics": ["static_eval"]}}, "expect": [
           {"path": "/ok", "op": "==", "value": false},
           {"path": "/step", "op": "==", "value": "check"},
@@ -882,10 +882,10 @@
       "claim": "memo takes {entries: N} with N at least 1: zero entries is refused, one is accepted",
       "steps": [
         {"command": "plan.pieces", "args": {}, "expect": [
-          {"path": "/slots/4/id", "op": "==", "value": "memo"},
-          {"path": "/slots/4/accepts", "op": "==", "value": "Memo"},
-          {"path": "/slots/4/field", "op": "==", "value": "memo"},
-          {"path": "/slots/4/designed", "op": "==", "value": false}]},
+          {"path": "/slots/5/id", "op": "==", "value": "memo"},
+          {"path": "/slots/5/accepts", "op": "==", "value": "Memo"},
+          {"path": "/slots/5/field", "op": "==", "value": "memo"},
+          {"path": "/slots/5/designed", "op": "==", "value": false}]},
         {"command": "plan.check", "args": {"plan": {"memo": {"entries": 0}}}, "expect": [
           {"path": "/ok", "op": "==", "value": false},
           {"path": "/step", "op": "==", "value": "check"},
@@ -912,9 +912,9 @@
       "claim": "SearchPlan has no bounds field, and the registry refuses every drop on the bounds slot while accepting a legal one elsewhere",
       "steps": [
         {"command": "plan.pieces", "args": {}, "expect": [
-          {"path": "/slots/5/id", "op": "==", "value": "bounds"},
-          {"path": "/slots/5/accepts", "op": "==", "value": "Bound"},
-          {"path": "/slots/5/designed", "op": "==", "value": true}]},
+          {"path": "/slots/6/id", "op": "==", "value": "bounds"},
+          {"path": "/slots/6/accepts", "op": "==", "value": "Bound"},
+          {"path": "/slots/6/designed", "op": "==", "value": true}]},
         {"command": "plan.check", "args": {"plan": {"bounds": []}}, "expect": [
           {"path": "/ok", "op": "==", "value": false},
           {"path": "/step", "op": "==", "value": "parse"},
@@ -922,8 +922,8 @@
         {"command": "plan.slot_candidates", "args": {"piece": "threats"}, "expect": [
           {"path": "/slots/1/slot", "op": "==", "value": "order"},
           {"path": "/slots/1/ok", "op": "==", "value": true},
-          {"path": "/slots/5/slot", "op": "==", "value": "bounds"},
-          {"path": "/slots/5/ok", "op": "==", "value": false}]}
+          {"path": "/slots/6/slot", "op": "==", "value": "bounds"},
+          {"path": "/slots/6/ok", "op": "==", "value": false}]}
       ]
      }
   },
@@ -944,9 +944,9 @@
       "claim": "SearchPlan has no engine field, and the registry refuses every drop on the engine slot while accepting a legal one elsewhere",
       "steps": [
         {"command": "plan.pieces", "args": {}, "expect": [
-          {"path": "/slots/6/id", "op": "==", "value": "engine"},
-          {"path": "/slots/6/accepts", "op": "==", "value": "Engine"},
-          {"path": "/slots/6/designed", "op": "==", "value": true}]},
+          {"path": "/slots/7/id", "op": "==", "value": "engine"},
+          {"path": "/slots/7/accepts", "op": "==", "value": "Engine"},
+          {"path": "/slots/7/designed", "op": "==", "value": true}]},
         {"command": "plan.check", "args": {"plan": {"engine": "bit"}}, "expect": [
           {"path": "/ok", "op": "==", "value": false},
           {"path": "/step", "op": "==", "value": "parse"},
@@ -954,8 +954,8 @@
         {"command": "plan.slot_candidates", "args": {"piece": "threats"}, "expect": [
           {"path": "/slots/1/slot", "op": "==", "value": "order"},
           {"path": "/slots/1/ok", "op": "==", "value": true},
-          {"path": "/slots/6/slot", "op": "==", "value": "engine"},
-          {"path": "/slots/6/ok", "op": "==", "value": false}]}
+          {"path": "/slots/7/slot", "op": "==", "value": "engine"},
+          {"path": "/slots/7/ok", "op": "==", "value": false}]}
       ]
      }
   },
@@ -1275,10 +1275,10 @@
       "claim": "forced_moves is a proposed Filter with contract sound-pruning, and plan.rs refuses it as unknown",
       "steps": [
         {"command": "plan.pieces", "args": {}, "expect": [
-          {"path": "/pieces/14/name", "op": "==", "value": "forced_moves"},
-          {"path": "/pieces/14/kind", "op": "==", "value": "Filter"},
-          {"path": "/pieces/14/status", "op": "==", "value": "proposed"},
-          {"path": "/pieces/14/contract", "op": "==", "value": "sound-pruning"}]},
+          {"path": "/pieces/15/name", "op": "==", "value": "forced_moves"},
+          {"path": "/pieces/15/kind", "op": "==", "value": "Filter"},
+          {"path": "/pieces/15/status", "op": "==", "value": "proposed"},
+          {"path": "/pieces/15/contract", "op": "==", "value": "sound-pruning"}]},
         {"command": "plan.check", "args": {"plan": {"filters": ["forced_moves"]}}, "expect": [
           {"path": "/ok", "op": "==", "value": false},
           {"path": "/step", "op": "==", "value": "check"},
@@ -1300,10 +1300,10 @@
       "claim": "lmr is a proposed Heuristic with contract value-changing, and plan.rs refuses it as unknown",
       "steps": [
         {"command": "plan.pieces", "args": {}, "expect": [
-          {"path": "/pieces/15/name", "op": "==", "value": "lmr"},
-          {"path": "/pieces/15/kind", "op": "==", "value": "Heuristic"},
-          {"path": "/pieces/15/status", "op": "==", "value": "proposed"},
-          {"path": "/pieces/15/contract", "op": "==", "value": "value-changing"}]},
+          {"path": "/pieces/16/name", "op": "==", "value": "lmr"},
+          {"path": "/pieces/16/kind", "op": "==", "value": "Heuristic"},
+          {"path": "/pieces/16/status", "op": "==", "value": "proposed"},
+          {"path": "/pieces/16/contract", "op": "==", "value": "value-changing"}]},
         {"command": "plan.check", "args": {"plan": {"heuristics": ["lmr"]}}, "expect": [
           {"path": "/ok", "op": "==", "value": false},
           {"path": "/step", "op": "==", "value": "check"},
@@ -1325,10 +1325,10 @@
       "claim": "futility is a proposed Filter with contract value-changing, and plan.rs refuses it as unknown",
       "steps": [
         {"command": "plan.pieces", "args": {}, "expect": [
-          {"path": "/pieces/16/name", "op": "==", "value": "futility"},
-          {"path": "/pieces/16/kind", "op": "==", "value": "Filter"},
-          {"path": "/pieces/16/status", "op": "==", "value": "proposed"},
-          {"path": "/pieces/16/contract", "op": "==", "value": "value-changing"}]},
+          {"path": "/pieces/17/name", "op": "==", "value": "futility"},
+          {"path": "/pieces/17/kind", "op": "==", "value": "Filter"},
+          {"path": "/pieces/17/status", "op": "==", "value": "proposed"},
+          {"path": "/pieces/17/contract", "op": "==", "value": "value-changing"}]},
         {"command": "plan.check", "args": {"plan": {"filters": ["futility"]}}, "expect": [
           {"path": "/ok", "op": "==", "value": false},
           {"path": "/step", "op": "==", "value": "check"},
