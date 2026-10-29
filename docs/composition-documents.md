@@ -206,6 +206,7 @@ message}`:
 | `CITE_BIB_UNKNOWN` | error | a `bib` key the ontology does not have |
 | `CHECK_INVALID`, `CHECK_COMMAND_FORBIDDEN` | error | §3.4 |
 | `COMPOSITION_CID_STALE` | warning | `composition` names a CID other than the open composition's |
+| `CONTENT_LIMIT` | error | more than 1000 entries, or an entry with more than 32 KiB of text or more than 512 `about` ids (a check's 16-step cap is `CHECK_INVALID`; a document over 4 MiB is refused `[DOCUMENT_TOO_LARGE]` before it is read) |
 
 ### 3.4 Checks
 
@@ -238,10 +239,11 @@ A finding that the registry can decide carries the check that decides it, and a 
 | `orders` | the orders/workers/payment composition | `Composition::open` is given a set of instances that includes `orders`, `workers` and `payment` (so `bundle.open` with defaults) |
 | `connect4` | the Connect-4 search plan | `plan.open` (read through `content.get {subject: "plan"}`) |
 
-`content.library` lists them. Library content is attached to a catalog-opened composition only; a
-loaded document is bare unless the call passes `content`. The statics `comp::scenarios()` and
-`comp::scenario(id)` are now derived from `orders` content (parsed once), so the four orders scenarios
-have one source.
+`content.library` lists them. Library content is attached to a catalog-opened composition, and to a loaded
+PatternComposition whose exported CID is the one the content was written against (the example, reloaded);
+any other loaded document (an edited example, a raw Bundle) is bare unless the call passes `content`.
+The statics `comp::scenarios()` and `comp::scenario(id)` are now derived from `orders` content (parsed
+once), so the four orders scenarios have one source.
 
 ## 4. Commands
 
@@ -376,8 +378,13 @@ The `why` strings of a run are pflow-metamodel's, so a receipt is bound to the p
   loaded JSON and seals to `z4EBG9j1SUhuY7XnEcPfHQPzQkmqjUtgrD2wHADw8qdRbpnNt6W`; edited → re-serialised),
   reordered instances and links keep the CID, a reordered saga `steps` does not, every refusal code.
 * `tests/model_content.rs`: the validator for each code; the library content validates against its
-  composition; **every check in every library entry is run and passes**; the pool-leak finding's check
-  goes red if the pool's release link is fused with `undo_reserve` instead.
+  composition; **every check in every library entry is run and passes**; the checks can fail (the pool-leak
+  finding's check goes red if the pool's release link is fused with `undo_reserve` instead, and so do three
+  more orders findings, a declared scenario's prediction and the cafe guard finding when their claim is
+  made false); the `content.*` commands (filters, dormant entries, one undo step, a check leaves the
+  session alone); the element ids of §3.2, each for the right thing and not the wrong one; the cafe
+  Bundle's content (declared scenarios, a check on a raw Bundle); the declared scenarios
+  (`bundle.scenarios`, `bundle.run`, the lens test).
 * `tests/composition_store.rs`: put, get, list, open and delete of each kind; `dump_blobs` →
   `replace_all` round trip.
 * `tests/composition_receipts.rs`: a run, a check and a content receipt sign and verify (on the open

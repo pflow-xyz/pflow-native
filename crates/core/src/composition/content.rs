@@ -964,12 +964,7 @@ pub fn validate_entries(
             }
         }
         if let Some(chk) = &e.check {
-            for msg in super::checks::check_problems(chk) {
-                let code = if msg.starts_with("command ") {
-                    "CHECK_COMMAND_FORBIDDEN"
-                } else {
-                    "CHECK_INVALID"
-                };
+            for (code, msg) in super::checks::check_issues(chk) {
                 r.errors.push(Issue::new(code, id, None, msg));
             }
         }

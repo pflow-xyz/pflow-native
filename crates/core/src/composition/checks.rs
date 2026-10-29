@@ -39,28 +39,35 @@ pub fn command_allowed(id: &str) -> std::result::Result<(), String> {
     Ok(())
 }
 
-/// What is wrong with a check's shape, one message each (no registry
-/// command is run).
-pub fn check_problems(check: &Value) -> Vec<String> {
-    let mut out = vec![];
+/// What is wrong with a check's shape, as `(code, message)` each: `CHECK_COMMAND_FORBIDDEN` for a
+/// step whose command may not run, `CHECK_INVALID` for the rest (no registry command is run).
+pub fn check_issues(check: &Value) -> Vec<(&'static str, String)> {
+    const INVALID: &str = "CHECK_INVALID";
+    let mut out: Vec<(&'static str, String)> = vec![];
     let Some(steps) = check.get("steps").and_then(Value::as_array) else {
-        return vec!["a check needs steps: [{command, args, expect}]".into()];
+        return vec![(
+            INVALID,
+            "a check needs steps: [{command, args, expect}]".into(),
+        )];
     };
     if steps.is_empty() {
-        out.push("a check needs at least one step".into());
+        out.push((INVALID, "a check needs at least one step".into()));
     }
     if steps.len() > MAX_STEPS {
-        out.push(format!(
-            "a check has {} steps; at most {MAX_STEPS} are run",
-            steps.len()
+        out.push((
+            INVALID,
+            format!(
+                "a check has {} steps; at most {MAX_STEPS} are run",
+                steps.len()
+            ),
         ));
     }
     for (i, st) in steps.iter().enumerate() {
         match st.get("command").and_then(Value::as_str) {
-            None => out.push(format!("step {i}: command must be a string")),
+            None => out.push((INVALID, format!("step {i}: command must be a string"))),
             Some(c) => {
                 if let Err(e) = command_allowed(c) {
-                    out.push(format!("step {i}: {e}"));
+                    out.push(("CHECK_COMMAND_FORBIDDEN", format!("step {i}: {e}")));
                 }
             }
         }
@@ -68,28 +75,40 @@ pub fn check_problems(check: &Value) -> Vec<String> {
             .get("args")
             .is_some_and(|a| !a.is_object() && !a.is_null())
         {
-            out.push(format!("step {i}: args must be an object"));
+            out.push((INVALID, format!("step {i}: args must be an object")));
         }
         let rows = st.get("expect").and_then(Value::as_array);
         if rows.is_none_or(|r| r.is_empty()) {
-            out.push(format!("step {i}: expect needs at least one row"));
+            out.push((INVALID, format!("step {i}: expect needs at least one row")));
         }
         for (j, row) in rows.into_iter().flatten().enumerate() {
             let path = row.get("path").and_then(Value::as_str);
             if !path.is_some_and(|p| p.is_empty() || p.starts_with('/')) {
-                out.push(format!(
-                    "step {i} expect {j}: path must be a JSON Pointer ('' or '/…')"
+                out.push((
+                    INVALID,
+                    format!("step {i} expect {j}: path must be a JSON Pointer ('' or '/…')"),
                 ));
             }
             let op = row.get("op").and_then(Value::as_str).unwrap_or("");
             if !OPS.contains(&op) {
-                out.push(format!("step {i} expect {j}: op {op:?}; there are {OPS:?}"));
+                out.push((
+                    INVALID,
+                    format!("step {i} expect {j}: op {op:?}; there are {OPS:?}"),
+                ));
             } else if !["exists", "absent"].contains(&op) && row.get("value").is_none() {
-                out.push(format!("step {i} expect {j}: op {op:?} needs a value"));
+                out.push((
+                    INVALID,
+                    format!("step {i} expect {j}: op {op:?} needs a value"),
+                ));
             }
         }
     }
     out
+}
+
+/// [`check_issues`] without the codes: one message each.
+pub fn check_problems(check: &Value) -> Vec<String> {
+    check_issues(check).into_iter().map(|(_, m)| m).collect()
 }
 
 /// RFC 6901 lookup.

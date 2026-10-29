@@ -1,0 +1,129 @@
+{
+  "@context": "https://pflow.xyz/schema",
+  "@type": "ModelContent",
+  "name": "cafe-bundle",
+  "subject": {"kind": "composition", "name": "cafe-bundle"},
+  "composition": "z4EBG9j1SUhuY7XnEcPfHQPzQkmqjUtgrD2wHADw8qdRbpnNt6W",
+  "entries": [
+    {
+      "id": "espresso-order",
+      "kind": "scenario",
+      "order": 10,
+      "title": "One espresso, start to finish",
+      "about": [
+        "scenario:espresso-order",
+        "transition:counter/order",
+        "transition:counter/start_espresso",
+        "transition:counter/finish_espresso"
+      ],
+      "scenario": {
+        "script": ["counter/order", "counter/start_espresso", "counter/finish_espresso"],
+        "expect": [
+          {"place": "counter/done", "op": "==", "n": 1, "says": "the order is served"},
+          {"place": "pantry/beans", "op": "==", "n": 58, "says": "the brew draws two beans"},
+          {"place": "staff/available", "op": "==", "n": 2, "says": "the barista is free again"}
+        ]
+      }
+    },
+    {
+      "id": "latte-order",
+      "kind": "scenario",
+      "order": 20,
+      "title": "One latte, start to finish",
+      "about": ["scenario:latte-order", "transition:counter/start_latte", "transition:counter/finish_latte"],
+      "scenario": {
+        "script": ["counter/order", "counter/start_latte", "counter/finish_latte"],
+        "expect": [
+          {"place": "counter/done", "op": "==", "n": 1, "says": "the order is served"},
+          {"place": "pantry/beans", "op": ">=", "n": 59, "says": "a latte draws one bean at most"},
+          {"place": "pantry/milk", "op": "==", "n": 29, "says": "the brew draws one milk"}
+        ],
+        "note": "Written with a non-equality operator on purpose: the declared form allows == != < <= > >=."
+      }
+    },
+    {
+      "id": "espresso-guard",
+      "kind": "finding",
+      "order": 30,
+      "title": "The counter observes the beans without owning one",
+      "text": "The guard link espresso_needs_beans (>= 2) lets the counter's start_espresso see the pantry's beans. Flatten lowers it to a read arc of weight 2 from pantry/beans into the fused espresso_started, beside the two beans the brew itself consumes, so the gate and the brew agree on the same threshold.",
+      "about": [
+        "link:guard:counter:@transition/start_espresso->pantry:beans",
+        "port:pantry:beans",
+        "place:pantry/beans",
+        "flat-transition:espresso_started"
+      ],
+      "views": ["flat", "incidence"],
+      "cites": [
+        {"repo": "pflow-xyz", "path": "examples/showcase/cafe.bundle.json", "note": "the espresso_needs_beans guard link"}
+      ],
+      "check": {
+        "claim": "the guard link lowers to a read arc of weight 2 from pantry/beans into espresso_started, which fuses start, brew and acquire, and the espresso run completes",
+        "steps": [
+          {
+            "command": "bundle.flatten",
+            "args": {},
+            "expect": [
+              {"path": "/ok", "op": "==", "value": true},
+              {"path": "/arcs", "op": "contains", "value": {"from": "pantry/beans", "to": "espresso_started", "weight": 2, "type": "read"}},
+              {"path": "/fused_groups/espresso_started", "op": "==", "value": ["counter/start_espresso", "pantry/brew_espresso", "staff/acquire_espresso"]}
+            ]
+          },
+          {
+            "command": "bundle.run",
+            "args": {"scenario": "espresso-order"},
+            "expect": [
+              {"path": "/completed", "op": "==", "value": true},
+              {"path": "/final_marking/pantry~1beans", "op": "==", "value": 58}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "staff-per-drink",
+      "kind": "judgment",
+      "order": 40,
+      "title": "The staff net names its transitions per drink",
+      "text": "One shared acquire would fuse espresso and latte into a single start, because event fusion is transitive. The author kept one acquire and one release per drink so the two starts stay separate.",
+      "about": ["instance:staff", "transition:staff/acquire_espresso", "transition:staff/acquire_latte"]
+    },
+    {
+      "id": "counter-starts-empty",
+      "kind": "caveat",
+      "order": 50,
+      "title": "The counter starts with no cursor",
+      "text": "Validation warns that the counter workflow net starts with 0 tokens: its order transition mints the cursors, so the counter is a source rather than a one-cursor workflow.",
+      "about": ["instance:counter", "place:counter/pending", "transition:counter/order"],
+      "check": {
+        "claim": "the bundle validates, and the first warning is the workflow-cursor warning on the counter",
+        "steps": [
+          {
+            "command": "bundle.validate",
+            "args": {},
+            "expect": [
+              {"path": "/valid", "op": "==", "value": true},
+              {"path": "/warnings/0/code", "op": "==", "value": "W_WORKFLOW_MULTI_CURSOR"},
+              {"path": "/warnings/0/element", "op": "==", "value": "counter"}
+            ]
+          }
+        ]
+      }
+    },
+    {
+      "id": "pantry-restock-note",
+      "kind": "note",
+      "order": 60,
+      "text": "restock adds 30 beans and 15 milk and is never fused with another transition.",
+      "about": ["transition:pantry/restock", "flat-transition:pantry/restock"]
+    },
+    {
+      "id": "flat-convention-cafe",
+      "kind": "convention-example",
+      "order": 70,
+      "text": "Read the cafe's flat net by its fused transitions: espresso_started and latte_started are the starts, named after the links that fuse them.",
+      "about": ["model:"],
+      "views": ["flat"]
+    }
+  ]
+}
