@@ -760,7 +760,9 @@ impl Ids {
             .find(|x| **x == t)
             .ok_or_else(|| format!("unknown element type {t:?} in {reference:?}"))?;
         Ok(match *t {
-            "model" => true,
+            // `model:` names the whole model: its ref is empty (docs §3.2), so `model:orders` is a
+            // typo for a thing that is not there, not a second way to say "everything".
+            "model" => r.is_empty(),
             "flat-place" | "flat-transition" if !self.flat_ok => false,
             t => self.sets.get(t).is_some_and(|s| s.contains(r)),
         })

@@ -2284,6 +2284,9 @@ fn orders_element_ids_resolve_for_the_right_thing_and_not_the_wrong_one() {
         "view:Flat",
         "view:venn",
         "view:",
+        // `model:` takes no ref: a name after it is a typo, not the whole model
+        "model:orders",
+        "model:no-such-thing",
         // the plan's types are not a composition's
         "piece:x",
         "slot:x",
@@ -2294,8 +2297,8 @@ fn orders_element_ids_resolve_for_the_right_thing_and_not_the_wrong_one() {
         &ids,
         &yes,
         &no,
-        // (`model:` names the whole model, so it has no id it fails to resolve.)
         &[
+            "model",
             "instance",
             "place",
             "transition",
@@ -2551,8 +2554,16 @@ fn plan_element_ids_are_the_pieces_slots_and_net_of_the_plan() {
             "flat-place:orders/items",
             "idiom:idiom-pool-release-saga-commit",
             "view:venn",
+            "model:connect4",
         ],
-        &["piece", "slot", "net-place", "net-transition", "view"],
+        &[
+            "model",
+            "piece",
+            "slot",
+            "net-place",
+            "net-transition",
+            "view",
+        ],
     );
 }
 
@@ -3917,6 +3928,29 @@ fn restore_state_applies_the_content_bounds() {
     let e = refused(&mut u, "session.restore_state", json!({"state": hostile}));
     assert!(
         e.contains("CONTENT_REFUSED") || e.contains("CONTENT_LIMIT"),
+        "{e}"
+    );
+}
+
+/// `about: ["model:orders"]` is an id that names nothing: strict refuses it, a lenient load keeps
+/// the entry dormant, and the whole-model id is still `model:`.
+#[test]
+fn a_model_id_with_a_name_after_it_does_not_resolve() {
+    let typo = doc(vec![entry("a", "caveat", &["model:no-such-thing"])]);
+    let r = report(&typo, true);
+    assert_only_error(&r, "ID_UNRESOLVED", Some("a"));
+    assert_eq!(
+        r.errors[0].reference.as_deref(),
+        Some("model:no-such-thing")
+    );
+    let r = report(&typo, false);
+    assert!(r.valid());
+    assert_eq!(codes(&r.warnings), vec!["ID_UNRESOLVED"]);
+    assert!(report(&doc(vec![entry("a", "caveat", &["model:"])]), true).valid());
+    let mut s = orders();
+    let e = refused(&mut s, "content.load", json!({"document": typo}));
+    assert!(
+        e.starts_with("[CONTENT_REFUSED]") && e.contains("model:no-such-thing"),
         "{e}"
     );
 }
