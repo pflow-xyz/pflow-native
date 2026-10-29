@@ -635,6 +635,21 @@ fn the_open_composition_and_plan_round_trip() {
     assert_eq!(t.composition_view, s.composition_view);
     assert_eq!(run(&mut t, "session.dump_state", Value::Null), state);
 
+    // A state saved before composition documents has `instances` and `links`
+    // and no `document`: it still restores.
+    let mut old = state.clone();
+    old["composition"] = json!({
+        "instances": state["composition"]["instances"],
+        "links": state["composition"]["links"],
+    });
+    let mut u = Session::default();
+    let out = run(&mut u, "session.restore_state", json!({"state": old}));
+    assert_eq!(out["composition"], 4, "{out}");
+    assert_eq!(
+        run(&mut u, "bundle.state", Value::Null)["links"],
+        run(&mut s, "bundle.state", Value::Null)["links"]
+    );
+
     // Closed means closed: null restores as nothing open.
     run(&mut s, "bundle.close", Value::Null);
     run(&mut s, "plan.close", Value::Null);
@@ -647,18 +662,105 @@ fn the_open_composition_and_plan_round_trip() {
     run(&mut t, "session.restore_state", json!({"state": closed}));
     assert!(t.composition.is_none() && t.search_plan.is_none());
 
-    // A saved link this build's rules refuse refuses the whole state.
-    let mut bad = state.clone();
-    bad["composition"]["links"] =
-        json!([{"kind": "token", "from": "orders:in", "to": "workers:available"}]);
+    // A saved link this build's rules refuse refuses the whole state, in
+    // either shape.
+    let link = json!([{"kind": "token", "from": "orders:in", "to": "workers:available"}]);
+    let mut bad = old.clone();
+    bad["composition"]["links"] = link.clone();
     let e = refused(&mut t, "session.restore_state", json!({"state": bad}));
     assert!(
         e.contains("composition") && e.contains("schemas differ"),
         "{e}"
     );
+    let mut bad_doc = state.clone();
+    bad_doc["composition"]["document"]["links"] = link;
+    let e = refused(&mut t, "session.restore_state", json!({"state": bad_doc}));
+    assert!(
+        e.contains("composition") && e.contains("schemas differ"),
+        "{e}"
+    );
     // An unknown instance refuses the whole state.
-    let mut worse = state.clone();
+    let mut worse = old.clone();
     worse["composition"]["instances"] = json!(["nope"]);
     let e = refused(&mut t, "session.restore_state", json!({"state": worse}));
     assert!(e.contains("composition"), "{e}");
+    // A state with neither a document nor instances is not a composition.
+    let mut empty = state.clone();
+    empty["composition"] = json!({});
+    let e = refused(&mut t, "session.restore_state", json!({"state": empty}));
+    assert!(e.contains("composition"), "{e}");
+}
+
+#[test]
+fn a_loaded_raw_bundle_round_trips_as_its_document() {
+    memory_store();
+    let cafe: Value =
+        serde_json::from_str(include_str!("fixtures/bundle/cafe.bundle.json")).unwrap();
+    let mut s = Session::default();
+    let loaded = run(&mut s, "bundle.load", json!({"document": cafe}));
+    assert_eq!(loaded["form"], "bundle", "{loaded}");
+    let state = run(
+        &mut s,
+        "session.dump_state",
+        json!({"parts": ["composition"]}),
+    );
+    assert_eq!(state["composition"]["form"], "bundle");
+
+    let mut t = Session::default();
+    let out = run(&mut t, "session.restore_state", json!({"state": state}));
+    assert_eq!(out["composition"], 3, "{out}");
+    // The same document, so the same CID (an unedited raw load re-exports
+    // as written), and the same dump.
+    let (a, b) = (
+        run(&mut s, "bundle.export", Value::Null),
+        run(&mut t, "bundle.export", Value::Null),
+    );
+    assert_eq!(a["cid"], b["cid"]);
+    assert_eq!(a["document"], b["document"]);
+    assert_eq!(
+        run(
+            &mut t,
+            "session.dump_state",
+            json!({"parts": ["composition"]})
+        ),
+        state
+    );
+}
+
+#[test]
+fn attached_content_round_trips_with_the_composition() {
+    memory_store();
+    let mut s = Session::default();
+    run(
+        &mut s,
+        "bundle.load",
+        json!({"document": orders_document(), "library": "orders"}),
+    );
+    let state = run(
+        &mut s,
+        "session.dump_state",
+        json!({"parts": ["composition"]}),
+    );
+    // The library's content is a name, not a copy.
+    assert_eq!(state["composition"]["library"], "orders");
+    assert!(state["composition"].get("content").is_none());
+
+    let mut t = Session::default();
+    run(&mut t, "session.restore_state", json!({"state": state}));
+    assert_eq!(
+        run(&mut t, "bundle.scenarios", Value::Null)["source"],
+        run(&mut s, "bundle.scenarios", Value::Null)["source"]
+    );
+    // A name this build does not have refuses the state.
+    let mut gone = state.clone();
+    gone["composition"]["library"] = json!("nope");
+    let e = refused(&mut t, "session.restore_state", json!({"state": gone}));
+    assert!(e.contains("composition") && e.contains("nope"), "{e}");
+}
+
+/// The default orders composition, as `bundle.export` writes it.
+fn orders_document() -> Value {
+    let mut s = Session::default();
+    run(&mut s, "bundle.open", json!({}));
+    run(&mut s, "bundle.export", json!({"form": "composition"}))["document"].clone()
 }

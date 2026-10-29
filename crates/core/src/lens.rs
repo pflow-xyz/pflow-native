@@ -19,6 +19,7 @@
 
 use std::collections::{BTreeMap, BTreeSet};
 
+use crate::composition::content::{self, DeclaredScenario, ModelContent};
 use pflow_compose::{Link, LinkKind, Subnet};
 use pflow_metamodel::Model;
 use serde::Serialize;
@@ -271,8 +272,29 @@ fn qualify(subnet: &str, local: &str) -> String {
     format!("{subnet}/{local}")
 }
 
-/// The analysis of `subnets` composed by `links`, given its flat net.
+/// The analysis of `subnets` composed by `links`, given its flat net, read
+/// against the orders library's declared scenarios.
 pub fn analyse(subnets: &[&Subnet], links: &[Link], flat: &Result<Flat, String>) -> Analysis {
+    analyse_with(subnets, links, flat, &orders_scenarios())
+}
+
+/// The scenarios the orders library declares.
+fn orders_scenarios() -> Vec<DeclaredScenario> {
+    content::library_entry("orders")
+        .map(|l| l.content.scenarios())
+        .unwrap_or_default()
+}
+
+/// [`analyse`] against `scenarios`: the forward pass is the declared
+/// `commit` scenario, the runs are the others but `second-order`. A model
+/// that declares no `commit` gets an error instead of a verdict (the strict
+/// test would hold vacuously on an empty forward pass).
+pub fn analyse_with(
+    subnets: &[&Subnet],
+    links: &[Link],
+    flat: &Result<Flat, String>,
+    scenarios: &[DeclaredScenario],
+) -> Analysis {
     let legal = comp::legal_link_counts(subnets);
     let glued = links
         .iter()
@@ -307,10 +329,17 @@ pub fn analyse(subnets: &[&Subnet], links: &[Link], flat: &Result<Flat, String>)
             return a;
         }
     };
+    let Some(commit) = scenarios.iter().find(|s| s.id == "commit") else {
+        a.errors.push(
+            "no scenario \"commit\" is declared for this model: the lens test reads its forward \
+             pass from it, and a verdict on an empty forward pass would hold for nothing"
+                .into(),
+        );
+        return a;
+    };
     a.ok = true;
     let flat_t = |m: &str| flat.transition_of(m).map(str::to_string);
     let members_of = flat.transition_members();
-    let commit = comp::scenario("commit").expect("the commit scenario");
     for m in &commit.script {
         if let Some(f) = flat_t(m) {
             push_unique(&mut a.forward_flat, &f);
@@ -394,10 +423,10 @@ pub fn analyse(subnets: &[&Subnet], links: &[Link], flat: &Result<Flat, String>)
             composes,
         });
     }
-    a.runs = comp::scenarios()
+    a.runs = scenarios
         .iter()
         .filter(|s| s.id != "second-order")
-        .map(|s| comp::run_scenario(flat, s))
+        .map(|s| content::run_declared(flat, s))
         .collect();
     a.holds = glued > 0
         && a.no_backward.is_empty()
@@ -437,6 +466,17 @@ pub fn try_fixes(
     patterns: &[(&str, &str)],
     links: &[Link],
     a: &Analysis,
+) -> Vec<Fix> {
+    try_fixes_with(subnets, patterns, links, a, &orders_scenarios())
+}
+
+/// [`try_fixes`] re-running `scenarios`.
+pub fn try_fixes_with(
+    subnets: &[&Subnet],
+    patterns: &[(&str, &str)],
+    links: &[Link],
+    a: &Analysis,
+    scenarios: &[DeclaredScenario],
 ) -> Vec<Fix> {
     if !a.ok {
         return vec![];
@@ -523,7 +563,8 @@ pub fn try_fixes(
                     }
                     b.links = next.clone();
                     let f = comp::flatten(&b);
-                    f.is_ok().then(|| Box::new(analyse(subnets, &next, &f)))
+                    f.is_ok()
+                        .then(|| Box::new(analyse_with(subnets, &next, &f, scenarios)))
                 } else {
                     None
                 };
@@ -548,14 +589,20 @@ pub fn try_fixes(
 pub fn report(c: &comp::Composition, fixes: bool) -> serde_json::Value {
     let subnets = c.subnets();
     let flat = comp::flatten(&c.bundle);
-    let analysis = analyse(&subnets, &c.bundle.links, &flat);
+    let scenarios = c
+        .doc
+        .content
+        .as_ref()
+        .map(ModelContent::scenarios)
+        .unwrap_or_default();
+    let analysis = analyse_with(&subnets, &c.bundle.links, &flat, &scenarios);
     let fixes = if fixes {
         let patterns: Vec<(&str, &str)> = c
             .specs
             .iter()
             .map(|s| (s.id.as_str(), s.pattern.as_str()))
             .collect();
-        try_fixes(&subnets, &patterns, &c.bundle.links, &analysis)
+        try_fixes_with(&subnets, &patterns, &c.bundle.links, &analysis, &scenarios)
     } else {
         vec![]
     };

@@ -8,9 +8,10 @@
 //!
 //! The document, marking, rates, selection, view and undo history are not
 //! part of it: the page owns the document, and history ends with the page.
-//! What the composition views show is: the open composition (its instances
-//! and links), the open search plan, and which view, example and mode is
-//! up, so the page and the app come back to the same drawing.
+//! What the composition views show is: the open composition (its document,
+//! either form, with the content attached to it), the open search plan, and
+//! which view, example and mode is up, so the page and the app come back to
+//! the same drawing.
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::fmt::Display;
@@ -53,7 +54,8 @@ pub const SET: &[CommandSpec] = &[
         help: "The state that outlives one document, as one JSON object for a front end to save (pflow.xyz's page keeps it \
                in browser storage): models (the library), systems, macros, recording (the steps of a recording in progress, \
                or null), notes, artifacts (results), store (every file of the local store, as text), composition (the open \
-               composition's instances and links, or null when none is open), plan (the open search plan, or null) and \
+               composition as its document, either form, with its content when that is not the library's, beside the \
+               instances and links of the older shape; or null when none is open), plan (the open search plan, or null) and \
                composition_view (which composition view, example and mode is shown); `parts` picks some. \
                Not the document, marking, rates, selection or undo history.",
         menu: "",
@@ -144,10 +146,7 @@ fn dump_part(sess: &Session, part: &str) -> Result<Value> {
             json!({ "location": st.location(), "blobs": st.dump_blobs()? })
         }
         "composition" => match &sess.composition {
-            Some(c) => json!({
-                "instances": c.specs.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
-                "links": c.bundle.links.iter().map(crate::composition::link_json).collect::<Vec<_>>(),
-            }),
+            Some(c) => crate::composition::document::dump_part(c)?,
             None => Value::Null,
         },
         "plan" => match &sess.search_plan {
@@ -353,17 +352,13 @@ fn parse(sess: &Session, state: &Value) -> Result<Parsed> {
     if let Some(v) = obj.get("composition") {
         p.composition = Some(match v {
             Value::Null => None,
-            v => {
-                let ids: Vec<String> = typed("composition", &v["instances"])?;
-                let raw: Vec<Value> = typed("composition", &v["links"])?;
-                let links = raw
-                    .iter()
-                    .map(|l| crate::composition::parse_link(l).map_err(|e| bad("composition", e)))
-                    .collect::<Result<Vec<_>>>()?;
-                let c = crate::composition::Composition::open(&ids, &links)
-                    .map_err(|e| bad("composition", e))?;
-                Some(c)
-            }
+            // The document (either form) when the state has one; the older
+            // `{instances, links}` of catalog ids otherwise (a state a build
+            // before composition documents saved).
+            v => Some(
+                crate::composition::document::restore_part(v, &super::bundle_doc::from_store)
+                    .map_err(|e| bad("composition", e))?,
+            ),
         });
     }
     if let Some(v) = obj.get("plan") {

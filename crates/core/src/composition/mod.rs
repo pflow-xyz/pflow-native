@@ -50,6 +50,10 @@ pub fn ontology() -> &'static Value {
     O.get_or_init(|| serde_json::from_str(ONTOLOGY_JSON).expect("ontology.json is JSON"))
 }
 
+pub mod checks;
+pub mod content;
+pub mod document;
+
 pub const PARAMS_NOTE: &str = "Parameters are this page's choice (judgment): the description fixes the patterns, not their sizes.";
 
 // ------------------------------------------------------------ instances
@@ -334,7 +338,13 @@ pub fn parse_kind(s: &str) -> Result<LinkKind, String> {
 /// `"subnet:port"`, the prototype's port reference (port ids may contain
 /// `:`, subnet ids do not).
 pub fn port_key(e: &Endpoint) -> String {
-    format!("{}:{}", e.subnet, e.port)
+    if !e.port.is_empty() || (e.place.is_empty() && e.transition.is_empty()) {
+        format!("{}:{}", e.subnet, e.port)
+    } else if !e.transition.is_empty() {
+        format!("{}:@transition/{}", e.subnet, e.transition)
+    } else {
+        format!("{}:@place/{}", e.subnet, e.place)
+    }
 }
 
 /// `"kind:subnet:port->subnet:port"`.
@@ -351,14 +361,42 @@ pub fn link_key(l: &Link) -> String {
 pub fn parse_endpoint(v: &Value) -> Result<Endpoint, String> {
     match v {
         Value::String(s) => match s.split_once(':') {
-            Some((a, b)) if !a.is_empty() && !b.is_empty() => Ok(ep(a, b)),
+            Some((a, b)) if !a.is_empty() && !b.is_empty() => {
+                Ok(if let Some(t) = b.strip_prefix("@transition/") {
+                    Endpoint {
+                        subnet: a.into(),
+                        transition: t.into(),
+                        ..Default::default()
+                    }
+                } else if let Some(p) = b.strip_prefix("@place/") {
+                    Endpoint {
+                        subnet: a.into(),
+                        place: p.into(),
+                        ..Default::default()
+                    }
+                } else {
+                    ep(a, b)
+                })
+            }
             _ => Err(format!("endpoint {s:?} is not \"subnet:port\"")),
         },
         Value::Object(o) => {
             let get = |k: &str| o.get(k).and_then(Value::as_str).filter(|s| !s.is_empty());
-            match (get("subnet"), get("port")) {
-                (Some(a), Some(b)) => Ok(ep(a, b)),
-                _ => Err(format!("endpoint {v} needs \"subnet\" and \"port\"")),
+            match (get("subnet"), get("port"), get("place"), get("transition")) {
+                (Some(a), Some(b), None, None) => Ok(ep(a, b)),
+                (Some(a), None, Some(p), None) => Ok(Endpoint {
+                    subnet: a.into(),
+                    place: p.into(),
+                    ..Default::default()
+                }),
+                (Some(a), None, None, Some(t)) => Ok(Endpoint {
+                    subnet: a.into(),
+                    transition: t.into(),
+                    ..Default::default()
+                }),
+                _ => Err(format!(
+                    "endpoint {v} needs \"subnet\" and one of \"port\", \"place\", \"transition\""
+                )),
             }
         }
         other => Err(format!(
@@ -383,9 +421,22 @@ pub fn parse_link(v: &Value) -> Result<Link, String> {
 pub fn link_json(l: &Link) -> Value {
     json!({
         "kind": kind_name(l.kind),
-        "from": {"subnet": l.from.subnet, "port": l.from.port},
-        "to": {"subnet": l.to.subnet, "port": l.to.port},
+        "from": endpoint_json(&l.from),
+        "to": endpoint_json(&l.to),
     })
+}
+
+/// `{subnet, port}`, plus `place` or `transition` when the link names those
+/// instead of a port (a raw Bundle's links often do).
+pub fn endpoint_json(e: &Endpoint) -> Value {
+    let mut v = json!({"subnet": e.subnet, "port": e.port});
+    if !e.place.is_empty() {
+        v["place"] = json!(e.place);
+    }
+    if !e.transition.is_empty() {
+        v["transition"] = json!(e.transition);
+    }
+    v
 }
 
 // ------------------------------------------------------------ the composition
@@ -402,6 +453,8 @@ pub struct Unavailable {
 /// were added) and links.
 #[derive(Debug, Clone)]
 pub struct Composition {
+    /// Where it came from and what is attached (document form, content).
+    pub doc: document::DocState,
     pub specs: Vec<InstanceSpec>,
     pub bundle: Bundle,
     /// Instances asked for but not buildable at this pin (the saga).
@@ -418,6 +471,7 @@ impl Composition {
     /// instance that cannot be built is recorded, not fatal.
     pub fn open(instances: &[String], links: &[Link]) -> Result<Self, String> {
         let mut c = Composition {
+            doc: document::DocState::default(),
             specs: vec![],
             bundle: Bundle::new("composition"),
             unavailable: vec![],
@@ -450,6 +504,7 @@ impl Composition {
             }
             c.add_link(l.clone()).map_err(|v| v.refusal())?;
         }
+        c.doc.attach_library_for(instances);
         Ok(c)
     }
 
@@ -588,6 +643,10 @@ impl Composition {
             "unavailable": self.unavailable,
             "dropped_links": self.dropped_links.iter().map(|(l, why)| json!({"link": link_json(l), "reason": why})).collect::<Vec<_>>(),
             "params_note": PARAMS_NOTE,
+            "document": document::document_json(self),
+            "capabilities": document::capabilities(self),
+            "missing": document::missing(self),
+            "content": document::content_json(self),
         })
     }
 }
@@ -1236,71 +1295,35 @@ pub struct Scenario {
     pub note: &'static str,
 }
 
-const fn ex(place: &'static str, n: i64, says: &'static str) -> Expect {
-    Expect {
-        place,
-        op: "==",
-        n,
-        says,
-    }
-}
-
-/// The prototype's four scenarios (`SCENARIOS`).
+/// The orders library's four scenarios (`SCENARIOS`), derived from the
+/// library content (`library/orders.content.json`, the one place they are
+/// written) and parsed once.
 pub fn scenarios() -> &'static [Scenario] {
     static S: OnceLock<Vec<Scenario>> = OnceLock::new();
     S.get_or_init(|| {
-        vec![
-            Scenario {
-                id: "commit",
-                title: "An order is paid",
-                script: vec!["orders/dequeue", "payment/do_charge", "payment/commit"],
-                expect: vec![
-                    ex("payment/completed", 1, "the saga completes"),
-                    ex("workers/available", 2, "the worker returns to the pool"),
-                ],
-                note: "",
-            },
-            Scenario {
-                id: "refund",
-                title: "The payment fails after the charge (refund)",
-                script: vec![
-                    "orders/dequeue",
-                    "payment/do_charge",
-                    "payment/fail_commit",
-                    "payment/undo_charge",
-                    "payment/undo_reserve",
-                ],
-                expect: vec![
-                    ex("payment/rolled_back", 1, "the saga rolls back"),
-                    ex("payment/customer", 1, "the customer is refunded"),
-                    ex("workers/available", 2, "the worker returns to the pool"),
-                ],
-                note: "Expected to fail on the last predicate: release is fused only with commit (the pool-leak caveat, patterns.ttl:496).",
-            },
-            Scenario {
-                id: "charge-fails",
-                title: "The charge itself fails (nothing to refund)",
-                script: vec!["orders/dequeue", "payment/fail_charge", "payment/undo_reserve"],
-                expect: vec![
-                    ex("payment/rolled_back", 1, "the saga rolls back"),
-                    ex("payment/customer", 1, "the customer was never charged"),
-                    ex("workers/available", 2, "the worker returns to the pool"),
-                ],
-                note: "A step that fails itself moved nothing, so there is nothing to refund (saga caveat). The worker leaks here too.",
-            },
-            Scenario {
-                id: "second-order",
-                title: "A second order, one saga",
-                script: vec![
-                    "orders/dequeue",
-                    "payment/do_charge",
-                    "payment/commit",
-                    "orders/dequeue",
-                ],
-                expect: vec![ex("orders/items", 0, "both orders are taken off the queue")],
-                note: "Expected to stop at the last step: the fused dequeue needs next_reserve, which the one-shot saga has spent (saga caveat: one saga is one case).",
-            },
-        ]
+        // Leaked once: the static list lives as long as the process.
+        let leak = |s: String| -> &'static str { Box::leak(s.into_boxed_str()) };
+        content::library_entry("orders")
+            .map(|l| l.content.scenarios())
+            .unwrap_or_default()
+            .into_iter()
+            .map(|d| Scenario {
+                id: leak(d.id),
+                title: leak(d.title),
+                script: d.script.into_iter().map(leak).collect(),
+                expect: d
+                    .expect
+                    .into_iter()
+                    .map(|e| Expect {
+                        place: leak(e.place),
+                        op: leak(e.op),
+                        n: e.n,
+                        says: leak(e.says),
+                    })
+                    .collect(),
+                note: leak(d.note),
+            })
+            .collect()
     })
 }
 

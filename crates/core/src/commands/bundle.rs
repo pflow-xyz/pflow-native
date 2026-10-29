@@ -412,8 +412,16 @@ fn instances(_: &mut Session, _: &Value) -> Result<Value> {
     }))
 }
 
-fn scenarios(_: &mut Session, _: &Value) -> Result<Value> {
-    Ok(json!({ "scenarios": comp::scenarios() }))
+fn scenarios(sess: &mut Session, _: &Value) -> Result<Value> {
+    let (source, list) = super::bundle_doc::declared_scenarios(sess);
+    let mut out = json!({
+        "scenarios": list.iter().map(|s| s.to_json()).collect::<Vec<_>>(),
+        "source": source,
+    });
+    if list.is_empty() {
+        out["note"] = json!("no scenario is declared for this model");
+    }
+    Ok(out)
 }
 
 fn ontology(_: &mut Session, _: &Value) -> Result<Value> {
@@ -703,11 +711,14 @@ fn run_cmd(sess: &mut Session, a: &Value) -> Result<Value> {
     let flat = comp::flatten(&c.bundle).map_err(Error::Invalid)?;
     let r = match (s(a, "scenario"), strs(a, "script")) {
         (Some(id), None) => {
-            let sc = comp::scenario(id).ok_or_else(|| {
-                let ids: Vec<&str> = comp::scenarios().iter().map(|s| s.id).collect();
-                Error::BadArgs(format!("no scenario {id:?}; there are {ids:?}"))
+            let (_, declared) = super::bundle_doc::declared_scenarios(sess);
+            let sc = declared.iter().find(|s| s.id == id).ok_or_else(|| {
+                let ids: Vec<&str> = declared.iter().map(|s| s.id.as_str()).collect();
+                Error::BadArgs(format!(
+                    "no scenario {id:?} is declared for this model; there are {ids:?}"
+                ))
             })?;
-            comp::run_scenario(&flat, sc)
+            crate::composition::content::run_declared(&flat, sc)
         }
         (None, Some(script)) => comp::run(&flat, "script", "script", &script, &[]),
         _ => return Err(bad("pass `scenario` or `script`".into())),
