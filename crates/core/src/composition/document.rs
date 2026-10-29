@@ -905,6 +905,7 @@ pub fn dump_part(c: &Composition) -> Result<Value> {
         "instances": c.specs.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
         "links": c.bundle.links.iter().map(super::link_json).collect::<Vec<_>>(),
         "form": exp.form.name(),
+        "origin": c.doc.origin.name(),
         "document": exp.document,
     });
     match (&c.doc.content_source, &c.doc.content) {
@@ -933,6 +934,15 @@ pub fn restore_part(v: &Value, resolve: PartResolver) -> Result<Composition> {
         .get("document")
         .ok_or_else(|| Error::BadArgs("composition: `document` is required".into()))?;
     let mut c = load(doc, resolve)?.composition;
+    // A catalog-built composition is the same document as one loaded from its export, but it is
+    // not read the same: the parameters are this page's choice only for the catalog's, and
+    // `bundle.state` says so (`params_note`). The part says where it came from, as main's did by
+    // restoring through `Composition::open`; a loaded document or a raw Bundle is what `load` made.
+    if v.get("origin").and_then(Value::as_str) == Some(Origin::Catalog.name())
+        && c.doc.origin == Origin::Document
+    {
+        c.doc.origin = Origin::Catalog;
+    }
     if let Some(id) = v.get("library").and_then(Value::as_str) {
         let lib = content::library_entry(id)
             .ok_or_else(|| Error::NotFound(format!("no library content {id:?}")))?;

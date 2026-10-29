@@ -628,6 +628,16 @@ fn the_open_composition_and_plan_round_trip() {
         run(&mut t, "bundle.state", Value::Null)["links"],
         run(&mut s, "bundle.state", Value::Null)["links"]
     );
+    // Restored it reads as it did: a catalog-built composition is the catalog's (its parameters
+    // are this page's choice, the Cospans view's note) and not a loaded document.
+    let (before, after) = (
+        run(&mut s, "bundle.state", Value::Null),
+        run(&mut t, "bundle.state", Value::Null),
+    );
+    assert_eq!(before["document"]["origin"], "catalog", "{before}");
+    assert_eq!(after["document"], before["document"], "{after}");
+    assert_eq!(after["params_note"], before["params_note"], "{after}");
+    assert!(after["params_note"].is_string(), "{after}");
     assert_eq!(
         run(&mut t, "plan.state", Value::Null),
         run(&mut s, "plan.state", Value::Null)
@@ -756,6 +766,43 @@ fn attached_content_round_trips_with_the_composition() {
     gone["composition"]["library"] = json!("nope");
     let e = refused(&mut t, "session.restore_state", json!({"state": gone}));
     assert!(e.contains("composition") && e.contains("nope"), "{e}");
+}
+
+/// Where a composition came from survives a save: only the catalog's own parameters are "this
+/// page's choice" (`params_note`), and a loaded document with the very same instances is not.
+#[test]
+fn a_restored_composition_keeps_where_it_came_from() {
+    memory_store();
+    for (origin, note, load) in [
+        ("document", false, Some(orders_document())),
+        (
+            "bundle",
+            false,
+            Some(serde_json::from_str(include_str!("fixtures/bundle/cafe.bundle.json")).unwrap()),
+        ),
+        ("catalog", true, None),
+    ] {
+        let mut s = Session::default();
+        match load {
+            Some(d) => run(&mut s, "bundle.load", json!({"document": d})),
+            None => run(&mut s, "bundle.open", json!({})),
+        };
+        let state = run(
+            &mut s,
+            "session.dump_state",
+            json!({"parts": ["composition"]}),
+        );
+        assert_eq!(state["composition"]["origin"], origin, "{state}");
+        let mut t = Session::default();
+        run(&mut t, "session.restore_state", json!({"state": state}));
+        let after = run(&mut t, "bundle.state", Value::Null);
+        assert_eq!(after["document"]["origin"], origin, "{after}");
+        assert_eq!(
+            after.get("params_note").is_some(),
+            note,
+            "{origin}: {after}"
+        );
+    }
 }
 
 /// The default orders composition, as `bundle.export` writes it.
