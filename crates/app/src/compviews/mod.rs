@@ -145,6 +145,10 @@ pub struct Data {
     /// The Connect-4 net played by hand (`plan.game`).
     pub c4game: Option<Value>,
     pub lens: Option<Value>,
+    /// The scenarios the open composition's content declares (none for a bare
+    /// model), and each one run on the flat net (`bundle.run`). The Flat view's
+    /// chips and the Process view draw these and nothing else.
+    pub scenarios: Vec<comp::content::DeclaredScenario>,
     pub runs: Vec<Value>,
     pub plan: Option<Value>,
     pub net: Value,
@@ -167,6 +171,7 @@ impl Default for Data {
             boundaries: None,
             c4game: None,
             lens: None,
+            scenarios: vec![],
             runs: vec![],
             plan: None,
             net: sp::net_json(),
@@ -244,13 +249,15 @@ impl Data {
                 self.prev_flat = self.flat.take();
                 self.flat = Some(comp::flatten_json(&c.bundle));
                 self.incidence = Some(comp::incidence_json(&c.bundle));
-                self.game = Some(comp::game::game_json(&c.bundle, &c.game));
+                self.scenarios = c.declared_scenarios();
+                self.game = Some(comp::game::game_json(&c.bundle, &c.game, &self.scenarios));
                 self.boundaries = Some(comp::boundaries::boundaries_json(c));
                 self.lens = Some(lens::report(c, true));
                 self.runs = match comp::flatten(&c.bundle) {
-                    Ok(f) => comp::scenarios()
+                    Ok(f) => self
+                        .scenarios
                         .iter()
-                        .map(|s| json!(comp::run_scenario(&f, s)))
+                        .map(|s| json!(comp::content::run_declared(&f, s)))
                         .collect(),
                     Err(_) => vec![],
                 };
@@ -262,6 +269,7 @@ impl Data {
                 self.game = None;
                 self.boundaries = None;
                 self.lens = None;
+                self.scenarios = vec![];
                 self.runs = vec![];
             }
         }
@@ -831,6 +839,12 @@ pub fn draw(
         rect.right_bottom() - Vec2::new(14.0, 10.0),
     );
     let orders = example == "orders";
+    if orders && matches!(view, "cospan" | "spiders" | "operad" | "string") {
+        let n = off_port_count(&c);
+        if n > 0 {
+            c.note("warn", off_port_text(n));
+        }
+    }
     if orders && d.state.is_none() {
         c.note("warn", "No composition is open (bundle.open).");
     } else if !orders && d.plan.is_none() {
@@ -901,6 +915,50 @@ fn links(c: &Ctx) -> Vec<Value> {
         .as_ref()
         .map(|st| arr(&st["links"]).to_vec())
         .unwrap_or_default()
+}
+
+/// A link end as its key writes it: the port, else `@place/<id>` or `@transition/<id>` (a raw
+/// Bundle's links, like the cafe's, end on those).
+fn end_name(e: &Value) -> String {
+    if !s(&e["port"]).is_empty() {
+        s(&e["port"]).to_string()
+    } else if !s(&e["transition"]).is_empty() {
+        format!("@transition/{}", s(&e["transition"]))
+    } else if !s(&e["place"]).is_empty() {
+        format!("@place/{}", s(&e["place"]))
+    } else {
+        String::new()
+    }
+}
+
+/// Whether both ends of a link name a port.
+fn on_ports(l: &Value) -> bool {
+    !s(&l["from"]["port"]).is_empty() && !s(&l["to"]["port"]).is_empty()
+}
+
+/// The links the port-anchored views (Cospans, Spiders, Operad, String) can place: both ends
+/// are ports. A link that ends on a place or a transition has no port to hang a wire on.
+fn port_links(c: &Ctx) -> Vec<Value> {
+    links(c).into_iter().filter(on_ports).collect()
+}
+
+/// How many links the port-anchored views leave out.
+fn off_port_count(c: &Ctx) -> usize {
+    links(c).iter().filter(|l| !on_ports(l)).count()
+}
+
+/// What a port-anchored view says about the links it cannot place, instead of drawing nothing and
+/// claiming there are none.
+fn off_port_text(n: usize) -> String {
+    format!(
+        "{n} link{} end{} on places or transitions, not ports, so this view has nothing to anchor {} to and does not draw {}; the Flat net, Boundaries and Laws views show what {} fuse{}.",
+        if n == 1 { "" } else { "s" },
+        if n == 1 { "s" } else { "" },
+        if n == 1 { "it" } else { "them" },
+        if n == 1 { "it" } else { "them" },
+        if n == 1 { "it" } else { "they" },
+        if n == 1 { "s" } else { "" },
+    )
 }
 
 /// The prototype's port sides (cospan.js `portSides`): transition ports on
@@ -1360,6 +1418,32 @@ pub fn headless_manifest_at(
     state: &str,
     level: &str,
 ) -> Value {
+    headless_frame_at(sess, view, example, state, level).manifest
+}
+
+/// What a headless frame drew.
+pub struct Headless {
+    /// The parity manifest the drawing collected.
+    pub manifest: Value,
+    /// Every text the frame painted.
+    pub texts: Vec<String>,
+    /// The notes shown under the view, `(level, text)`.
+    pub notes: Vec<(String, String)>,
+}
+
+/// [`headless_manifest`], with the text it painted and the notes it raised: what a person
+/// reading the view would see said.
+pub fn headless_frame(sess: &Session, view: &str, example: &str) -> Headless {
+    headless_frame_at(sess, view, example, "default", "pattern")
+}
+
+fn headless_frame_at(
+    sess: &Session,
+    view: &str,
+    example: &str,
+    state: &str,
+    level: &str,
+) -> Headless {
     let mut data = Data::default();
     data.refresh(sess);
     let ctx = egui::Context::default();
@@ -1368,17 +1452,31 @@ pub fn headless_manifest_at(
         ..Default::default()
     };
     let mut manifest = Value::Null;
+    let mut notes = vec![];
     let mut cv = sess.composition_view.clone();
     cv.view = view.into();
     cv.example = example.into();
     cv.rewrite = None;
     cv.level = level.into();
-    ctx.run_ui(raw, |ui| {
+    let out = ctx.run_ui(raw, |ui| {
         let f = draw(ui, &data, None, &cv, false, None);
         manifest = f.scene.manifest_at(view, example, state, level);
-    })
-    .drop_without_applying_deltas();
-    manifest
+        notes = f
+            .notes
+            .iter()
+            .map(|(l, t)| (l.to_string(), t.clone()))
+            .collect();
+    });
+    let mut texts = vec![];
+    out.shapes
+        .iter()
+        .for_each(|s| crate::modelcontent::painted(&s.shape, &mut texts));
+    out.drop_without_applying_deltas();
+    Headless {
+        manifest,
+        texts: texts.into_iter().map(|p| p.text).collect(),
+        notes,
+    }
 }
 
 /// The spec's states, each from a fresh session by commands only.

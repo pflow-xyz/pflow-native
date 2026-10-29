@@ -1018,8 +1018,9 @@ pub fn missing(c: &Composition) -> Vec<Value> {
     if scenarios == 0 {
         add(
             "NO_SCENARIOS",
-            "no scenario is declared for this model: the Process view has no run to draw and the lens \
-             test has no scenarios to read; the strict test and the flat net still work"
+            "no scenario is declared for this model: the Process view has no run to draw, the token game \
+             has none to step, and the lens test has no commit run to read as its forward pass, so it \
+             gives no verdict; the flat net and incidence still work"
                 .into(),
         );
     }

@@ -1353,8 +1353,33 @@ fn member_subnet(m: &str) -> &str {
 
 pub(super) fn process_orders(c: &mut Ctx, area: Rect, scenario: Option<&str>) {
     let subs = subnets(c);
-    let scs = comp::scenarios();
+    let scs = c.d.scenarios.clone();
     let runs = c.d.runs.clone();
+    if scs.is_empty() {
+        // A model that declares no scenario has no run to draw: say so, in the words
+        // `bundle.state` gives (`NO_SCENARIOS`), rather than draw another model's runs.
+        let text =
+            c.d.state
+                .as_ref()
+                .and_then(|st| {
+                    arr(&st["missing"])
+                        .iter()
+                        .find(|m| m["code"] == "NO_SCENARIOS")
+                        .map(|m| s(&m["text"]).to_string())
+                })
+                .unwrap_or_else(|| {
+                    "No scenario is declared for this model: there is no run to draw.".into()
+                });
+        c.wrapped(
+            area.left_top() + Vec2::new(0.0, 4.0),
+            &text,
+            12.0,
+            MUTED,
+            area.width().min(760.0),
+            false,
+        );
+        return;
+    }
     // emit: one run per scenario (D15)
     for r in &runs {
         let mut fired: Vec<String> = arr(&r["steps"])
@@ -1382,7 +1407,14 @@ pub(super) fn process_orders(c: &mut Ctx, area: Rect, scenario: Option<&str>) {
     // controls
     let sel = scenario
         .filter(|x| scs.iter().any(|s| s.id == *x))
-        .unwrap_or("refund");
+        .unwrap_or_else(|| {
+            // "refund" is the orders example's habitual pick; any other model starts on its first.
+            if scs.iter().any(|x| x.id == "refund") {
+                "refund"
+            } else {
+                scs[0].id.as_str()
+            }
+        });
     c.text(
         area.left_top() + Vec2::new(0.0, 4.0),
         Align2::LEFT_TOP,
@@ -1430,14 +1462,19 @@ pub(super) fn process_orders(c: &mut Ctx, area: Rect, scenario: Option<&str>) {
             json!({"scenario": id}),
         );
         c.p.circle_filled(rect.left_center() + Vec2::new(11.0, 0.0), 4.0, dot);
-        let title = scs.iter().find(|x| x.id == id).map_or("", |x| x.title);
+        let title = scs
+            .iter()
+            .find(|x| x.id == id)
+            .map_or("", |x| x.title.as_str());
         c.hover(rect, info(format!("scenario {id}")).fact("title", title).fact("result", res).note("A scenario's firing script (orders.js in the prototype, judgment, frozen), fired on the flat net with pflow-metamodel's firing rule (bundle.run)."));
         x = rect.right() + 6.0;
     }
     let Some(run) = runs.iter().find(|r| s(&r["id"]) == sel).cloned() else {
         return;
     };
-    let sc = scs.iter().find(|x| x.id == sel).expect("selected");
+    let Some(sc) = scs.iter().find(|x| x.id == sel) else {
+        return;
+    };
     c.text(
         area.left_top() + Vec2::new(0.0, 28.0),
         Align2::LEFT_TOP,

@@ -1579,9 +1579,9 @@ fn draw_card(
             "{} {}:{} — {}:{}",
             kind_glyph("event"),
             s(&l["from"]["subnet"]),
-            s(&l["from"]["port"]),
+            end_name(&l["from"]),
             s(&l["to"]["subnet"]),
-            s(&l["to"]["port"])
+            end_name(&l["to"])
         );
         let w = c.mono(
             xf.pt(cx + 24.0, yy - 3.0),

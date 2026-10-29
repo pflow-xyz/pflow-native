@@ -278,7 +278,7 @@ pub(super) fn operad_orders(c: &mut Ctx, area: Rect) {
     if subs.is_empty() {
         return;
     }
-    let ls = links(c);
+    let ls = port_links(c);
     let ls_all = ls.clone();
     let ont = comp::ontology();
     // ---- grid: column by pattern, row by instance number ----

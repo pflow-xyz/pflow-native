@@ -745,7 +745,11 @@ fn boundaries(sess: &mut Session, _: &Value) -> Result<Value> {
 
 fn game(sess: &mut Session, _: &Value) -> Result<Value> {
     let c = comp_ref(sess)?;
-    Ok(comp::game::game_json(&c.bundle, &c.game))
+    Ok(comp::game::game_json(
+        &c.bundle,
+        &c.game,
+        &c.declared_scenarios(),
+    ))
 }
 
 fn fire(sess: &mut Session, a: &Value) -> Result<Value> {
@@ -763,7 +767,11 @@ fn fire(sess: &mut Session, a: &Value) -> Result<Value> {
         let mut g = c.game.of(&flat);
         g.fire(&flat, &id).map_err(Error::Invalid)?;
         c.game = g;
-        Ok(comp::game::game_json(&c.bundle, &c.game))
+        Ok(comp::game::game_json(
+            &c.bundle,
+            &c.game,
+            &c.declared_scenarios(),
+        ))
     })
 }
 
@@ -771,7 +779,11 @@ fn reset_marking(sess: &mut Session, _: &Value) -> Result<Value> {
     edit_comp(sess, "reset token game", |c| {
         let flat = flat_of(c)?;
         c.game = c.game.reset(&flat);
-        Ok(comp::game::game_json(&c.bundle, &c.game))
+        Ok(comp::game::game_json(
+            &c.bundle,
+            &c.game,
+            &c.declared_scenarios(),
+        ))
     })
 }
 
@@ -779,8 +791,15 @@ fn select_scenario(sess: &mut Session, a: &Value) -> Result<Value> {
     let id = req(a, "id").to_string();
     edit_comp(sess, &format!("scenario {id}"), |c| {
         let flat = flat_of(c)?;
-        c.game = c.game.select(&flat, &id).map_err(Error::BadArgs)?;
-        Ok(comp::game::game_json(&c.bundle, &c.game))
+        c.game = c
+            .game
+            .select(&flat, &c.declared_scenarios(), &id)
+            .map_err(Error::BadArgs)?;
+        Ok(comp::game::game_json(
+            &c.bundle,
+            &c.game,
+            &c.declared_scenarios(),
+        ))
     })
 }
 
@@ -789,14 +808,19 @@ fn step(sess: &mut Session, a: &Value) -> Result<Value> {
     edit_comp(sess, "step scenario", |c| {
         let flat = flat_of(c)?;
         let mut g = c.game.of(&flat);
+        let scenarios = c.declared_scenarios();
         loop {
-            let more = g.step(&flat).map_err(Error::Invalid)?;
+            let more = g.step(&flat, &scenarios).map_err(Error::Invalid)?;
             if !all || !more {
                 break;
             }
         }
         c.game = g;
-        Ok(comp::game::game_json(&c.bundle, &c.game))
+        Ok(comp::game::game_json(
+            &c.bundle,
+            &c.game,
+            &c.declared_scenarios(),
+        ))
     })
 }
 

@@ -164,6 +164,10 @@ pub fn layout(inp: &Input) -> Lay {
     }
     let member_of_ref = |r: &Value| -> Option<String> {
         let sub = by_id.get(s(&r["subnet"]))?;
+        // A link that ends on a transition names its member directly (a raw Bundle's do).
+        if !s(&r["transition"]).is_empty() {
+            return Some(format!("{}/{}", s(&sub["id"]), s(&r["transition"])));
+        }
         let p = arr(&sub["ports"])
             .iter()
             .find(|q| s(&q["id"]) == s(&r["port"]))?;

@@ -427,7 +427,7 @@ impl DeclaredScenario {
     }
 }
 
-fn compare(op: &str, actual: i64, n: i64) -> bool {
+pub(super) fn compare(op: &str, actual: i64, n: i64) -> bool {
     match op {
         "==" => actual == n,
         "!=" => actual != n,

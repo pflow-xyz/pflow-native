@@ -3305,3 +3305,58 @@ fn the_declared_scenarios_come_from_the_library_content() {
         .collect();
     assert_eq!(ids, ["commit", "refund", "charge-fails", "second-order"]);
 }
+
+// ------------------------------------------------------------ the token game reads declared scenarios
+
+/// `bundle.run` has always read the open composition's declared scenarios; the token game
+/// (`bundle.scenario`, `bundle.step`) read the orders library's instead, so a scenario a loaded model
+/// declares could be run but not stepped.
+#[test]
+fn a_declared_scenario_is_selected_and_stepped_in_the_token_game() {
+    let mut s = cafe();
+    let g = run(&mut s, "bundle.scenario", json!({"id": "espresso-order"}));
+    assert_eq!(g["scenario"]["id"], "espresso-order");
+    assert_eq!(g["scenario"]["shown"], 0);
+    let g = run(&mut s, "bundle.step", json!({}));
+    assert_eq!(g["scenario"]["shown"], 1);
+    assert_eq!(g["fired"], json!(["counter/order"]));
+    let g = run(&mut s, "bundle.step", json!({"all": true}));
+    let sc = &g["scenario"];
+    assert_eq!(sc["done"], true, "{sc}");
+    assert_eq!(sc["completed"], true, "{sc}");
+    assert_eq!(sc["steps"].as_array().unwrap().len(), 3);
+    // The predicates are the declared ones, read at the marking the game reached.
+    let expect = sc["expect"].as_array().unwrap();
+    assert!(expect.len() >= 3, "{sc}");
+    assert!(expect.iter().all(|e| e["pass"] == true), "{expect:?}");
+    // And they say what `bundle.run` says.
+    let r = run(&mut s, "bundle.run", json!({"scenario": "espresso-order"}));
+    assert_eq!(r["completed"], sc["completed"]);
+    for (a, b) in r["expect"].as_array().unwrap().iter().zip(expect) {
+        assert_eq!(
+            (&a["place"], &a["actual"], &a["pass"]),
+            (&b["place"], &b["actual"], &b["pass"])
+        );
+    }
+}
+
+#[test]
+fn a_scenario_the_model_does_not_declare_cannot_be_selected_in_the_token_game() {
+    let mut s = cafe();
+    let err = refused(&mut s, "bundle.scenario", json!({"id": "commit"}));
+    assert!(
+        err.contains("\"commit\"") && err.contains("espresso-order") && err.contains("latte-order"),
+        "names what it declares: {err}"
+    );
+    // The orders example, once its content is cleared, declares none: `commit` is gone with them.
+    let mut o = orders();
+    run(&mut o, "bundle.scenario", json!({"id": "commit"}));
+    run(&mut o, "content.clear", json!({}));
+    let err = refused(&mut o, "bundle.scenario", json!({"id": "commit"}));
+    assert!(err.contains("declares none"), "{err}");
+    // A game left on a scenario that is no longer declared reads as no scenario, not a crash.
+    let g = run(&mut o, "bundle.game", json!({}));
+    assert!(g["scenario"].is_null(), "{g}");
+    let err = refused(&mut o, "bundle.step", json!({}));
+    assert!(err.contains("no scenario"), "{err}");
+}

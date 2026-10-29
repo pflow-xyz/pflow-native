@@ -1018,7 +1018,8 @@ pub(super) fn hover_path(c: &mut Ctx, d: &D, pts: &[Pt], tol: f32, i: Info) {
 
 pub(super) fn draw(c: &mut Ctx, area: Rect) {
     let subs = subnets(c);
-    let ls = links(c);
+    let ls = port_links(c);
+    let off_port = off_port_count(c);
     let probe = D {
         p: c.p.clone(),
         xf: Xf {
@@ -1099,7 +1100,7 @@ pub(super) fn draw(c: &mut Ctx, area: Rect) {
         }
     }
     paper(&d, &lay);
-    head(&d, &lay);
+    head(&d, &lay, off_port);
     draw_links(c, &d, &lay, &added, link_t, pop_t);
     draw_boxes(c, &d, &lay, &added, pop_t);
     foot(c, &d, &lay);
@@ -1132,7 +1133,7 @@ fn paper(d: &D, lay: &Layout) {
     );
 }
 
-fn head(d: &D, lay: &Layout) {
+fn head(d: &D, lay: &Layout, off_port: usize) {
     let names = lay.ids.join(" ⊗ ");
     d.text(
         (MARGIN, 28.0),
@@ -1149,7 +1150,14 @@ fn head(d: &D, lay: &Layout) {
             (n > 0).then(|| format!("{n} {k} link{}", if n == 1 { "" } else { "s" }))
         })
         .collect();
-    let sub = if counts.is_empty() {
+    let sub = if counts.is_empty() && off_port > 0 {
+        format!(
+            "side by side (⊗); {off_port} link{} end{} on places or transitions, not ports, and {} not drawn here",
+            if off_port == 1 { "" } else { "s" },
+            if off_port == 1 { "s" } else { "" },
+            if off_port == 1 { "is" } else { "are" }
+        )
+    } else if counts.is_empty() {
         "side by side (⊗), no links: the composite is exactly the monoidal product".to_string()
     } else {
         format!("side by side (⊗), with {}", counts.join(", "))

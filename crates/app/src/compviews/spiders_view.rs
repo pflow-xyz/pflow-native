@@ -810,9 +810,9 @@ fn link_text(l: &Value) -> String {
     format!(
         "{}:{} {g} {}:{}",
         s(&l["from"]["subnet"]),
-        s(&l["from"]["port"]),
+        end_name(&l["from"]),
         s(&l["to"]["subnet"]),
-        s(&l["to"]["port"])
+        end_name(&l["to"])
     )
 }
 
@@ -905,7 +905,8 @@ pub(super) fn spiders_orders(c: &mut Ctx, area: Rect) {
         };
         rank(a).cmp(&rank(b)).then(s(&a["id"]).cmp(s(&b["id"])))
     });
-    let ls = links(c);
+    let ls = port_links(c);
+    let off_port = off_port_count(c);
 
     // ---- boxes and port anchors
     let nsub = subs.len();
@@ -1057,7 +1058,6 @@ pub(super) fn spiders_orders(c: &mut Ctx, area: Rect) {
             .collect();
         classes.push(mk(true, name, m, cl));
     }
-    let n_event = classes.len();
     for (name, members) in &wires {
         let m = strs(members);
         let cl: Vec<Value> = ls
@@ -1070,6 +1070,10 @@ pub(super) fn spiders_orders(c: &mut Ctx, area: Rect) {
             .collect();
         classes.push(mk(false, name, m, cl));
     }
+    // A class none of whose links this view can anchor (a raw Bundle's end on places and
+    // transitions) has no leg to draw: it is not a spider here, whatever Flatten fused.
+    classes.retain(|cl| !cl.links.is_empty());
+    let n_event = classes.iter().filter(|cl| cl.event).count();
     let guards: Vec<Value> = ls
         .iter()
         .filter(|l| s(&l["kind"]) == "guard")
@@ -2096,6 +2100,12 @@ pub(super) fn spiders_orders(c: &mut Ctx, area: Rect) {
         "no two links share a member, so every spider has two legs".to_string()
     } else if !ls.is_empty() {
         "no event, token or data link: no spiders (a guard never forms one)".to_string()
+    } else if off_port > 0 {
+        format!(
+            "{off_port} link{} end{} on places or transitions, not ports: not drawn here",
+            if off_port == 1 { "" } else { "s" },
+            if off_port == 1 { "s" } else { "" }
+        )
     } else {
         "no links: no spiders".to_string()
     };

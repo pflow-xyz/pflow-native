@@ -15,7 +15,8 @@ use std::collections::BTreeMap;
 
 use serde_json::{json, Value};
 
-use super::{flatten, scenario, Flat};
+use super::content::DeclaredScenario;
+use super::{flatten, Flat};
 use pflow_compose::Bundle;
 use pflow_metamodel::{Marking, Model};
 
@@ -100,10 +101,18 @@ impl FlatGame {
         Ok(())
     }
 
-    /// Selects scenario `id`: back to the initial marking with nothing of
-    /// its script fired.
-    pub fn select(&self, flat: &Flat, id: &str) -> Result<FlatGame, String> {
-        scenario(id).ok_or_else(|| format!("no scenario {id:?}"))?;
+    /// Selects scenario `id` of `scenarios` (the ones the open composition's
+    /// content declares): back to the initial marking with nothing of its
+    /// script fired.
+    pub fn select(
+        &self,
+        flat: &Flat,
+        scenarios: &[DeclaredScenario],
+        id: &str,
+    ) -> Result<FlatGame, String> {
+        if !scenarios.iter().any(|s| s.id == id) {
+            return Err(no_scenario(scenarios, id));
+        }
         let mut g = self.reset(flat);
         g.scenario = Some(Stepping {
             id: id.into(),
@@ -116,16 +125,19 @@ impl FlatGame {
     /// Takes the next step of the selected scenario: resolves its member to a
     /// flat transition, fires it when enabled, else records where the script
     /// stopped. `Ok(true)` while there is more to do.
-    pub fn step(&mut self, flat: &Flat) -> Result<bool, String> {
+    pub fn step(&mut self, flat: &Flat, scenarios: &[DeclaredScenario]) -> Result<bool, String> {
         let st = self
             .scenario
             .clone()
             .ok_or("no scenario is selected (bundle.scenario)")?;
-        let sc = scenario(&st.id).ok_or_else(|| format!("no scenario {:?}", st.id))?;
+        let sc = scenarios
+            .iter()
+            .find(|s| s.id == st.id)
+            .ok_or_else(|| no_scenario(scenarios, &st.id))?;
         if st.stopped_at.is_some() || st.shown >= sc.script.len() {
             return Ok(false);
         }
-        let member = sc.script[st.shown];
+        let member = sc.script[st.shown].as_str();
         let mk = to_marking(&self.marking);
         let t = flat.transition_of(member).map(str::to_string);
         let ok = match &t {
@@ -149,6 +161,17 @@ impl FlatGame {
 }
 
 // ------------------------------------------------------------ constraints at a marking
+
+/// The refusal for a scenario the composition does not declare: its content's list says
+/// what there is.
+fn no_scenario(scenarios: &[DeclaredScenario], id: &str) -> String {
+    if scenarios.is_empty() {
+        format!("no scenario {id:?}: this composition declares none (content.load adds them)")
+    } else {
+        let ids: Vec<&str> = scenarios.iter().map(|s| s.id.as_str()).collect();
+        format!("no scenario {id:?}; this composition declares {ids:?}")
+    }
+}
 
 /// A declared constraint read at a marking.
 #[derive(Debug, Clone, PartialEq)]
@@ -212,8 +235,9 @@ pub fn evaluate(expr: &str, mk: &BTreeMap<String, i64>) -> Option<Evaluated> {
 
 // ------------------------------------------------------------ the query
 
-/// `bundle.game`'s result for the composition's bundle and its stored game.
-pub fn game_json(b: &Bundle, stored: &FlatGame) -> Value {
+/// `bundle.game`'s result for the composition's bundle and its stored game;
+/// `scenarios` are the ones its content declares.
+pub fn game_json(b: &Bundle, stored: &FlatGame, scenarios: &[DeclaredScenario]) -> Value {
     let flat = match flatten(b) {
         Ok(f) => f,
         Err(e) => return json!({"ok": false, "error": e}),
@@ -250,15 +274,17 @@ pub fn game_json(b: &Bundle, stored: &FlatGame) -> Value {
         "fired": g.fired,
         "enabled": enabled,
         "transitions": transitions,
-        "scenario": g.scenario.as_ref().map(|s| scenario_json(&flat, &g, s)),
+        "scenario": g
+            .scenario
+            .as_ref()
+            .and_then(|s| scenarios.iter().find(|x| x.id == s.id).map(|sc| scenario_json(&flat, &g, s, sc))),
         "constraints": constraints,
     })
 }
 
 /// The scenario's progress: the steps taken, and when it is done the
 /// predicates at the marking reached.
-fn scenario_json(flat: &Flat, g: &FlatGame, st: &Stepping) -> Value {
-    let sc = scenario(&st.id).expect("selected scenarios exist");
+fn scenario_json(flat: &Flat, g: &FlatGame, st: &Stepping, sc: &DeclaredScenario) -> Value {
     // The steps are replayed from the initial marking, as `run` does; the
     // game's own marking is what they led to.
     let mut mk = flat.model.initial_marking();
@@ -287,14 +313,14 @@ fn scenario_json(flat: &Flat, g: &FlatGame, st: &Stepping) -> Value {
         sc.expect
             .iter()
             .map(|e| {
-                let f = flat.place_of(e.place).map(str::to_string);
+                let f = flat.place_of(&e.place).map(str::to_string);
                 let actual = f
                     .as_ref()
                     .and_then(|p| g.marking.get(p))
                     .copied()
                     .unwrap_or(0);
                 json!({"place": e.place, "flat": f, "op": e.op, "n": e.n, "says": e.says,
-                       "actual": actual, "pass": e.op == "==" && actual == e.n})
+                       "actual": actual, "pass": super::content::compare(&e.op, actual, e.n)})
             })
             .collect()
     } else {
@@ -310,7 +336,7 @@ fn scenario_json(flat: &Flat, g: &FlatGame, st: &Stepping) -> Value {
         "done": done,
         "completed": done && st.stopped_at.is_none(),
         "stopped_at": st.stopped_at.map_or(-1, |i| i as i64),
-        "stopped_step": st.stopped_at.map(|i| sc.script[i]),
+        "stopped_step": st.stopped_at.map(|i| sc.script[i].as_str()),
         "expect": expect,
     })
 }

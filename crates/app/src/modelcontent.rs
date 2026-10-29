@@ -735,7 +735,7 @@ pub struct Painted {
     pub pos: egui::Pos2,
 }
 
-fn painted(shape: &egui::Shape, out: &mut Vec<Painted>) {
+pub(crate) fn painted(shape: &egui::Shape, out: &mut Vec<Painted>) {
     match shape {
         egui::Shape::Text(t) => out.push(Painted {
             text: t.galley.text().to_string(),

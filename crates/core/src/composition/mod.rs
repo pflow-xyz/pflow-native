@@ -582,6 +582,16 @@ impl Composition {
         Ok(v)
     }
 
+    /// The scenarios this composition's content declares (none when bare):
+    /// what the token game, `bundle.scenarios`, `bundle.run` and the views read.
+    pub fn declared_scenarios(&self) -> Vec<content::DeclaredScenario> {
+        self.doc
+            .content
+            .as_ref()
+            .map(content::ModelContent::scenarios)
+            .unwrap_or_default()
+    }
+
     pub fn pattern_of(&self, subnet: &str) -> Option<&str> {
         self.spec(subnet).map(|s| s.pattern.as_str())
     }

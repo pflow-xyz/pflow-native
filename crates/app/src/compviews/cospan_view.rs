@@ -653,7 +653,7 @@ fn token_dots(c: &Ctx, xf: Xf, at: Pos2, n: i64, r: f32, scale: f32, alpha: f32)
 
 pub(super) fn cospan_orders(c: &mut Ctx, area: Rect) {
     let subs = subnets(c);
-    let ls = links(c);
+    let ls = port_links(c);
     let by_id: BTreeMap<String, Value> = subs
         .iter()
         .map(|x| (s(&x["id"]).to_string(), x.clone()))

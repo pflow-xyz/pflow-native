@@ -142,13 +142,32 @@ pub(super) fn lens_orders(c: &mut Ctx, area: Rect, mode: &str) {
     }
     let body = Rect::from_min_max(area.left_top() + Vec2::new(0.0, 32.0), area.right_bottom());
     if a["ok"] != true {
-        c.note(
-            "warn",
-            format!(
-                "The composition does not flatten: {}",
-                strs(&a["errors"]).join("; ")
-            ),
-        );
+        // The analysis fails for two reasons that read differently: the composition does not
+        // flatten, or it flattens and declares no `commit` scenario for the forward pass.
+        let flattens =
+            c.d.flat
+                .as_ref()
+                .is_some_and(|f| f["ok"] != Value::Bool(false));
+        let errors = strs(&a["errors"]).join("; ");
+        if flattens {
+            let text = format!(
+                "The lens test reads a declared \"commit\" scenario as its forward pass, and this model declares none ({errors}): there is no verdict to draw. The flat net and the other views still work; content.load can add the scenario."
+            );
+            c.wrapped(
+                area.left_top() + Vec2::new(0.0, 36.0),
+                &text,
+                12.0,
+                MUTED,
+                area.width().min(760.0),
+                false,
+            );
+            c.note("warn", text);
+        } else {
+            c.note(
+                "warn",
+                format!("The composition does not flatten: {errors}"),
+            );
+        }
         return;
     }
     if assume {
