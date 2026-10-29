@@ -599,8 +599,11 @@ pub fn link_to_json(l: &Link) -> Value {
 // ------------------------------------------------------------ form (b)
 
 /// How [`Composition::from_bundle_document`] finds a subnet that is only a
-/// reference (`cid`, no `model`): the stored net's JSON.
-pub type PartResolver<'a> = &'a dyn Fn(&str) -> Option<Value>;
+/// reference (`cid`, no `model`): the stored net's JSON. `Ok(None)`: there is
+/// no such net in the store. `Err`: there is a file, and the store did not
+/// serve it (`[STORE_ALTERED]`, `[DOCUMENT_TOO_COMPLEX]`, or that it is not a
+/// net); the load reports that cause.
+pub type PartResolver<'a> = &'a dyn Fn(&str) -> Result<Option<Value>>;
 
 fn keys_not_kept(orig: &Value, kept: &Value, path: &str, out: &mut Vec<String>) {
     match (orig, kept) {
@@ -683,15 +686,24 @@ impl Composition {
                     s.get("cid").and_then(Value::as_str).map(str::to_string),
                 );
                 if let (false, Some(cid)) = (has_model, cid) {
-                    let net = resolve(&cid).ok_or_else(|| {
-                        refuse(
-                            "BUNDLE_PART_UNRESOLVED",
-                            format!(
-                                "subnets[{i}] refers to {cid}, which is not in the local store \
-                                 (store.put the net, or inline it)"
-                            ),
-                        )
-                    })?;
+                    let net = resolve(&cid)
+                        .map_err(|e| {
+                            refuse(
+                                "BUNDLE_PART_UNRESOLVED",
+                                format!(
+                                    "subnets[{i}] refers to {cid}, which the store did not serve: {e}"
+                                ),
+                            )
+                        })?
+                        .ok_or_else(|| {
+                            refuse(
+                                "BUNDLE_PART_UNRESOLVED",
+                                format!(
+                                    "subnets[{i}] refers to {cid}, which is not in the local store \
+                                     (store.put the net, or inline it)"
+                                ),
+                            )
+                        })?;
                     let sub = subnet_from_net(s, &net).map_err(|e| {
                         refuse("BUNDLE_PART_UNRESOLVED", format!("subnets[{i}] {cid}: {e}"))
                     })?;

@@ -363,15 +363,15 @@ fn parse(sess: &Session, state: &Value) -> Result<Parsed> {
                     .get("store")
                     .and_then(|s| s.get("blobs"))
                     .and_then(Value::as_object);
-                let resolve = |cid: &str| -> Option<Value> {
-                    match saved {
-                        Some(blobs) => {
-                            let text = blobs.get(&format!("models/{cid}.jsonld"))?.as_str()?;
-                            let doc: Value = serde_json::from_str(text).ok()?;
-                            (store::kind_of(&doc) == store::DocKind::Net).then_some(doc)
-                        }
-                        None => super::bundle_doc::from_store(cid),
-                    }
+                let resolve = |cid: &str| -> Result<Option<Value>> {
+                    let Some(blobs) = saved else {
+                        return super::bundle_doc::from_store(cid);
+                    };
+                    let doc = blobs
+                        .get(&format!("models/{cid}.jsonld"))
+                        .and_then(Value::as_str)
+                        .and_then(|text| serde_json::from_str::<Value>(text).ok());
+                    Ok(doc.filter(|d| store::kind_of(d) == store::DocKind::Net))
                 };
                 Some(
                     crate::composition::document::restore_part(v, &resolve)

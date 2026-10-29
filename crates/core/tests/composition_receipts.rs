@@ -1699,6 +1699,45 @@ fn store_supersede_names_the_kinds_without_reading_the_documents() {
     );
 }
 
+/// A part named by `cid` that the store has a file for and does not serve is reported with the
+/// cause (altered, or not a net), not as missing from the store; a CID it does not have still is.
+#[test]
+fn a_part_the_store_refuses_is_reported_with_its_cause_not_as_missing() {
+    let mem = world();
+    let mut s = Session::default();
+    let handoff = model_fixture("compose-handoff.jsonld");
+    let maker = handoff["subnets"][0]["cid"].as_str().unwrap().to_string();
+
+    // Not in the store at all.
+    let e = err(&mut s, "bundle.load", json!({"document": handoff.clone()}));
+    assert!(e.contains("BUNDLE_PART_UNRESOLVED"), "{e}");
+    assert!(e.contains("is not in the local store"), "{e}");
+
+    // A file there that is another document than its name says.
+    plant(&mem, &maker, &orders_document());
+    let e = err(&mut s, "bundle.load", json!({"document": handoff.clone()}));
+    assert!(
+        e.contains("BUNDLE_PART_UNRESOLVED") && e.contains("subnets[0]"),
+        "{e}"
+    );
+    assert!(e.contains(&maker), "{e}");
+    assert!(e.contains("[STORE_ALTERED] "), "the cause is reported: {e}");
+    assert!(
+        !e.contains("is not in the local store"),
+        "it is in the store: {e}"
+    );
+
+    // A document of another kind, stored under its own name: not a net.
+    run(&mut s, "bundle.open", json!({}));
+    let comp = cid_of(&run(&mut s, "store.put", json!({"composition": true})));
+    let mut named = handoff;
+    named["subnets"][0]["cid"] = json!(comp);
+    let e = err(&mut s, "bundle.load", json!({"document": named}));
+    assert!(e.contains("BUNDLE_PART_UNRESOLVED"), "{e}");
+    assert!(e.contains("it is a composition document, not a net"), "{e}");
+    assert!(!e.contains("is not in the local store"), "{e}");
+}
+
 // ------------------------------------------------------------ signature-only verification
 
 fn verify_signature_only(s: &mut Session, receipt: &Value) -> Value {

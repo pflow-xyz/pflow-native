@@ -88,7 +88,7 @@ fn cafe() -> Session {
 }
 
 fn cafe_comp() -> Composition {
-    Composition::from_bundle_document(&cafe_bundle(), &|_: &str| None).unwrap()
+    Composition::from_bundle_document(&cafe_bundle(), &|_: &str| Ok(None)).unwrap()
 }
 
 /// `content.check {entry}`: the one result.
@@ -2432,7 +2432,7 @@ fn constraints_resolve_at_the_subnet_and_at_the_bundle_level() {
     let mut d = cafe_bundle();
     d["subnets"][2]["model"]["constraints"] = json!([{"id": "staff_conservation", "expr": "tokens(\"available\") + tokens(\"busy\") == 2"}]);
     d["constraints"] = json!([{"id": "total_staff", "expr": "tokens(\"staff/available\") + tokens(\"staff/busy\") == 2"}]);
-    let c = Composition::from_bundle_document(&d, &|_: &str| None).unwrap();
+    let c = Composition::from_bundle_document(&d, &|_: &str| Ok(None)).unwrap();
     let ids = Ids::of(&c, &[]);
     assert_resolution(
         &ids,

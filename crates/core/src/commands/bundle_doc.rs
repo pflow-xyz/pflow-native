@@ -77,9 +77,18 @@ fn source(id: &str, a: &Value) -> Step {
 
 /// The resolver for `cid` subnets: a net in the local store. A net whose `@type` names its net
 /// type (`ResourceNet`, as examples/producer-consumer.json) is a net too: `kind_of` says so.
-pub fn from_store(cid: &str) -> Option<Value> {
-    let v = store::open().get_model(cid).ok()?;
-    (store::kind_of(&v) == store::DocKind::Net).then_some(v)
+/// `Ok(None)` is a CID the store does not have; a file that is there and is not served (altered,
+/// too large to seal, or not a net) is an `Err` that says why.
+pub fn from_store(cid: &str) -> Result<Option<Value>> {
+    match store::open().get_model(cid) {
+        Ok(v) if store::kind_of(&v) == store::DocKind::Net => Ok(Some(v)),
+        Ok(v) => Err(Error::Invalid(format!(
+            "it is a {} document, not a net",
+            store::kind_of(&v).name()
+        ))),
+        Err(Error::NotFound(_)) => Ok(None),
+        Err(e) => Err(e),
+    }
 }
 
 /// The report shape of `bundle.validate`.
