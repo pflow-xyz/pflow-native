@@ -761,9 +761,10 @@ impl Ids {
     }
 }
 
-/// How many entries of `content` name an element `c` does not have: dormant, kept and shown by no
-/// view (`content.get` leaves them out unless asked for `all`).
-pub fn dormant_count(content: &ModelContent, c: &Composition) -> usize {
+/// The entries of `content` whose element ids all resolve against `c`, in display order: what a
+/// view may read and draw. The others are dormant (`content.get` leaves them out unless asked for
+/// `all`).
+pub fn live_entries<'a>(content: &'a ModelContent, c: &Composition) -> Vec<&'a Entry> {
     let declared: Vec<String> = content
         .entries
         .iter()
@@ -772,10 +773,16 @@ pub fn dormant_count(content: &ModelContent, c: &Composition) -> usize {
         .collect();
     let ids = Ids::of(c, &declared);
     content
-        .entries
-        .iter()
-        .filter(|e| !e.about.iter().all(|r| ids.resolves(r).unwrap_or(false)))
-        .count()
+        .sorted()
+        .into_iter()
+        .filter(|e| e.about.iter().all(|r| ids.resolves(r).unwrap_or(false)))
+        .collect()
+}
+
+/// How many entries of `content` name an element `c` does not have: dormant, kept and shown by no
+/// view.
+pub fn dormant_count(content: &ModelContent, c: &Composition) -> usize {
+    content.entries.len() - live_entries(content, c).len()
 }
 
 fn bib_keys() -> BTreeSet<String> {

@@ -145,6 +145,9 @@ pub struct Data {
     /// The Connect-4 net played by hand (`plan.game`).
     pub c4game: Option<Value>,
     pub lens: Option<Value>,
+    /// The entries of the open composition's content that resolve against it (what `content.get`
+    /// returns), for a view to read its notes from instead of carrying them.
+    pub content: Vec<Value>,
     /// The scenarios the open composition's content declares (none for a bare
     /// model), and each one run on the flat net (`bundle.run`). The Flat view's
     /// chips and the Process view draw these and nothing else.
@@ -171,6 +174,7 @@ impl Default for Data {
             boundaries: None,
             c4game: None,
             lens: None,
+            content: vec![],
             scenarios: vec![],
             runs: vec![],
             plan: None,
@@ -250,6 +254,12 @@ impl Data {
                 self.flat = Some(comp::flatten_json(&c.bundle));
                 self.incidence = Some(comp::incidence_json(&c.bundle));
                 self.scenarios = c.declared_scenarios();
+                self.content = c.doc.content.as_ref().map_or(vec![], |k| {
+                    comp::content::live_entries(k, c)
+                        .into_iter()
+                        .map(comp::content::Entry::to_view_json)
+                        .collect()
+                });
                 self.game = Some(comp::game::game_json(&c.bundle, &c.game, &self.scenarios));
                 self.boundaries = Some(comp::boundaries::boundaries_json(c));
                 self.lens = Some(lens::report(c, true));
@@ -270,6 +280,7 @@ impl Data {
                 self.boundaries = None;
                 self.lens = None;
                 self.scenarios = vec![];
+                self.content = vec![];
                 self.runs = vec![];
             }
         }
@@ -537,6 +548,18 @@ impl<'a> Ctx<'a> {
         let v = f(e)?;
         self.p.ctx().request_repaint();
         Some((v, ease(*t)))
+    }
+
+    /// The text of the open model's content entry `id`, when the model has it and it resolves
+    /// against the model: a view draws what the content says instead of carrying the sentence, and
+    /// draws nothing for a model whose content does not say it.
+    fn content_text(&self, id: &str) -> Option<String> {
+        self.d
+            .content
+            .iter()
+            .find(|e| s(&e["id"]) == id)
+            .map(|e| s(&e["text"]).to_string())
+            .filter(|t| !t.is_empty())
     }
 
     fn hover(&mut self, r: Rect, i: Info) {

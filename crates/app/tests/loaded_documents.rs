@@ -187,3 +187,44 @@ fn the_lens_view_of_a_model_with_no_commit_scenario_says_why_there_is_no_verdict
         h.notes
     );
 }
+
+/// The Flat view's "Conservation is not liveness" box was a sentence in the view's code, repeated
+/// in the orders content. It is read from the content now: edit the entry and the box says the new
+/// text; a model whose content lacks it draws none.
+#[test]
+fn the_flat_views_conservation_box_is_read_from_the_models_content() {
+    const OPENING: &str = "The saga has rolled back with a worker still in workers/in_use";
+    let leaking = || {
+        let mut s = Session::default();
+        run(&mut s, "bundle.open", json!({}));
+        run(&mut s, "bundle.scenario", json!({"id": "refund"}));
+        run(&mut s, "bundle.step", json!({"all": true}));
+        s
+    };
+    let s = leaking();
+    let h = compviews::headless_frame(&s, "flat", "orders");
+    assert!(said(&h, OPENING), "{:?}", h.texts);
+
+    // Edit the entry's text in the content: that is what the box says.
+    let mut t = leaking();
+    let mut doc = run(&mut t, "content.export", Value::Null)["document"].clone();
+    for e in doc["entries"].as_array_mut().unwrap() {
+        if e["id"] == "flat-conservation-not-liveness" {
+            e["text"] = json!("A sentence of the author's, in place of the library's.");
+        }
+    }
+    run(&mut t, "content.load", json!({"document": doc}));
+    let h = compviews::headless_frame(&t, "flat", "orders");
+    assert!(
+        said(&h, "A sentence of the author's, in place of the library's."),
+        "{:?}",
+        h.texts
+    );
+    assert!(!said(&h, OPENING));
+
+    // No content, no box: the view has no sentence of its own to put there.
+    let mut u = leaking();
+    run(&mut u, "content.clear", Value::Null);
+    let h = compviews::headless_frame(&u, "flat", "orders");
+    assert!(!said(&h, "Conservation is not liveness"), "{:?}", h.texts);
+}

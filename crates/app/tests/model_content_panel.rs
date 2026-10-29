@@ -600,3 +600,37 @@ fn untitled_entries_unknown_kinds_and_dormant_entries() {
         )]
     );
 }
+
+/// A check that has not run is marked as not run, not with the tick of one that passed.
+#[test]
+fn a_check_that_has_not_run_is_not_marked_as_passed() {
+    let mut s = default_session();
+    let (ctx, mut st) = (egui::Context::default(), State::default());
+    let before = draw(&ctx, &mut st, &mut s, "flat", "orders");
+    assert!(
+        !st.model().checked().is_empty(),
+        "the flat view has checked entries"
+    );
+    assert!(
+        any(&before, "○"),
+        "{:?}",
+        before.iter().map(|p| &p.text).collect::<Vec<_>>()
+    );
+    assert!(!any(&before, "✔"), "nothing has passed yet");
+    st.run_checks();
+    let mut guard = 0;
+    loop {
+        let (steps, _) = modelcontent::headless(&ctx, &mut st, &mut s, "flat", "orders", vec![]);
+        for step in steps {
+            s.execute(&step.command, step.args).unwrap();
+        }
+        guard += 1;
+        assert!(guard < 100);
+        if !st.checking() {
+            break;
+        }
+    }
+    let after = draw(&ctx, &mut st, &mut s, "flat", "orders");
+    assert!(any(&after, "✔"));
+    assert!(!any(&after, "○"));
+}

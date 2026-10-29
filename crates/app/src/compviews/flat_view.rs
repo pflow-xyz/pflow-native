@@ -1629,13 +1629,16 @@ fn constraints_card(c: &mut Ctx, r: Rect, flat: &Value, game: &Value) {
     let pool = arr(&game["constraints"])
         .iter()
         .find(|k| s(&k["id"]) == "workers/pool_conservation");
-    if let (true, Some(pool)) = (leaking, pool) {
+    // The sentence is the model's content (`flat-conservation-not-liveness`), read, not carried: a
+    // model whose content does not say it draws nothing here. The live part, what the constraint
+    // evaluates to at this marking, is in the hover.
+    let said = c.content_text("flat-conservation-not-liveness");
+    if let (true, Some(pool), Some(t)) = (leaking, pool, said) {
         let v = if pool["evaluated"] == true {
             format!("{} == {}", s(&pool["lhs"]), pool["rhs"])
         } else {
             s(&pool["expr"]).to_string()
         };
-        let t = format!("Conservation is not liveness. The saga has rolled back with a worker still in workers/in_use, and pool_conservation still holds ({v}): a stuck token keeps the sum. That is the gap ROADMAP Phase 4's faithfulness checks are for: Validate and verify say what a net satisfies, not whether it is the system described, so frozen scenarios are run as well (ROADMAP.md:247-295). Its 4.1 exit expects the leak to show as \"a failed conservation check on the rollback path\" (lines 240-242); on this net the declared conservation constraint holds, and what fails is the scenario predicate.");
         let h = c.wrapped_h(&t, 10.0, w - 12.0, false);
         let rr = Rect::from_min_size(Pos2::new(x, y + 2.0), Vec2::new(w, h + 10.0));
         c.p.rect_filled(rr, 4.0, hex("#fbf4e6"));

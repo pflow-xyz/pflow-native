@@ -500,7 +500,8 @@ enum Mark {
 impl Mark {
     fn glyph(self) -> (&'static str, Color32) {
         match self {
-            Mark::Unrun => ("✔", Color32::GRAY),
+            // Not a tick: a check that has not run is not a check that passed.
+            Mark::Unrun => ("○", Color32::GRAY),
             Mark::Ran(v) | Mark::Old(v) => match v {
                 Verdict::Pass => ("✔", PASS),
                 Verdict::Fail => ("✘", FAIL),
