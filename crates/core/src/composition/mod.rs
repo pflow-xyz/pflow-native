@@ -53,6 +53,7 @@ pub fn ontology() -> &'static Value {
 pub mod checks;
 pub mod content;
 pub mod document;
+pub mod receipt;
 
 pub const PARAMS_NOTE: &str = "Parameters are this page's choice (judgment): the description fixes the patterns, not their sizes.";
 

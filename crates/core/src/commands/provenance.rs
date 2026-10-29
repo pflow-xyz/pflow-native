@@ -240,6 +240,9 @@ fn receipt(sess: &mut Session, a: &Value) -> Result<Value> {
 
 fn verify_receipt(sess: &mut Session, a: &Value) -> Result<Value> {
     let r = pv::parse_receipt(&a["receipt"])?;
+    if crate::composition::receipt::is_composition_receipt(&r) {
+        return crate::composition::receipt::verify_command(sess, a, &r);
+    }
     let replay = b(a, "replay").unwrap_or(true);
     let mut out = json!({
         "revisionAtIssue": r.revision,

@@ -13,7 +13,7 @@ receipts). This file is the contract for `bundle.load`, `bundle.export`, the `co
 | Write the open composition out again | `bundle.export` | same |
 | Curated content per model (D11) | `content.library`, `content.get`, `content.load`, `content.export`, `content.clear`, `content.validate`, `content.check` | `composition/content.rs`, `composition/checks.rs`, `commands/content.rs` |
 | Store a composition or content document (D12) | `store.put` (extended), `store.open`, `store.list` | `store/kind.rs`, `store/mod.rs`, `commands/store.rs` |
-| Receipts for runs, checks and content | `bundle.receipt`, `content.receipt`, `provenance.verify_receipt` (extended) | `composition/receipt.rs`, `commands/content.rs` |
+| Receipts for runs, checks and content | `bundle.receipt`, `content.receipt`, `provenance.verify_receipt` (extended) | `composition/receipt.rs`, `commands/composition_receipt.rs`, `commands/provenance.rs` (the dispatch) |
 
 Nothing here changes `crates/core/src/cid.rs`: every CID in this feature is `cid::seal(&Value)` on the
 JSON the command exported (the identity runs' contract: sealed bytes are the document as written).
@@ -273,13 +273,14 @@ raw-loaded, unedited composition returns the loaded JSON; otherwise the Bundle p
 | `content.clear` | yes | back to bare |
 | `content.validate` | no | the §3.3 report (stores a Report) |
 | `content.check` | no | runs one entry's `check` (`id`) or all (`all: true`) on a scratch session; `{checks, passed, failed}` (stores a Report) |
-| `content.receipt` | no | signs a check receipt for `entry`, or a content receipt (all ids resolve and all checks pass) |
+| `content.receipt` | no | signs a `composition-check` receipt for `entry`, or a `composition-content` receipt over the strict validation and every check (§6); a failing check is receipted as it is |
 
 ### `bundle.receipt`
 
 `scenario` (a declared scenario id) or `script` (`["orders/dequeue", …]`): runs it on the flat net and
 signs `{model: <composition document cid>, scenario: {kind: "composition-run", …}, resultHash}` with the
-receipt key (`provenance::issue`, sim's Ed25519 canonical-JSON scheme).
+receipt key (`provenance::issue`, sim's Ed25519 canonical-JSON scheme). Both commands are queries (not
+journaled), return `{result, receipt, report}` as `sim.receipt` does and store the report.
 
 ### Changes to existing commands
 
@@ -291,7 +292,7 @@ receipt key (`provenance::issue`, sim's Ed25519 canonical-JSON scheme).
 * `store.put` takes `composition: true` (the open composition's document; `form` as in `bundle.export`),
   `content: true` (its content, stored with `about` = the composition's CID), or `document` (any
   document `store::kind_of` knows). `store.open` opens by kind; `store.list` shows `kind` and `about`.
-* `provenance.verify_receipt` replays `composition-run` and `composition-check` receipts.
+* `provenance.verify_receipt` replays `composition-run`, `composition-check` and `composition-content` receipts (§6).
 
 ## 5. The store (D12)
 
@@ -323,17 +324,50 @@ by `about` in its index entry, because sim's `about` edge needs an Artifact or M
 
 ## 6. Receipts
 
-`provenance::issue` signs; its `Receipt` is unchanged (`deny_unknown_fields` and all). Two new
-`scenario.kind` values:
+`provenance::issue` signs; its `Receipt` is unchanged (`deny_unknown_fields` and all). Three new
+`scenario.kind` values. For all of them `model` is the composition document's CID
+(`Composition::document_cid`, the seal of what `bundle.export` writes), `modelRates` is absent and
+`engine` is `pflow-compose`:
 
-| `scenario.kind` | `model` | `scenario` holds | `resultHash` is over |
-|---|---|---|---|
-| `composition-run` | the composition document's CID | `{kind, form, scenario: {id, title, script, expect}}` | the run result (`comp::Run` as JSON, canonical) |
-| `composition-check` | the composition document's CID | `{kind, form, content: <cid|null>, entry, check}` | the check result (§3.4), canonical |
+| `scenario.kind` | `scenario` holds | `resultHash` is over |
+|---|---|---|
+| `composition-run` | `{kind, form, content: <cid|null>, scenario: {id, title, script, expect}}`; `content` is the content document the scenario was declared in, null for a bare `script` | the run result (`comp::Run` as JSON: steps, `completed`, final marking, expect rows), canonical |
+| `composition-check` | `{kind, form, content: <cid>, entry, check}`; `check` is the entry's check, in full | the check result (§3.4: `{id, ok, claim, steps}`), canonical |
+| `composition-content` | `{kind, form, content: <cid>}` | `{valid, unresolved: [{entry, ref}], checks: [{id, ok}]}`: strict `content.validate` (`valid` is its verdict, `unresolved` the element ids that did not resolve) and the outcome of every check, each list in id order (the document's array order is not part of its CID, so it is not part of the result) |
 
-`provenance.verify_receipt` checks the signature, finds the composition (the open one, a stored one by
-CID), replays the script or the check on a scratch session and compares the hash, with the same
-`valid` / `invalid` / `uncheckable` verdicts it gives a net receipt.
+"Canonical, hashed" is `checks::result_hash`: sha256 over the sorted-key JSON `provenance::canonical`
+writes. A receipt states what happened and not what should: a run that stops or fails its predicates, a
+check whose `ok` is false and a content with a failing check are receipted as they are, and replay
+(not the outcome) is what `valid` means. The `form` is the composition document's form (`composition` or
+`bundle`).
+
+`bundle.receipt` and `content.receipt` issue them by running the replay below on the scenario as the
+receipt will store it, so an issued receipt replays in the session that issued it.
+
+`provenance.verify_receipt` dispatches on `scenario.kind` (any `composition-` kind; one this build does
+not know is `uncheckable`). It checks the signature, finds the composition by `model`, replays and
+compares the hash, with the same keys and the same `valid` / `invalid` / `uncheckable` verdicts it gives
+a net receipt (`kind`, `modelFrom` and, for a check or content receipt, `contentFrom` are added):
+
+* **The composition** is the open one when its document CID is `model`, else the stored document of
+  that CID (read back with the form its `@type` says, and only trusted when it exports as exactly that
+  CID). Neither: `uncheckable`, "not found". A composition edited after the receipt therefore verifies
+  it if the original document is in the store (`store.put`), and is `uncheckable` if it is not.
+* **The content** (check and content receipts) is the document of the CID in `scenario.content`: the
+  one attached to the composition found or to the open one (`contentFrom` `library:<id>` when that is
+  the library's, which a composition that is a library example gets back whenever it is loaded, else
+  `current`), a library entry, or a stored document (`store`). The
+  check or the content runs against it (its declared scenarios are what `bundle.run {scenario}` reads),
+  not against whatever content is attached now. None found: `uncheckable`.
+* **The replay** is the run on the flat net, the check on a scratch session (§3.4, so only `bundle.*`
+  and `plan.*` queries run, whatever the receipt says), or the strict validation plus every check.
+  A bad signature, or a replay that does not reproduce `resultHash`, is `invalid`.
+
+A replay reproduces the labels a check can read only as the document rebuilds them: a check that
+asserts on `bundle.state`'s `document.origin` or `content.source` can differ between the session that
+issued the receipt (a catalog-opened composition) and a session that rebuilds it from the store.
+The `why` strings of a run are pflow-metamodel's, so a receipt is bound to the pflow-rs revision
+(`revisionAtIssue`), as a net receipt is to its engine.
 
 ## 7. Tests
 
@@ -345,5 +379,11 @@ CID), replays the script or the check on a scratch session and compares the hash
   composition; **every check in every library entry is run and passes**; the pool-leak finding's check
   goes red if the pool's release link is fused with `undo_reserve` instead.
 * `tests/composition_store.rs`: put, get, list, open and delete of each kind; `dump_blobs` →
-  `replace_all` round trip; receipts sign, verify, and fail on a tampered script, hash or composition.
+  `replace_all` round trip.
+* `tests/composition_receipts.rs`: a run, a check and a content receipt sign and verify (on the open
+  composition, on one read back from the store after `store.put`, and on the library's content); a
+  tampered signature, script, check, hash or model CID is `invalid` or `uncheckable`; a failing check
+  and a run that stops are receipted as they are; an edited composition verifies the old receipt when the
+  original is stored and is `uncheckable` when it is not; the content is pinned by its CID; net receipts
+  verify as before.
 * The existing `views_*` and `compose` tests pass unchanged.

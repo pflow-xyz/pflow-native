@@ -14,6 +14,7 @@ pub mod cid;
 pub mod clipboard;
 pub mod command;
 pub mod compose;
+pub mod composition_receipt;
 pub mod conformance;
 pub mod content;
 pub mod data;
@@ -81,6 +82,7 @@ pub const ALL: &[&[CommandSpec]] = &[
     bundle::SET,
     bundle_doc::SET,
     content::SET,
+    composition_receipt::SET,
     plan::SET,
     systems::SET,
     #[cfg(feature = "services")]
