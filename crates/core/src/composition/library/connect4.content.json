@@ -298,7 +298,14 @@
      {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 197, "to": 199, "note": "the empty chain: every key ties, moves keep the net's own order"},
      {"repo": "pflow-rs", "rev": "c396d46", "path": "crates/pflow-metamodel/src/order.rs", "from": 205, "to": 217, "note": "Chain::default: tt_best, immediate_win, history"},
      {"repo": "pflow-views-prototype", "rev": "91695ad", "path": "chyp/orderer-monoid.chyp", "from": 74, "to": 74, "note": "an absent \"order\" is Chain::default(), not []"}
-   ]
+   ],
+   "check": {"claim": "an order given as [] is kept as the empty chain, and one left out stays absent: the canonical plan echoes the first with its order and the second without one",
+     "steps": [
+       {"command": "plan.check", "args": {"plan": {"order": []}},
+        "expect": [{"path": "/ok", "op": "==", "value": true}, {"path": "/plan/order", "op": "==", "value": []}]},
+       {"command": "plan.check", "args": {"plan": {}},
+        "expect": [{"path": "/ok", "op": "==", "value": true}, {"path": "/plan/order", "op": "absent"}]}
+     ]}
   },
   {
    "id": "c4-model-plan", "kind": "note", "title": "plan:connect4-exact",

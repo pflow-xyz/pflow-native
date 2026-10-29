@@ -54,6 +54,23 @@ pub fn canonical_json(v: &Value) -> String {
 /// Most bytes of a document `bundle.load` / `content.load` accept.
 pub const MAX_DOCUMENT_BYTES: usize = 4 * 1024 * 1024;
 
+/// Most instances (subnets) and links a loaded composition may have. The byte cap bounds the size of
+/// a document, not the work: flattening is superlinear in both (about 7 s at 1000 chained queues,
+/// 78 s at 3000, and `bundle.state` flattens several times), and the commands run on the caller's
+/// thread. A hand-made model is a handful of each.
+pub const MAX_INSTANCES: usize = 128;
+pub const MAX_LINKS: usize = 1000;
+
+fn within(what: &str, n: usize, max: usize) -> Result<()> {
+    if n > max {
+        return Err(refuse(
+            "COMPOSITION_LIMIT",
+            format!("{n} {what}; at most {max} are accepted"),
+        ));
+    }
+    Ok(())
+}
+
 /// A JSON value from a value or a string holding it, refused over
 /// [`MAX_DOCUMENT_BYTES`].
 pub fn value_arg(v: &Value, what: &str) -> Result<Value> {
@@ -405,6 +422,10 @@ impl Composition {
             .get("instances")
             .and_then(Value::as_array)
             .ok_or_else(|| refuse("COMPOSITION_FIELD", "instances must be an array"))?;
+        within("instances", insts.len(), MAX_INSTANCES)?;
+        if let Some(links) = m.get("links").and_then(Value::as_array) {
+            within("links", links.len(), MAX_LINKS)?;
+        }
         let mut c = Composition::open(&[], &[]).map_err(Error::Invalid)?;
         for inst in insts {
             let spec = spec_from_json(inst)?;
@@ -642,6 +663,14 @@ impl Composition {
             ));
         }
         check_context(m)?;
+        for (key, what, max) in [
+            ("subnets", "subnets", MAX_INSTANCES),
+            ("links", "links", MAX_LINKS),
+        ] {
+            if let Some(a) = m.get(key).and_then(Value::as_array) {
+                within(what, a.len(), max)?;
+            }
+        }
         // Resolve part references into inline subnets before parsing.
         let mut resolved = doc.clone();
         if let Some(subs) = resolved.get_mut("subnets").and_then(Value::as_array_mut) {
@@ -1024,6 +1053,20 @@ pub fn missing(c: &Composition) -> Vec<Value> {
                 .into(),
         );
     }
+    if let Some(k) = &c.doc.content {
+        let dormant = content::dormant_count(k, c);
+        if dormant > 0 {
+            add(
+                "DORMANT",
+                format!(
+                    "{dormant} of {} content entries name elements this model does not have (it was \
+                     edited after the content was written, or the content is for another model): they are \
+                     kept with the content and no view shows them",
+                    k.entries.len()
+                ),
+            );
+        }
+    }
     if c.doc.content.is_none() {
         add(
             "NO_CONTENT",
@@ -1061,13 +1104,20 @@ pub fn missing(c: &Composition) -> Vec<Value> {
 pub fn capabilities(c: &Composition) -> Value {
     let patterned = !c.specs.is_empty() && c.specs.iter().all(|s| !s.pattern.is_empty());
     let ports: usize = c.bundle.subnets.iter().map(|s| s.ports.len()).sum();
+    // A link joins two subnets: one subnet with ports has nothing to snap to.
+    let with_ports = c
+        .bundle
+        .subnets
+        .iter()
+        .filter(|s| !s.ports.is_empty())
+        .count();
     json!({
         "flatten": super::flatten(&c.bundle).is_ok(),
         "patterns": patterned,
         "ontology_keys": patterned,
         "idioms": patterned,
         "ports": ports,
-        "snap_together": ports > 0,
+        "snap_together": with_ports >= 2,
         "scenarios": c.doc.content.as_ref().map_or(0, |k| k.scenarios().len()),
         "content_entries": c.doc.content.as_ref().map_or(0, |k| k.entries.len()),
     })
@@ -1102,6 +1152,8 @@ pub fn content_json(c: &Composition) -> Value {
                 "entries": k.entries.len(),
                 "kinds": kinds,
                 "unresolved": report.unresolved(),
+                "warnings": report.warnings.iter().map(content::Issue::to_json).collect::<Vec<_>>(),
+                "dormant": content::dormant_count(k, c),
                 "scenarios": k.scenarios().iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
             })
         }

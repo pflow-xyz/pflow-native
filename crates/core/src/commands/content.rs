@@ -257,11 +257,13 @@ fn get(sess: &mut Session, a: &Value) -> Result<Value> {
 
 fn load(sess: &mut Session, a: &Value) -> Result<Value> {
     let strict = b(a, "strict").unwrap_or(true);
+    let mut received_cid = None;
     let (mc, src) = match (a.get("document").filter(|v| !v.is_null()), s(a, "library")) {
-        (Some(d), None) => (
-            ModelContent::parse(&value_arg(d, "document")?)?,
-            ContentSource::Loaded,
-        ),
+        (Some(d), None) => {
+            let received = value_arg(d, "document")?;
+            received_cid = crate::cid::seal(&received).ok();
+            (ModelContent::parse(&received)?, ContentSource::Loaded)
+        }
         (None, Some(id)) => (
             content::library_entry(id)
                 .ok_or_else(|| {
@@ -280,7 +282,15 @@ fn load(sess: &mut Session, a: &Value) -> Result<Value> {
         })?;
         crate::commands::bundle_doc::attach(c, mc, strict)?;
         c.doc.content_source = src;
-        Ok(document::content_json(c).tap(|v| v["cid"] = json!(cid)))
+        Ok(document::content_json(c).tap(|v| {
+            v["cid"] = json!(cid);
+            // The CID is the seal of the normalised document (`check` and `scenario` as canonical
+            // text, nothing the build does not read): the one `content.export`, `store.put` and the
+            // receipts name. A document received in another spelling seals to another CID, said here.
+            if let Some(r) = received_cid.filter(|r| *r != cid) {
+                v["received_cid"] = json!(r);
+            }
+        }))
     })
 }
 

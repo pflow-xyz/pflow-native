@@ -159,6 +159,8 @@ pub fn model(
                 ))
             })
             .filter(|(code, _)| !(bare && code == "NO_CONTENT"))
+            // The panel counts dormant entries itself, from `content.get`.
+            .filter(|(code, _)| code != "DORMANT")
             .collect(),
         _ => vec![],
     };

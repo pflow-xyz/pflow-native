@@ -647,18 +647,22 @@ impl Composition {
             .iter()
             .filter_map(|s| self.subnet(&s.id).map(|sub| subnet_json(s, sub)))
             .collect();
-        json!({
+        let mut out = json!({
             "instances": self.specs.iter().map(|s| s.id.clone()).collect::<Vec<_>>(),
             "subnets": subnets,
             "links": self.links_json(),
             "unavailable": self.unavailable,
             "dropped_links": self.dropped_links.iter().map(|(l, why)| json!({"link": link_json(l), "reason": why})).collect::<Vec<_>>(),
-            "params_note": PARAMS_NOTE,
             "document": document::document_json(self),
             "capabilities": document::capabilities(self),
             "missing": document::missing(self),
             "content": document::content_json(self),
-        })
+        });
+        // "This page's choice": true of the catalog's parameters only, not of a loaded document's.
+        if self.doc.origin == document::Origin::Catalog {
+            out["params_note"] = json!(PARAMS_NOTE);
+        }
+        out
     }
 }
 

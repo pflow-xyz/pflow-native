@@ -17,9 +17,11 @@
 //!   progress, notes, results and the store) as one JSON string
 //!   (`session.dump_state`), for the page to keep in browser storage.
 //!
-//! The composition views' commands (`bundle.*`, `plan.*`) are exposed the
-//! same way as every other: there is no allowlist, so the page lists and
-//! runs them like the rest.
+//! The composition views' commands (`bundle.*`, `plan.*`) and the model
+//! content, document and receipt commands that go with them (`bundle.load`,
+//! `bundle.export`, `bundle.receipt`, `content.*`, `store.put` of a
+//! composition or content document) are exposed the same way as every other:
+//! there is no allowlist, so the page lists and runs them like the rest.
 //!
 //! Every call goes through the registry (`Session::execute`; `load` through
 //! `Session::execute_unjournaled`), as the ground rules require; this crate

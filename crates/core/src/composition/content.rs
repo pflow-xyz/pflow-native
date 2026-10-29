@@ -48,6 +48,13 @@ pub const SCENARIO_OPS: [&str; 6] = ["==", "!=", "<", "<=", ">", ">="];
 pub const MAX_ENTRIES: usize = 1000;
 pub const MAX_TEXT_BYTES: usize = 32 * 1024;
 pub const MAX_ABOUT: usize = 512;
+/// A title is one line, a cite a pointer: neither is prose.
+pub const MAX_TITLE_BYTES: usize = 512;
+pub const MAX_CITES: usize = 64;
+pub const MAX_CITE_FIELD_BYTES: usize = 2 * 1024;
+/// Most registry queries all the checks of one document may run (the library's 278 fit with room):
+/// `content.check`, `content.receipt` and a verifier's replay each run every one.
+pub const MAX_CHECK_STEPS: usize = 1024;
 
 // ------------------------------------------------------------ types
 
@@ -86,16 +93,17 @@ pub struct ModelContent {
     pub entries: Vec<Entry>,
 }
 
-const DOC_KEYS: [&str; 6] = [
+const DOC_KEYS: [&str; 7] = [
     "@context",
+    "@id",
     "@type",
     "name",
     "subject",
     "composition",
     "entries",
 ];
-const ENTRY_KEYS: [&str; 11] = [
-    "id", "kind", "order", "title", "text", "about", "views", "cites", "check", "scenario", "by",
+const ENTRY_KEYS: [&str; 10] = [
+    "id", "kind", "order", "title", "text", "about", "views", "cites", "check", "scenario",
 ];
 
 fn field_err(msg: impl std::fmt::Display) -> Error {
@@ -161,9 +169,16 @@ impl Entry {
             Some(Value::Array(a)) => a.clone(),
             Some(_) => return Err(field_err(format!("{what}: cites must be a list"))),
         };
+        let order = match m.get("order") {
+            None | Some(Value::Null) => None,
+            Some(v) => Some(
+                v.as_i64()
+                    .ok_or_else(|| field_err(format!("{what}: order must be an integer")))?,
+            ),
+        };
         Ok(Entry {
             kind: s("kind")?,
-            order: m.get("order").and_then(Value::as_i64),
+            order,
             title: s("title")?,
             text: s("text")?,
             about: str_list(m, "about", &what)?,
@@ -249,6 +264,16 @@ impl ModelContent {
         for k in m.keys() {
             if !DOC_KEYS.contains(&k.as_str()) {
                 return Err(field_err(format!("unknown key {k:?}")));
+            }
+        }
+        // `store.get` returns the document with the `@id` the store added; the seal ignores a
+        // top-level `@id`, so the one that is the document's own CID is accepted (an export drops it).
+        if let Some(id) = m.get("@id") {
+            let want = crate::cid::seal(doc)?;
+            if id.as_str() != Some(want.as_str()) {
+                return Err(field_err(format!(
+                    "\"@id\" must be the CID of the document ({want}) or absent"
+                )));
             }
         }
         let subject = match m.get("subject") {
@@ -554,6 +579,14 @@ impl Issue {
     }
 }
 
+/// The codes of an issue that is "this names something the model does not have": an error under
+/// `strict`, a warning (the entry is dormant) otherwise.
+const UNRESOLVED_CODES: [&str; 3] = [
+    "ID_UNRESOLVED",
+    "SCENARIO_UNRESOLVED",
+    "CHECK_REF_UNRESOLVED",
+];
+
 #[derive(Debug, Clone, Default, PartialEq)]
 pub struct Report {
     pub errors: Vec<Issue>,
@@ -571,7 +604,7 @@ impl Report {
         self.errors
             .iter()
             .chain(&self.warnings)
-            .filter(|i| i.code == "ID_UNRESOLVED")
+            .filter(|i| UNRESOLVED_CODES.contains(&i.code.as_str()))
             .map(|i| json!({"entry": i.entry, "ref": i.reference}))
             .collect()
     }
@@ -728,6 +761,23 @@ impl Ids {
     }
 }
 
+/// How many entries of `content` name an element `c` does not have: dormant, kept and shown by no
+/// view (`content.get` leaves them out unless asked for `all`).
+pub fn dormant_count(content: &ModelContent, c: &Composition) -> usize {
+    let declared: Vec<String> = content
+        .entries
+        .iter()
+        .filter(|e| e.kind == "scenario")
+        .map(|e| e.id.clone())
+        .collect();
+    let ids = Ids::of(c, &declared);
+    content
+        .entries
+        .iter()
+        .filter(|e| !e.about.iter().all(|r| ids.resolves(r).unwrap_or(false)))
+        .count()
+}
+
 fn bib_keys() -> BTreeSet<String> {
     ontology()["bib"]
         .as_object()
@@ -772,28 +822,62 @@ pub fn validate(content: &ModelContent, c: &Composition, strict: bool) -> Report
             }
         }
         if let Some(flat) = &flat {
-            for m in &sc.script {
-                if flat.transition_of(m).is_none() {
+            // A member or place the model does not have: an error for an explicit load, and for
+            // library content on an edited model a warning (the scenario is dormant: it still
+            // runs, and stops where the member is missing, as the prototype's does).
+            let mut unresolved = |reference: &str, message: String| {
+                if strict {
                     r.errors.push(Issue::new(
                         "SCENARIO_INVALID",
                         Some(&sc.id),
-                        Some(m),
-                        format!("script member {m:?} is not a transition of the composition"),
+                        Some(reference),
+                        message,
                     ));
+                } else {
+                    r.warnings.push(Issue::new(
+                        "SCENARIO_UNRESOLVED",
+                        Some(&sc.id),
+                        Some(reference),
+                        message,
+                    ));
+                }
+            };
+            for m in &sc.script {
+                if flat.transition_of(m).is_none() {
+                    unresolved(
+                        m,
+                        format!("script member {m:?} is not a transition of the composition"),
+                    );
                 }
             }
             for e in &sc.expect {
                 if flat.place_of(&e.place).is_none() {
-                    r.errors.push(Issue::new(
-                        "SCENARIO_INVALID",
-                        Some(&sc.id),
-                        Some(&e.place),
+                    unresolved(
+                        &e.place,
                         format!(
                             "expected place {:?} is not a place of the composition",
                             e.place
                         ),
-                    ));
+                    );
                 }
+            }
+        }
+    }
+    // The scenarios and script members a check names must be there too: a check that runs a
+    // scenario the model does not declare would load clean and fail only when run.
+    let scenario_ids: BTreeSet<&str> = declared.iter().map(String::as_str).collect();
+    for e in &content.entries {
+        for (reference, message) in check_refs(e, &scenario_ids, flat.as_ref()) {
+            let issue = Issue::new(
+                "CHECK_REF_UNRESOLVED",
+                Some(&e.id),
+                Some(&reference),
+                message,
+            );
+            if strict {
+                r.errors.push(issue)
+            } else {
+                r.warnings.push(issue)
             }
         }
     }
@@ -810,6 +894,38 @@ pub fn validate(content: &ModelContent, c: &Composition, strict: bool) -> Report
         }
     }
     r
+}
+
+/// The names a check's steps use that the model does not have: `args.scenario` (a declared
+/// scenario) and `args.script` members (transitions of the flat net).
+fn check_refs(e: &Entry, scenarios: &BTreeSet<&str>, flat: Option<&Flat>) -> Vec<(String, String)> {
+    let mut out = vec![];
+    let steps = e
+        .check
+        .as_ref()
+        .and_then(|c| c.get("steps"))
+        .and_then(Value::as_array);
+    for (i, st) in steps.into_iter().flatten().enumerate() {
+        let args = st.get("args");
+        if let Some(sc) = args.and_then(|a| a.get("scenario")).and_then(Value::as_str) {
+            if !scenarios.contains(sc) {
+                out.push((
+                    format!("scenario:{sc}"),
+                    format!("step {i} runs scenario {sc:?}, which the content does not declare"),
+                ));
+            }
+        }
+        let script = args.and_then(|a| a.get("script")).and_then(Value::as_array);
+        for m in script.into_iter().flatten().filter_map(Value::as_str) {
+            if flat.is_some_and(|f| f.transition_of(m).is_none()) {
+                out.push((
+                    format!("transition:{m}"),
+                    format!("step {i} fires {m:?}, which is not a transition of the composition"),
+                ));
+            }
+        }
+    }
+    out
 }
 
 /// [`validate`] for a plan subject: structure, and every `about` id against
@@ -850,7 +966,33 @@ pub fn validate_entries(
             ),
         ));
     }
+    let steps: usize = content
+        .entries
+        .iter()
+        .filter_map(|e| e.check.as_ref()?.get("steps")?.as_array().map(Vec::len))
+        .sum();
+    if steps > MAX_CHECK_STEPS {
+        r.errors.push(Issue::new(
+            "CONTENT_LIMIT",
+            None,
+            None,
+            format!("the checks have {steps} steps in all; at most {MAX_CHECK_STEPS} are accepted"),
+        ));
+    }
+    let mut conventions: BTreeMap<&str, &str> = BTreeMap::new();
     for e in &content.entries {
+        if e.title.len() > MAX_TITLE_BYTES || e.cites.len() > MAX_CITES {
+            r.errors.push(Issue::new(
+                "CONTENT_LIMIT",
+                Some(&e.id),
+                None,
+                format!(
+                    "a title of {} bytes and {} cites; at most {MAX_TITLE_BYTES} bytes and {MAX_CITES} cites",
+                    e.title.len(),
+                    e.cites.len()
+                ),
+            ));
+        }
         if e.text.len() > MAX_TEXT_BYTES || e.about.len() > MAX_ABOUT {
             r.errors.push(Issue::new(
                 "CONTENT_LIMIT",
@@ -896,12 +1038,20 @@ pub fn validate_entries(
                 format!("kind {:?}; there are {KINDS:?}", e.kind),
             ));
         }
-        if e.kind != "scenario" && e.text.is_empty() {
+        if e.kind != "scenario" && e.text.trim().is_empty() {
             r.errors.push(Issue::new(
                 "CONTENT_FIELD",
                 id,
                 None,
                 "text is required".into(),
+            ));
+        }
+        if e.scenario.is_some() && e.kind != "scenario" {
+            r.errors.push(Issue::new(
+                "CONTENT_FIELD",
+                id,
+                None,
+                "only an entry of kind scenario carries a scenario".into(),
             ));
         }
         if e.about.is_empty() {
@@ -950,9 +1100,24 @@ pub fn validate_entries(
                 None,
                 "a convention-example names exactly one view".into(),
             ));
+        } else if e.kind == "convention-example" {
+            // A view shows one convention example: a second would be drawn beside the first.
+            if let Some(first) = conventions.insert(e.views[0].as_str(), e.id.as_str()) {
+                r.warnings.push(Issue::new(
+                    "CONVENTION_DUPLICATE",
+                    id,
+                    Some(&e.views[0]),
+                    format!(
+                        "view {:?} already has the convention example {first:?}; both are drawn",
+                        e.views[0]
+                    ),
+                ));
+            }
         }
         for c in &e.cites {
-            if let Some(k) = c.get("bib").and_then(Value::as_str) {
+            if let Some(msg) = cite_problem(c) {
+                r.errors.push(Issue::new("CITE_INVALID", id, None, msg));
+            } else if let Some(k) = c.get("bib").and_then(Value::as_str) {
                 if !bib.contains(k) {
                     r.errors.push(Issue::new(
                         "CITE_BIB_UNKNOWN",
@@ -969,4 +1134,56 @@ pub fn validate_entries(
             }
         }
     }
+}
+
+/// What is wrong with a cite, if anything: `{bib: "<key>"}` (a key of the ontology's `bib`, checked
+/// by the caller) or a source cite `{repo, path, rev?, from?, to?, note?}`; nothing else, so a
+/// panel never has a line of empty strings to print.
+fn cite_problem(c: &Value) -> Option<String> {
+    let Some(m) = c.as_object() else {
+        return Some(format!("a cite must be an object, not {c}"));
+    };
+    let text = |k: &str| m.get(k).and_then(Value::as_str);
+    let line = |k: &str| m.get(k).and_then(Value::as_u64).filter(|n| *n > 0);
+    if m.contains_key("bib") {
+        if let Some(k) = m.keys().find(|k| *k != "bib") {
+            return Some(format!("a bib cite is {{bib}} alone, not also {k:?}"));
+        }
+        return match text("bib") {
+            Some(k) if !k.is_empty() => None,
+            _ => Some("bib must be a non-empty string".into()),
+        };
+    }
+    for k in m.keys() {
+        if !["repo", "path", "rev", "from", "to", "note"].contains(&k.as_str()) {
+            return Some(format!(
+                "unknown key {k:?} in a cite (it is {{bib}} or {{repo, path, rev, from, to, note}})"
+            ));
+        }
+    }
+    for k in ["repo", "path"] {
+        if text(k).is_none_or(str::is_empty) {
+            return Some(format!("a source cite needs a non-empty {k}"));
+        }
+    }
+    for k in ["rev", "note"] {
+        if m.get(k).is_some_and(|v| !v.is_string()) {
+            return Some(format!("{k} must be a string"));
+        }
+    }
+    for k in ["from", "to"] {
+        if m.get(k).is_some() && line(k).is_none() {
+            return Some(format!("{k} must be a positive line number"));
+        }
+    }
+    if let (Some(a), Some(b)) = (line("from"), line("to")) {
+        if a > b {
+            return Some(format!("from {a} is after to {b}"));
+        }
+    }
+    let big = m
+        .values()
+        .filter_map(Value::as_str)
+        .any(|t| t.len() > MAX_CITE_FIELD_BYTES);
+    big.then(|| format!("a cite field is over {MAX_CITE_FIELD_BYTES} bytes"))
 }

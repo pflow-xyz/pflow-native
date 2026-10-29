@@ -764,3 +764,127 @@ fn orders_document() -> Value {
     run(&mut s, "bundle.open", json!({}));
     run(&mut s, "bundle.export", json!({"form": "composition"}))["document"].clone()
 }
+
+// ------------------------------------------------------------ content and documents in a saved state
+
+/// The composition part exactly as main's build dumps it (`instances` and `links` of catalog
+/// instances, nothing else): pasted, not derived from this build's dump, so a change to how the old
+/// shape is read cannot go unnoticed.
+fn mains_composition_part() -> Value {
+    json!({
+        "instances": ["orders", "workers", "payment"],
+        "links": [
+            {"kind": "event", "from": {"subnet": "orders", "port": "dequeue"},
+             "to": {"subnet": "workers", "port": "acquire"}},
+            {"kind": "event", "from": {"subnet": "orders", "port": "dequeue"},
+             "to": {"subnet": "payment", "port": "do:reserve"}},
+            {"kind": "event", "from": {"subnet": "workers", "port": "release"},
+             "to": {"subnet": "payment", "port": "commit"}},
+        ],
+    })
+}
+
+#[test]
+fn a_state_dumped_by_mains_build_still_restores() {
+    memory_store();
+    let mut s = Session::default();
+    let mut state = run(
+        &mut s,
+        "session.dump_state",
+        json!({"parts": ["composition_view"]}),
+    );
+    state["composition"] = mains_composition_part();
+    let out = run(&mut s, "session.restore_state", json!({"state": state}));
+    assert_eq!(out["composition"], 3, "{out}");
+    let st = run(&mut s, "bundle.state", Value::Null);
+    assert_eq!(st["instances"], json!(["orders", "workers", "payment"]));
+    assert_eq!(st["links"].as_array().unwrap().len(), 3);
+    // It is the built-in example, so the library's content is back with it.
+    assert_eq!(
+        st["content"]["source"], "library:orders",
+        "{}",
+        st["content"]
+    );
+    assert_eq!(st["document"]["origin"], "catalog");
+    // And a link this build's rules refuse still refuses the state.
+    let mut bad = state.clone();
+    bad["composition"]["links"][0]["to"]["port"] = json!("no-such-port");
+    let e = refused(
+        &mut Session::default(),
+        "session.restore_state",
+        json!({"state": bad}),
+    );
+    assert!(e.contains("no-such-port") || e.contains("refus"), "{e}");
+}
+
+/// A user's own content is dumped by value and restored by value; the library's is a name. This
+/// path (`dump_part`'s `content`, `restore_part`'s) had no test: emptying either left every test
+/// green, and a saved session would have lost the content of a user's model.
+#[test]
+fn loaded_content_survives_a_dump_and_a_restore_dormant_entries_included() {
+    memory_store();
+    let mut s = Session::default();
+    run(&mut s, "bundle.open", json!({}));
+    let content = json!({
+        "@context": "https://pflow.xyz/schema", "@type": "ModelContent", "name": "mine",
+        "subject": {"kind": "composition", "name": "orders"},
+        "entries": [
+            {"id": "mine", "kind": "judgment", "order": 1, "title": "Capacity 3", "text": "My choice.",
+             "about": ["place:orders/items"]},
+            {"id": "gone", "kind": "caveat", "order": 2, "text": "About a place that will be removed.",
+             "about": ["instance:payment"]},
+            {"id": "sc", "kind": "scenario", "order": 3,
+             "scenario": {"script": ["orders/dequeue"], "expect": [{"place": "orders/items", "op": "==", "n": 1, "says": "one left"}]},
+             "about": ["model:"]},
+        ],
+    });
+    run(&mut s, "content.load", json!({"document": content}));
+    // The payment instance goes: `gone` is now dormant, and still part of the content.
+    run(&mut s, "bundle.remove_instance", json!({"id": "payment"}));
+    let before = run(&mut s, "bundle.state", Value::Null);
+    assert_eq!(before["content"]["source"], "loaded");
+    assert_eq!(before["content"]["dormant"], 1, "{}", before["content"]);
+    let exported = run(&mut s, "content.export", Value::Null);
+
+    let state = run(
+        &mut s,
+        "session.dump_state",
+        json!({"parts": ["composition"]}),
+    );
+    assert!(
+        state["composition"]["content"].is_object(),
+        "dumped by value: {}",
+        state["composition"]
+    );
+    assert!(state["composition"].get("library").is_none());
+
+    let mut t = Session::default();
+    run(&mut t, "session.restore_state", json!({"state": state}));
+    let after = run(&mut t, "bundle.state", Value::Null);
+    assert_eq!(after["content"]["source"], "loaded");
+    assert_eq!(after["content"], before["content"]);
+    assert_eq!(after["missing"], before["missing"]);
+    let again = run(&mut t, "content.export", Value::Null);
+    assert_eq!(again["cid"], exported["cid"]);
+    assert_eq!(again["document"], exported["document"]);
+    // It dumps to what it was restored from.
+    assert_eq!(
+        run(
+            &mut t,
+            "session.dump_state",
+            json!({"parts": ["composition"]})
+        ),
+        state
+    );
+
+    // The library's is a name, not a copy.
+    let mut lib = Session::default();
+    run(&mut lib, "bundle.open", json!({}));
+    let state = run(
+        &mut lib,
+        "session.dump_state",
+        json!({"parts": ["composition"]}),
+    );
+    assert_eq!(state["composition"]["library"], "orders");
+    assert!(state["composition"].get("content").is_none());
+}

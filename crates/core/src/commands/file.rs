@@ -195,6 +195,21 @@ fn new(s: &mut Session, _: &Value) -> Result<Value> {
 fn open(sess: &mut Session, a: &Value) -> Result<Value> {
     let path = s(a, "path").expect("required");
     let data = std::fs::read(path).map_err(|e| Error::Io(format!("{path}: {e}")))?;
+    // A composition document is not a net: opened as one it would be an empty net with no hint of
+    // why. Say where it opens.
+    if let Ok(v) = serde_json::from_slice::<Value>(&data) {
+        let ty = v.get("@type").and_then(Value::as_str).unwrap_or_default();
+        if ["PetriNetBundle", "PatternComposition", "ModelContent"].contains(&ty) {
+            let how = if ty == "ModelContent" {
+                "content.load {document} attaches it to the open composition"
+            } else {
+                "bundle.load {document} opens it as a composition (Compose → Load Composition…)"
+            };
+            return Err(Error::Invalid(format!(
+                "[DOCUMENT_TYPE] {path} is a {ty}, not a net; {how}"
+            )));
+        }
+    }
     let doc = Document::from_json(&data)?;
     replace(sess, doc)?;
     sess.path = Some(path.to_string());

@@ -2815,7 +2815,16 @@ pub(super) fn cospan_orders(c: &mut Ctx, area: Rect) {
     c.note("honesty", "go-pflow keeps every port after a link, and a link may glue any compatible pair of ports, not only a whole foot onto a whole foot as in Baez–Master. The view draws each link as one glued pair of points; the unglued points stay on the composite's feet.");
     c.note("honesty", "Observe ports are drawn as taps in neither foot (the ROADMAP's reading). go-pflow's validateLink checks only in/out for a token link, so a token link through an observe port is allowed; the view draws it and says so.");
     c.note("honesty", "Layout is this view's: the positions of places and transitions inside a frame, and which instance goes left of which in a glued pair (the first link's from side), are drawing choices.");
-    c.note("judgment", comp::PARAMS_NOTE);
+    // The catalog's note: a loaded document's parameters are its author's, and `bundle.state`
+    // carries no `params_note` for it.
+    if let Some(note) =
+        c.d.state
+            .as_ref()
+            .and_then(|st| st["params_note"].as_str())
+            .map(str::to_string)
+    {
+        c.note("judgment", note);
+    }
 }
 
 fn style_of(kind: &str) -> &'static str {

@@ -722,7 +722,7 @@ fn a_changed_expected_value_or_pointer_turns_the_check_red() {
     // still run.
     edit_entry(&mut s, id, |e| {
         e["check"]["steps"] = json!([
-            {"command": "bundle.run", "args": {"scenario": "nope"},
+            {"command": "bundle.run", "args": {},
              "expect": [{"path": "/completed", "op": "==", "value": true}]},
             {"command": "bundle.state", "args": {},
              "expect": [{"path": "/instances/0", "op": "==", "value": "orders"}]}
@@ -733,7 +733,7 @@ fn a_changed_expected_value_or_pointer_turns_the_check_red() {
     assert!(c["steps"][0]["error"]
         .as_str()
         .unwrap()
-        .contains("no scenario \"nope\""));
+        .contains("pass `scenario` or `script`"));
     assert_eq!(c["steps"][0]["ok"], false);
     assert_eq!(c["steps"][1]["ok"], true, "the second step ran");
 }
@@ -1378,12 +1378,26 @@ fn scenario_invalid_names_the_member_place_op_or_shape_that_is_wrong() {
         assert_only_error(&r, "SCENARIO_INVALID", Some("s"));
     }
 
-    // Strict or not does not matter to a scenario: it is wrong either way.
-    let bad = scenario_entry("s", json!(["orders/nope"]), json!([]));
+    // The shape of a scenario is wrong either way; a member or place the model lacks is an error
+    // for an explicit load and a warning (the scenario is dormant) when not strict, like an
+    // element id that does not resolve.
+    let bad_shape = edited(&scenario_entry("s", json!([]), json!([])), |e| {
+        e["scenario"] = json!({"script": [1], "expect": []})
+    });
     assert_only_error(
-        &report(&doc(vec![bad]), false),
+        &report(&doc(vec![bad_shape]), false),
         "SCENARIO_INVALID",
         Some("s"),
+    );
+    let lacks = scenario_entry("s", json!(["orders/nope"]), json!([]));
+    let r = report(&doc(vec![lacks]), false);
+    assert!(r.valid(), "{:?}", r.errors);
+    assert_eq!(codes(&r.warnings), vec!["SCENARIO_UNRESOLVED"]);
+    assert_eq!(r.warnings[0].reference.as_deref(), Some("orders/nope"));
+    assert_eq!(
+        r.unresolved(),
+        vec![json!({"entry": "s", "ref": "orders/nope"})],
+        "the load result names it among the unresolved"
     );
 
     // A plan declares no firing scenarios at all.
@@ -3359,4 +3373,394 @@ fn a_scenario_the_model_does_not_declare_cannot_be_selected_in_the_token_game() 
     assert!(g["scenario"].is_null(), "{g}");
     let err = refused(&mut o, "bundle.step", json!({}));
     assert!(err.contains("no scenario"), "{err}");
+}
+
+// ------------------------------------------------------------ the validator, the rest of the gaps
+
+fn finding_with(extra: Value) -> Value {
+    let mut e = plain("f");
+    for (k, v) in extra.as_object().unwrap() {
+        e[k] = v.clone();
+    }
+    e
+}
+
+fn parse_err(d: &Value) -> String {
+    ModelContent::parse(d).expect_err("refused").to_string()
+}
+
+/// `by` was whitelisted but never kept, and a non-integer `order` was read as no order: both were
+/// accepted and dropped by the next export, changing its CID.
+#[test]
+fn a_key_or_an_order_the_export_would_drop_is_refused() {
+    let err = parse_err(&doc(vec![finding_with(json!({"by": "matt"}))]));
+    assert!(
+        err.starts_with("[CONTENT_FIELD]") && err.contains("\"by\""),
+        "{err}"
+    );
+    for order in [json!("7"), json!(1.5), json!(true)] {
+        let err = parse_err(&doc(vec![finding_with(json!({"order": order}))]));
+        assert!(
+            err.starts_with("[CONTENT_FIELD]") && err.contains("order"),
+            "{err}"
+        );
+    }
+    // An integer, or none, is fine, and survives an export.
+    let mc = ModelContent::parse(&doc(vec![finding_with(json!({"order": 7}))])).unwrap();
+    assert_eq!(mc.to_document()["entries"][0]["order"], 7);
+}
+
+#[test]
+fn a_cite_is_a_bib_key_or_a_source_with_a_repo_and_a_path() {
+    let bad: [(Value, &str); 9] = [
+        (json!(1), "must be an object"),
+        (json!("x"), "must be an object"),
+        (json!(null), "must be an object"),
+        (json!({"bib": 5}), "bib must be a non-empty string"),
+        (json!({"bib": "baez-master", "repo": "x"}), "alone"),
+        (json!({"foo": "bar"}), "unknown key"),
+        (json!({"repo": "x"}), "non-empty path"),
+        (
+            json!({"repo": "x", "path": "p", "from": 9, "to": 3}),
+            "after",
+        ),
+        (
+            json!({"repo": "x", "path": "p", "from": "nine"}),
+            "line number",
+        ),
+    ];
+    for (cite, want) in bad {
+        let r = report(
+            &doc(vec![finding_with(json!({"cites": [cite.clone()]}))]),
+            true,
+        );
+        assert_only_error(&r, "CITE_INVALID", Some("f"));
+        assert!(
+            r.errors[0].message.contains(want),
+            "{cite}: {}",
+            r.errors[0].message
+        );
+    }
+    for good in [
+        json!({"bib": "baez-master"}),
+        json!({"repo": "go-pflow", "path": "metamodel/firing.go", "rev": "69257b3", "from": 142, "to": 196, "note": "n"}),
+        json!({"repo": "x", "path": "p"}),
+    ] {
+        let r = report(
+            &doc(vec![finding_with(json!({"cites": [good.clone()]}))]),
+            true,
+        );
+        assert!(r.valid(), "{good}: {:?}", r.errors);
+    }
+}
+
+#[test]
+fn text_that_is_only_whitespace_a_scenario_on_a_finding_and_a_second_convention_example_are_caught()
+{
+    let r = report(&doc(vec![finding_with(json!({"text": "  \n\t "}))]), true);
+    assert_only_error(&r, "CONTENT_FIELD", Some("f"));
+    let r = report(
+        &doc(vec![finding_with(
+            json!({"scenario": {"script": [], "expect": []}}),
+        )]),
+        true,
+    );
+    assert_only_error(&r, "CONTENT_FIELD", Some("f"));
+    assert!(r.errors[0]
+        .message
+        .contains("only an entry of kind scenario"));
+    // Two convention examples for one view are both drawn: a warning, not a refusal.
+    let conv = |id: &str| json!({"id": id, "kind": "convention-example", "text": "t", "about": ["model:"], "views": ["flat"]});
+    let r = report(&doc(vec![conv("a"), conv("b")]), true);
+    assert!(r.valid(), "{:?}", r.errors);
+    assert_eq!(codes(&r.warnings), vec!["CONVENTION_DUPLICATE"]);
+    assert_eq!(r.warnings[0].entry.as_deref(), Some("b"));
+}
+
+#[test]
+fn a_check_that_names_a_scenario_or_a_member_the_model_lacks_is_refused_at_load() {
+    let run_step = |args: Value| step_with("bundle.run", args);
+    for (args, reference) in [
+        (json!({"scenario": "nope"}), "scenario:nope"),
+        (
+            json!({"script": ["orders/dequeue", "orders/nope"]}),
+            "transition:orders/nope",
+        ),
+    ] {
+        let e = finding_with(json!({"check": check_of(json!([run_step(args.clone())]))}));
+        let r = report(&doc(vec![e.clone()]), true);
+        assert_only_error(&r, "CHECK_REF_UNRESOLVED", Some("f"));
+        assert_eq!(r.errors[0].reference.as_deref(), Some(reference));
+        // Not strict: dormant, a warning that the load result lists.
+        let r = report(&doc(vec![e]), false);
+        assert!(r.valid());
+        assert_eq!(codes(&r.warnings), vec!["CHECK_REF_UNRESOLVED"]);
+        assert_eq!(r.unresolved().len(), 1);
+    }
+    // A scenario the content declares is fine.
+    let sc = scenario_entry("s", json!(["orders/dequeue"]), json!([]));
+    let ok = finding_with(json!({"check": check_of(json!([run_step(json!({"scenario": "s"}))]))}));
+    assert!(report(&doc(vec![sc, ok]), true).valid());
+}
+
+fn step_with(command: &str, args: Value) -> Value {
+    json!({"command": command, "args": args, "expect": [{"path": "", "op": "exists"}]})
+}
+
+#[test]
+fn the_sizes_of_titles_cites_and_the_checks_in_all_are_bounded() {
+    let r = report(
+        &doc(vec![finding_with(
+            json!({"title": "x".repeat(content::MAX_TITLE_BYTES + 1)}),
+        )]),
+        true,
+    );
+    assert_only_error(&r, "CONTENT_LIMIT", Some("f"));
+    let cites: Vec<Value> = (0..=content::MAX_CITES)
+        .map(|_| json!({"bib": "baez-master"}))
+        .collect();
+    let r = report(&doc(vec![finding_with(json!({"cites": cites}))]), true);
+    assert_only_error(&r, "CONTENT_LIMIT", Some("f"));
+    // 16 steps an entry is the per-check cap; many entries of 16 add up to the document's.
+    let steps: Vec<Value> = (0..checks::MAX_STEPS)
+        .map(|_| step_with("bundle.state", json!({})))
+        .collect();
+    let many = content::MAX_CHECK_STEPS / checks::MAX_STEPS + 1;
+    let entries: Vec<Value> = (0..many)
+        .map(|i| {
+            let mut e = plain(&format!("f{i}"));
+            e["check"] = check_of(json!(steps));
+            e
+        })
+        .collect();
+    let r = report(&doc(entries), true);
+    assert_only_error(&r, "CONTENT_LIMIT", None);
+    assert!(r.errors[0].message.contains("steps in all"));
+}
+
+/// A check from outside runs reads of the model. `bundle.receipt` signs with the local key and
+/// `bundle.export` writes a document: neither is a read.
+#[test]
+fn a_check_may_not_sign_or_export() {
+    for cmd in checks::NOT_READS {
+        let e = finding_with(json!({"check": check_of(json!([step_with(cmd, json!({}))]))}));
+        let r = report(&doc(vec![e]), true);
+        assert_only_error(&r, "CHECK_COMMAND_FORBIDDEN", Some("f"));
+        assert!(
+            r.errors[0].message.contains("not a read"),
+            "{}",
+            r.errors[0].message
+        );
+    }
+}
+
+/// The allow-list is the registry's queries in `bundle.` and `plan.` minus the ones named as not
+/// reads: a new query is a decision here, not a default.
+#[test]
+fn every_bundle_and_plan_query_is_either_a_read_or_named_here() {
+    let mut queries: Vec<&str> = pflow_native_core::commands::ALL
+        .iter()
+        .flat_map(|set| set.iter())
+        .filter(|c| (c.id.starts_with("bundle.") || c.id.starts_with("plan.")) && !c.journal)
+        .map(|c| c.id)
+        .collect();
+    queries.sort();
+    let mut known: Vec<&str> = checks::READS
+        .iter()
+        .chain(&checks::NOT_READS)
+        .copied()
+        .collect();
+    known.sort();
+    assert_eq!(queries, known);
+    for id in checks::READS {
+        assert!(checks::command_allowed(id).is_ok(), "{id}");
+    }
+}
+
+// ------------------------------------------------------------ what a load tells the caller
+
+fn small_content() -> Value {
+    json!({
+        "@context": CONTEXT, "@type": "ModelContent", "name": "small",
+        "subject": {"kind": "composition", "name": "orders"},
+        "entries": [{"id": "f", "kind": "finding", "text": "t", "about": ["instance:orders"],
+            "check": "{\n  \"claim\": \"c\",\n  \"steps\": [ {\"command\": \"bundle.state\", \"args\": {}, \"expect\": [{\"path\": \"/instances/0\", \"op\": \"==\", \"value\": \"orders\"}]} ]\n}"}],
+    })
+}
+
+/// A load says what it normalised: the CID is the document `content.export` writes, and the seal
+/// of the document as received is given beside it when it differs.
+#[test]
+fn a_content_cid_is_the_normalised_documents_and_the_received_one_is_named() {
+    let mut s = orders();
+    let received = small_content();
+    let out = run(&mut s, "content.load", json!({"document": received}));
+    let exported = run(&mut s, "content.export", Value::Null);
+    assert_eq!(out["cid"], exported["cid"]);
+    assert_eq!(out["received_cid"], json!(cid::seal(&received).unwrap()));
+    assert_ne!(out["received_cid"], out["cid"]);
+    // The normalised document, loaded again, is its own CID: nothing further to say.
+    let again = run(
+        &mut s,
+        "content.load",
+        json!({"document": exported["document"]}),
+    );
+    assert_eq!(again["cid"], out["cid"]);
+    assert!(again.get("received_cid").is_none(), "{again}");
+    // And the same bytes through the store name the same CID.
+    let put = run(&mut s, "store.put", json!({"document": received}));
+    assert_eq!(put["cid"], out["cid"]);
+}
+
+/// A warning is part of what a load returns, not only of `content.validate`.
+#[test]
+fn a_load_returns_its_warnings() {
+    let mut s = orders();
+    let mut d = small_content();
+    d["composition"] = json!("zNOTACID");
+    let out = run(&mut s, "content.load", json!({"document": d}));
+    let codes: Vec<&str> = out["warnings"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|w| w["code"].as_str().unwrap())
+        .collect();
+    assert_eq!(codes, ["COMPOSITION_CID_STALE"], "{out}");
+    // bundle.load reports the same, under `content`.
+    let mut t = session();
+    let l = run(
+        &mut t,
+        "bundle.load",
+        json!({"document": run(&mut orders(), "bundle.export", Value::Null)["document"], "content": d}),
+    );
+    assert_eq!(
+        l["content"]["warnings"][0]["code"], "COMPOSITION_CID_STALE",
+        "{l}"
+    );
+}
+
+/// Library content on a composition that lacks some of its elements is dormant, not refused, and
+/// the model says so beside what else it lacks.
+#[test]
+fn library_content_on_an_edited_model_is_dormant_and_missing_says_so() {
+    let mut s = session();
+    run(
+        &mut s,
+        "bundle.open",
+        json!({"instances": ["orders", "workers"]}),
+    );
+    // The library's content was attached by the instances it needs: this has two of three. Load it
+    // on purpose, not strict.
+    let out = run(
+        &mut s,
+        "content.load",
+        json!({"library": "orders", "strict": false}),
+    );
+    assert!(out["dormant"].as_u64().unwrap() > 0, "{out}");
+    assert!(
+        out["unresolved"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|u| u["ref"] == "payment/do_charge"),
+        "its scenarios' missing members are named: {}",
+        out["unresolved"]
+    );
+    let st = run(&mut s, "bundle.state", Value::Null);
+    let dormant = st["missing"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|m| m["code"] == "DORMANT")
+        .unwrap_or_else(|| panic!("{}", st["missing"]));
+    let text = dormant["text"].as_str().unwrap();
+    assert!(
+        text.contains("content entries") && text.contains("no view shows them"),
+        "{text}"
+    );
+    // Strict, the same load is refused and says which.
+    let err = refused(&mut s, "content.load", json!({"library": "orders"}));
+    assert!(err.starts_with("[CONTENT_REFUSED]"), "{err}");
+    // The full orders example has none dormant.
+    let st = run(&mut orders(), "bundle.state", Value::Null);
+    assert!(!st["missing"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .any(|m| m["code"] == "DORMANT"));
+}
+
+// ------------------------------------------------------------ the plan's checks can go red
+
+/// No Connect-4 check had been shown to fail: 35 of the 40 assert pflow-rs vocabulary, which no edit
+/// of the plan moves. Each is run here with one expected value made false, and the ones that read the
+/// open plan with the plan edited.
+#[test]
+fn a_connect4_check_goes_red_when_its_claim_is_made_false() {
+    let lib = content::library_entry("connect4").unwrap();
+    // The empty-order finding is checked by this change; each check of the library, with its
+    // first expected value of its first step turned into something else, fails.
+    let mut turned = 0;
+    for e in lib.content.checks() {
+        let mut broken = e.clone();
+        let rows = broken.check.as_mut().unwrap()["steps"][0]["expect"]
+            .as_array_mut()
+            .unwrap();
+        let first = &mut rows[0];
+        match first["op"].as_str().unwrap() {
+            "==" => first["value"] = json!("a value nothing has"),
+            "contains" => first["value"] = json!("a text nothing contains"),
+            "exists" => first["op"] = json!("absent"),
+            "absent" => first["op"] = json!("exists"),
+            _ => continue,
+        }
+        let red = checks::run_check(&Base::Plan(None), &broken);
+        assert_eq!(red["ok"], false, "{} should go red: {red}", e.id);
+        turned += 1;
+    }
+    assert!(turned >= 40, "{turned} checks were made false");
+    let empty = lib.content.entry("c4-finding-empty-order").unwrap();
+    assert!(
+        empty.check.is_some(),
+        "the empty-order finding carries its check"
+    );
+    assert_eq!(checks::run_check(&Base::Plan(None), empty)["ok"], true);
+}
+
+#[test]
+fn a_connect4_check_that_reads_the_open_plan_goes_red_when_the_plan_is_edited() {
+    let mut s = session();
+    run(&mut s, "plan.open", json!({}));
+    let r = run(
+        &mut s,
+        "content.check",
+        json!({"subject": "plan", "entry": "c4-model-plan"}),
+    );
+    assert_eq!(r["passed"], 1, "{r}");
+    // One entry fewer in the order, and the plan is no longer the module-doc example.
+    run(
+        &mut s,
+        "plan.remove_piece",
+        json!({"slot": "order", "index": 0}),
+    );
+    let r = run(
+        &mut s,
+        "content.check",
+        json!({"subject": "plan", "entry": "c4-model-plan"}),
+    );
+    assert_eq!(r["failed"], 1, "{r}");
+    assert!(
+        reds(&r["checks"][0])
+            .iter()
+            .any(|x| x.contains("/plan/order")),
+        "{:?}",
+        reds(&r["checks"][0])
+    );
+    run(&mut s, "edit.undo", json!({}));
+    let r = run(
+        &mut s,
+        "content.check",
+        json!({"subject": "plan", "entry": "c4-model-plan"}),
+    );
+    assert_eq!(r["passed"], 1, "{r}");
 }

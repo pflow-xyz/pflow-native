@@ -839,9 +839,13 @@ fn cafe_loads_as_a_raw_bundle_and_says_what_it_lacks() {
         st["capabilities"],
         json!({
             "flatten": true, "patterns": false, "ontology_keys": false, "idioms": false,
-            "ports": 1, "snap_together": true, "scenarios": 0, "content_entries": 0,
-        })
+            "ports": 1, "snap_together": false, "scenarios": 0, "content_entries": 0,
+        }),
+        "one port on one subnet leaves nothing to snap together"
     );
+    // The catalog's note that the parameters are the page's choice is not said of a loaded document.
+    assert!(st.get("params_note").is_none(), "{st}");
+    assert!(state(&mut orders_session())["params_note"].is_string());
     assert_eq!(st["content"]["source"], "none");
     assert_eq!(
         missing_codes(&st["missing"]),
@@ -2626,4 +2630,108 @@ fn a_recipe_a_build_does_not_interpret_is_kept_and_is_what_the_identity_rule_cal
         "",
         "kept, not interpreted"
     );
+}
+
+// ------------------------------------------------------------ bounds
+
+/// The byte cap bounds a document's size, not the work it asks for: a thousand chained queues was
+/// seven seconds of flattening and three thousand over a minute. Instances, subnets and links are
+/// capped, and a document at the cap loads in well under a second.
+#[test]
+fn a_composition_over_the_instance_or_link_cap_is_refused_and_one_at_it_loads_quickly() {
+    use pflow_native_core::composition::document::{MAX_INSTANCES, MAX_LINKS};
+    let queue = |i: usize| {
+        json!({"id": format!("q{i}"), "pattern": "queue",
+            "params": {"ID": format!("q{i}"), "Capacity": 3, "Initial": 1, "Payload": ""}})
+    };
+    let chain = |n: usize| -> Value {
+        let insts: Vec<Value> = (0..n).map(queue).collect();
+        let links: Vec<Value> = (1..n)
+            .map(|i| {
+                event(
+                    (&format!("q{}", i - 1), "dequeue"),
+                    (&format!("q{i}"), "enqueue"),
+                )
+            })
+            .collect();
+        doc(json!(insts), json!(links))
+    };
+    let err = load_err(&chain(MAX_INSTANCES + 1));
+    assert_code(&err, "COMPOSITION_LIMIT");
+    assert!(
+        err.contains(&format!("{} instances", MAX_INSTANCES + 1)),
+        "{err}"
+    );
+    let too_many_links = doc(
+        json!([orders_inst(), workers_inst()]),
+        json!((0..=MAX_LINKS)
+            .map(|_| dequeue_acquire())
+            .collect::<Vec<_>>()),
+    );
+    assert_code(&load_err(&too_many_links), "COMPOSITION_LIMIT");
+
+    let started = std::time::Instant::now();
+    let mut s = session();
+    let out = run(
+        &mut s,
+        "bundle.load",
+        json!({"document": chain(MAX_INSTANCES)}),
+    );
+    assert_eq!(out["instances"].as_array().unwrap().len(), MAX_INSTANCES);
+    run(&mut s, "bundle.state", Value::Null);
+    let took = started.elapsed();
+    assert!(
+        took.as_secs() < 20,
+        "a composition at the cap loads and reports in {took:?}"
+    );
+
+    // The same for a raw Bundle's subnets and links.
+    let mut bundle = cafe();
+    let sub = bundle["subnets"][0].clone();
+    let subs: Vec<Value> = (0..=MAX_INSTANCES)
+        .map(|i| {
+            let mut x = sub.clone();
+            x["id"] = json!(format!("s{i}"));
+            x
+        })
+        .collect();
+    bundle["subnets"] = json!(subs);
+    assert_code(&load_err(&bundle), "COMPOSITION_LIMIT");
+}
+
+/// `file.open` read a composition document as a net: an empty one, with no hint why.
+#[test]
+fn file_open_of_a_composition_document_says_where_it_opens_instead_of_opening_an_empty_net() {
+    let dir = std::env::temp_dir().join(format!("pn-file-open-{}", std::process::id()));
+    std::fs::create_dir_all(&dir).unwrap();
+    let mut s = session();
+    for (name, doc, want) in [
+        ("cafe.json", cafe(), "bundle.load"),
+        ("orders.json", small_doc(), "bundle.load"),
+        (
+            "content.json",
+            json!({"@context": CONTEXT, "@type": "ModelContent"}),
+            "content.load",
+        ),
+    ] {
+        let path = dir.join(name);
+        std::fs::write(&path, doc.to_string()).unwrap();
+        let e = refused(&mut s, "file.open", json!({"path": path.to_str().unwrap()}));
+        assert_code(&e, "DOCUMENT_TYPE");
+        assert!(e.contains(want), "{e}");
+    }
+    assert_eq!(s.doc.places.len(), 0, "nothing was opened");
+    // A net still opens.
+    let path = dir.join("sir.json");
+    run(&mut s, "file.open_example", json!({"name": "sir"}));
+    std::fs::write(&path, s.doc.to_json_pretty()).unwrap();
+    let out = run(&mut s, "file.open", json!({"path": path.to_str().unwrap()}));
+    assert!(out["places"].as_u64().unwrap() > 0, "{out}");
+    let _ = std::fs::remove_dir_all(&dir);
+}
+
+fn orders_session() -> Session {
+    let mut s = session();
+    run(&mut s, "bundle.open", json!({}));
+    s
 }

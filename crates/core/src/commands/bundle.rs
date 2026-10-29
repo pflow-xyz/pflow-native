@@ -44,8 +44,10 @@ pub const SET: &[CommandSpec] = &[
     CommandSpec {
         id: "bundle.scenarios",
         label: "Composition Scenarios",
-        help: "The firing scripts (members \"<subnet>/<transition>\") with their expected predicates, \
-               judgment frozen from the prototype: commit, refund, charge-fails, second-order.",
+        help: "The firing scripts (members \"<subnet>/<transition>\") with their expected predicates that the \
+               open composition's content declares (`scenario` entries), else, with none open, the orders \
+               library's: commit, refund, charge-fails, second-order. `source` says where they came from and \
+               `note` what a model with none lacks. bundle.run, bundle.scenario and bundle.step read the same.",
         menu: "",
         shortcut: None,
         args: &[],
@@ -99,7 +101,11 @@ pub const SET: &[CommandSpec] = &[
         label: "Composition State",
         help: "The open composition: instances, subnets (ports with their ontology keys, places, \
                transitions, arcs, constraints), links (index, key, idiom, leak), unavailable \
-               instances and dropped links.",
+               instances and dropped links; `document` (form, origin, name, whether it was edited, the \
+               keys it keeps but does not read), `capabilities` (what a view can rely on), `missing` \
+               ({code, text}: what this model cannot show, in words for a person) and `content` (a summary \
+               of the attached content: source, entries, kinds, unresolved, warnings, dormant, scenarios). \
+               `params_note` only for a catalog-built composition.",
         menu: "",
         shortcut: None,
         args: &[],

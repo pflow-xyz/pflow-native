@@ -18,8 +18,37 @@ use crate::session::Session;
 /// document from outside must not be able to ask for unbounded work.
 pub const MAX_STEPS: usize = 16;
 
-/// Whether the check runner may run `id`: a registered query (`journal:
-/// false`) in the `bundle.` or `plan.` namespace.
+/// The queries a check may run: reads of the model, and nothing that signs, writes a document or
+/// edits. `bundle.receipt` signs with the local receipt key and `bundle.export` writes a document,
+/// so a check from outside cannot run them; the test `every_bundle_and_plan_query_is_either_a_read_or_named_here`
+/// makes a new query a decision rather than a default.
+pub const READS: [&str; 20] = [
+    "bundle.instances",
+    "bundle.scenarios",
+    "bundle.ontology",
+    "bundle.state",
+    "bundle.validate",
+    "bundle.candidates",
+    "bundle.verdicts",
+    "bundle.flatten",
+    "bundle.incidence",
+    "bundle.run",
+    "bundle.boundaries",
+    "bundle.game",
+    "bundle.lens",
+    "plan.net",
+    "plan.opening",
+    "plan.pieces",
+    "plan.state",
+    "plan.check",
+    "plan.slot_candidates",
+    "plan.game",
+];
+/// Queries in the same namespaces that a check may not run.
+pub const NOT_READS: [&str; 2] = ["bundle.receipt", "bundle.export"];
+
+/// Whether the check runner may run `id`: a read of the model (a registered query, `journal: false`,
+/// in [`READS`]).
 pub fn command_allowed(id: &str) -> std::result::Result<(), String> {
     if !(id.starts_with("bundle.") || id.starts_with("plan.")) {
         return Err(format!(
@@ -34,6 +63,11 @@ pub fn command_allowed(id: &str) -> std::result::Result<(), String> {
     if spec.journal {
         return Err(format!(
             "command {id:?} is not allowed: it edits (journal: true), and a check only reads"
+        ));
+    }
+    if !READS.contains(&id) {
+        return Err(format!(
+            "command {id:?} is not allowed: it is a query, but not a read of the model (it signs or writes a document); a check may run {READS:?}"
         ));
     }
     Ok(())
