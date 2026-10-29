@@ -427,7 +427,7 @@ fn namespace_arc_merge_description_label_why_and_link_fields_round_trip() {
              "label": "Baristas", "why": "\"a fixed number of workers\": two"},
         ],
         "links": [
-            {"kind": "event", "id": "served",
+            {"kind": "event", "id": "served", "rename": {"item": "order", "worker": "barista"},
              "from": {"subnet": "orders", "port": "dequeue"},
              "to": {"subnet": "workers", "port": "acquire"}},
             {"kind": "guard", "condition": ">= 1", "lowering": "auto",
@@ -465,6 +465,12 @@ fn namespace_arc_merge_description_label_why_and_link_fields_round_trip() {
     assert_eq!(bundle["document"]["arc_merge"], "max");
     assert_eq!(bundle["document"]["links"][0]["id"], "served");
     assert_eq!(bundle["document"]["links"][1]["condition"], ">= 1");
+    // An event link's `rename` maps the bindings of the fused transitions: dropping it on export
+    // would change the flat net the reloaded document builds.
+    assert_eq!(
+        bundle["document"]["links"][0]["rename"],
+        json!({"item": "order", "worker": "barista"})
+    );
 
     let mut t = session();
     run(&mut t, "bundle.load", json!({"document": exp["document"]}));
@@ -1272,6 +1278,49 @@ fn an_edit_of_a_bundle_that_names_its_parts_by_cid_keeps_the_references() {
         "both parts are still named by cid, no model inlined"
     );
     assert_eq!(state(&mut s)["document"]["preserved_keys"], json!([]));
+}
+
+/// A subnet replaced by another of the same id is a new subnet, not the reference it replaced: the
+/// export merges the unknown keys the received one had, but not its `cid`, because the new subnet
+/// carries a `model` and a part is referenced or inline, never both (the identity rule's [E_PART]).
+#[test]
+fn a_subnet_replaced_under_the_same_id_does_not_inherit_the_cid_of_the_one_it_replaced() {
+    let root = format!(
+        "{}/tests/fixtures/model/fixtures",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let maker: Value =
+        serde_json::from_slice(&std::fs::read(format!("{root}/part-maker.jsonld")).unwrap())
+            .unwrap();
+    let mut s = session();
+    let part = run(&mut s, "store.put", json!({"document": maker}))["cid"].clone();
+    let received = json!({"@context": CONTEXT, "@type": "PetriNetBundle", "name": "swap",
+        "subnets": [{"@type": "PetriNet", "id": "orders", "cid": part, "x-note": "kept"}],
+        "links": []});
+    run(&mut s, "bundle.load", json!({"document": received}));
+    run(&mut s, "bundle.remove_instance", json!({"id": "orders"}));
+    run(&mut s, "bundle.add_instance", json!({"id": "orders"}));
+    let exp = run(&mut s, "bundle.export", json!({}));
+    let sub = &exp["document"]["subnets"][0];
+    assert_eq!(sub["id"], "orders", "{exp}");
+    assert!(
+        sub.get("cid").is_none(),
+        "the reference did not carry over: {sub}"
+    );
+    assert!(
+        sub.get("model").is_some(),
+        "the new subnet is inline: {sub}"
+    );
+    assert_eq!(sub["x-note"], "kept", "the keys it had are kept: {sub}");
+    assert!(
+        exp.get("model_error").is_none(),
+        "the export is a document the identity rule accepts: {}",
+        exp["model_error"]
+    );
+    assert_eq!(
+        state(&mut s)["document"]["preserved_keys"],
+        json!(["subnets[0].x-note"])
+    );
 }
 
 // ------------------------------------------------------------ 4. across the forms
@@ -2743,6 +2792,13 @@ fn a_composition_over_the_instance_or_link_cap_is_refused_and_one_at_it_loads_qu
         .collect();
     bundle["subnets"] = json!(subs);
     assert_code(&load_err(&bundle), "COMPOSITION_LIMIT");
+    // ...and its links, counted on their own (the subnets here are the cafe's three).
+    let mut bundle = cafe();
+    let link = bundle["links"][0].clone();
+    bundle["links"] = json!((0..=MAX_LINKS).map(|_| link.clone()).collect::<Vec<_>>());
+    let err = load_err(&bundle);
+    assert_code(&err, "COMPOSITION_LIMIT");
+    assert!(err.contains(&format!("{} links", MAX_LINKS + 1)), "{err}");
 }
 
 /// `file.open` read a composition document as a net: an empty one, with no hint why.
