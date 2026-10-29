@@ -50,9 +50,11 @@
 //! permuting groups of identical neighbours (factorial). A document a few
 //! hundred bytes long can ask for more time than anyone has, and `seal` runs
 //! on documents that were received. So the canonicaliser counts its steps
-//! ([`MAX_SEAL_WORK`]) and refuses, with `[DOCUMENT_TOO_COMPLEX]`, a document
-//! that needs more; the count is the same on every platform, and a document
-//! that is refused is never given a different CID. The N-degree hash is
+//! ([`seal_work_limit`]: twice the quadratic cost an honest long list has,
+//! between [`MIN_SEAL_WORK`] and [`MAX_SEAL_WORK`]) and refuses, with
+//! `[DOCUMENT_TOO_COMPLEX]`, a document that needs more; the count is the same
+//! on every platform, and a document that is refused is never given a
+//! different CID. The N-degree hash is
 //! recursive in the specification and in json-gold; here its recursion is a
 //! stack on the heap, so the depth of a long list cannot overflow the
 //! thread's stack (a browser's is 1 MiB): the same steps in the same order,
@@ -739,25 +741,50 @@ struct Canon<'a> {
     first_degree: Vec<Option<String>>,
     /// The canonical issuer (`_:c14n`).
     canonical: Issuer,
-    /// Steps taken so far, and the most that are allowed ([`MAX_SEAL_WORK`]).
+    /// Steps taken so far, and the most that are allowed ([`seal_work_limit`]).
     work: u64,
     limit: u64,
 }
 
-/// The most steps URDNA2015 may take for one document before `seal` refuses
-/// it with `[DOCUMENT_TOO_COMPLEX]`. A step is one N-degree hash call
-/// (counted with the quads it reads) or one permutation tried (counted with
-/// its length). The algorithm is superlinear by design: blank nodes that look
-/// alike (siblings with the same content, the cells of a long `@list`) are
-/// told apart by walking and permuting their neighbours, so a few hundred
-/// bytes of identical siblings cost factorial time and a long list costs
-/// quadratic time. The byte cap on a document bounds its size, not this; the
-/// count does, and it is the same on every platform, so a document seals or
-/// is refused alike everywhere. The largest parity fixture needs 0.4 million
-/// steps, a 200-place ring net 1.6 million, and every composition document
-/// of this repository under 0.13 million; a hostile one costs the whole
-/// budget (a few seconds in a debug build) and no more.
-pub const MAX_SEAL_WORK: u64 = 2_000_000;
+/// The fewest and the most steps URDNA2015 may take for one document before
+/// `seal` refuses it with `[DOCUMENT_TOO_COMPLEX]`. A step is one N-degree
+/// hash call (counted with the quads it reads) or one permutation tried
+/// (counted with its length). The algorithm is superlinear by design: blank
+/// nodes that look alike (siblings with the same content, the cells of a long
+/// `@list`) are told apart by walking and permuting their neighbours, so a
+/// few hundred bytes of identical siblings cost factorial time and a long
+/// list costs quadratic time. The byte cap on a document bounds its size, not
+/// this; the count does, and it is the same on every platform, so a document
+/// seals or is refused alike everywhere.
+///
+/// What an honest document needs is about its blank nodes squared (a net's
+/// arcs are one long list): 0.4 to 0.95 times the square for the nets of this
+/// repository (tic-tac-toe 0.4 million steps for 701 nodes, connect-3 2.9
+/// million for 1796, connect-4 37 million for 6260). So the limit is twice
+/// that, [`seal_work_limit`], and a hostile document pays for its own size:
+/// a small one (identical siblings are few bytes and few nodes) gets the
+/// floor, a few seconds in a debug build and a fraction of that in a release
+/// one, whatever it hides; a large one gets at most the ceiling.
+pub const MIN_SEAL_WORK: u64 = 2_000_000;
+pub const MAX_SEAL_WORK: u64 = 80_000_000;
+
+/// The steps a document of `blank_nodes` blank nodes may take to seal.
+pub fn seal_work_limit(blank_nodes: usize) -> u64 {
+    let n = blank_nodes as u64;
+    n.saturating_mul(n)
+        .saturating_mul(2)
+        .clamp(MIN_SEAL_WORK, MAX_SEAL_WORK)
+}
+
+thread_local! {
+    static WORK_LIMIT: std::cell::Cell<Option<u64>> = const { std::cell::Cell::new(None) };
+}
+
+/// Replaces [`seal_work_limit`] on this thread (`None` restores it), so a test can show the
+/// refusal of a document that is honest but not small without spending the real budget on it.
+pub fn limit_work_on_this_thread(limit: Option<u64>) {
+    WORK_LIMIT.with(|l| l.set(limit));
+}
 
 /// The deepest chain of N-degree calls (the length of a list, give or take):
 /// each pending call holds a few hundred bytes on the heap, not the stack.
@@ -779,10 +806,11 @@ pub fn is_too_complex(e: &Error) -> bool {
 }
 
 fn canonicalize(quads: &[Quad]) -> Result<String> {
-    canonicalize_within(quads, MAX_SEAL_WORK)
+    canonicalize_within(quads, None)
 }
 
-fn canonicalize_within(quads: &[Quad], limit: u64) -> Result<String> {
+/// `limit` of `None` is the rule: this thread's override, else [`seal_work_limit`] of the nodes.
+fn canonicalize_within(quads: &[Quad], limit: Option<u64>) -> Result<String> {
     let nodes = quads
         .iter()
         .flat_map(|q| [&q.s, &q.o])
@@ -806,7 +834,9 @@ fn canonicalize_within(quads: &[Quad], limit: u64) -> Result<String> {
         canonical: Issuer::new(nodes),
         bnode_quads,
         work: 0,
-        limit,
+        limit: limit
+            .or_else(|| WORK_LIMIT.with(std::cell::Cell::get))
+            .unwrap_or_else(|| seal_work_limit(nodes)),
     };
 
     // Issue canonical ids to nodes with a unique first-degree hash, in hash
@@ -873,7 +903,7 @@ fn canonicalize_within(quads: &[Quad], limit: u64) -> Result<String> {
 /// One pending call of the N-degree hash. The hash is recursive in the
 /// specification (depth = the length of a list); here the recursion is a
 /// stack of these on the heap, so a long list cannot overflow the thread's
-/// stack (the browser's is 1 MiB), and [`MAX_SEAL_WORK`] bounds the time.
+/// stack (the browser's is 1 MiB), and [`seal_work_limit`] bounds the time.
 struct Frame {
     /// The issuer this call returns: the chosen one after each related group.
     issuer: Issuer,
@@ -1229,8 +1259,11 @@ mod tests {
         let whole = canonicalize(&quads).unwrap();
         // Enough budget gives the same answer as the default, and a small one
         // refuses with the code, not with a different canonical form.
-        assert_eq!(canonicalize_within(&quads, 10_000_000).unwrap(), whole);
-        let err = canonicalize_within(&quads, 100_000)
+        assert_eq!(
+            canonicalize_within(&quads, Some(10_000_000)).unwrap(),
+            whole
+        );
+        let err = canonicalize_within(&quads, Some(100_000))
             .unwrap_err()
             .to_string();
         assert!(err.starts_with("[DOCUMENT_TOO_COMPLEX] "), "{err}");
@@ -1244,14 +1277,43 @@ mod tests {
     fn a_long_list_is_refused_not_overflowed() {
         // 3000 elements: the cells of an `@list` look alike, so the hash walks
         // the chain to its end from each of them. Recursing on the call stack
-        // aborted the process (a test thread has 2 MiB) before the work, which
-        // is quadratic, was counted; on the heap it is only slow.
+        // aborted the process (this thread has 2 MiB) at a depth of about a
+        // thousand, before the work, which is quadratic, was counted; on the
+        // heap the walk reaches the bottom and is only slow. (The refusal is
+        // asked of a small budget: the real one is spent in seconds.)
         let items: Vec<Value> = (0..3000)
             .map(|i| json!({"source": format!("p{i}")}))
             .collect();
         let doc = json!({"@context": PFLOW_CONTEXT_URL, "@type": "PetriNet", "arcs": items});
-        let err = seal(&doc).unwrap_err().to_string();
+        let quads = to_rdf(&doc).unwrap();
+        let err = canonicalize_within(&quads, Some(2_000_000))
+            .unwrap_err()
+            .to_string();
         assert!(err.starts_with("[DOCUMENT_TOO_COMPLEX] "), "{err}");
+        limit_work_on_this_thread(Some(2_000_000));
+        let err = seal(&doc).unwrap_err().to_string();
+        limit_work_on_this_thread(None);
+        assert!(err.starts_with("[DOCUMENT_TOO_COMPLEX] "), "{err}");
+    }
+
+    #[test]
+    fn the_limit_grows_with_the_document_between_a_floor_and_a_ceiling() {
+        assert_eq!(seal_work_limit(0), MIN_SEAL_WORK);
+        assert_eq!(
+            seal_work_limit(19),
+            MIN_SEAL_WORK,
+            "a small hostile document gets the floor"
+        );
+        assert_eq!(seal_work_limit(10_000_000), MAX_SEAL_WORK);
+        // What the nets of examples/ cost to seal, measured (blank nodes, steps): they must fit,
+        // each with room to spare.
+        for (nodes, needs) in [(701, 398_145), (1796, 2_887_626), (6260, 37_342_916)] {
+            assert!(
+                seal_work_limit(nodes) >= 2 * needs,
+                "{nodes} nodes need {needs}, may take {}",
+                seal_work_limit(nodes)
+            );
+        }
     }
 
     #[test]
@@ -1264,8 +1326,8 @@ mod tests {
         let doc = json!({"@context": PFLOW_CONTEXT_URL, "@type": "PetriNet", "arcs": items});
         let quads = to_rdf(&doc).unwrap();
         assert_eq!(
-            canonicalize_within(&quads, 2_000_000).unwrap(),
-            canonicalize_within(&quads, 20_000_000).unwrap()
+            canonicalize_within(&quads, Some(2_000_000)).unwrap(),
+            canonicalize_within(&quads, Some(20_000_000)).unwrap()
         );
         assert!(seal(&doc).unwrap().starts_with('z'));
     }

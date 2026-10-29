@@ -2884,15 +2884,18 @@ fn saga_steps_doc(n: usize) -> Value {
 
 /// The Bundle a composition flattens to is sealed for the commands that show `bundle_cid` and for
 /// none other: the autosave and a receipt's document id name the composition by its recipe, which
-/// seals in a moment however large the net it builds. A saga of 50 steps flattens to a Bundle past
-/// `cid::MAX_SEAL_WORK`: it loads, has its CID, and says why it has no `bundle_cid`.
+/// seals in a moment however large the net it builds. A saga of 10 steps flattens to a Bundle that
+/// needs 153 thousand steps to seal; with the limit set below that (a test stands in for a Bundle
+/// past the real limit, which costs seconds to find), it loads, has its CID, and says why it has
+/// no `bundle_cid`.
 #[test]
 fn a_composition_whose_bundle_is_too_large_to_seal_loads_and_is_named_by_its_recipe() {
     let mut s = session();
+    cid::limit_work_on_this_thread(Some(50_000));
     let out = run(
         &mut s,
         "bundle.load",
-        json!({"document": saga_steps_doc(50)}),
+        json!({"document": saga_steps_doc(10)}),
     );
     assert_eq!(out["form"], "composition", "{out}");
     assert!(out["cid"].as_str().unwrap().starts_with('z'), "{out}");
@@ -2901,11 +2904,12 @@ fn a_composition_whose_bundle_is_too_large_to_seal_loads_and_is_named_by_its_rec
         out["bundle_cid_error"].as_str().unwrap(),
         "DOCUMENT_TOO_COMPLEX",
     );
-    // A composition that does seal has no such member.
-    let mut t = session();
-    let ok = run(&mut t, "bundle.load", json!({"document": small_doc()}));
-    assert!(ok["bundle_cid"].is_string(), "{ok}");
-    assert!(ok.get("bundle_cid_error").is_none(), "{ok}");
+    let exported = run(&mut s, "bundle.export", Value::Null);
+    assert_eq!(exported["cid"], out["cid"]);
+    assert_code(
+        exported["bundle_cid_error"].as_str().unwrap(),
+        "DOCUMENT_TOO_COMPLEX",
+    );
 
     // The autosave seals the recipe once and never the Bundle.
     let before = cid::seals_on_this_thread();
@@ -2923,6 +2927,14 @@ fn a_composition_whose_bundle_is_too_large_to_seal_loads_and_is_named_by_its_rec
         out["cid"],
         "the recipe restores to the same document"
     );
+    cid::limit_work_on_this_thread(None);
+
+    // With the real limit the same composition seals, and so does a small one: no error member.
+    for d in [saga_steps_doc(10), small_doc()] {
+        let ok = run(&mut session(), "bundle.load", json!({"document": d}));
+        assert!(ok["bundle_cid"].is_string(), "{ok}");
+        assert!(ok.get("bundle_cid_error").is_none(), "{ok}");
+    }
 }
 
 /// A document refused for its keys or its size is refused before anything is sealed: the seal of

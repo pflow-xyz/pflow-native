@@ -494,3 +494,19 @@ fn outbound_cids_agree_with_file_cid() {
     // The permalink carries the document a save would write, rates included.
     assert!(link.as_str().unwrap().contains("rate"), "{link}");
 }
+
+/// The largest nets of `examples/` seal, as they did before sealing was bounded: the work a document
+/// may take grows with it (`cid::seal_work_limit`), so a net of 536 arcs is not mistaken for a
+/// hostile document. (connect-4, 1924 arcs, needs 37 million steps and a minute in a debug build:
+/// `cid::tests::the_limit_grows_with_the_document_between_a_floor_and_a_ceiling` pins that it fits.)
+#[test]
+fn the_larger_example_nets_still_seal() {
+    let path = format!(
+        "{}/../../examples/connect-3.json",
+        env!("CARGO_MANIFEST_DIR")
+    );
+    let net: Value = serde_json::from_slice(&std::fs::read(&path).unwrap()).unwrap();
+    assert!(net["arcs"].as_array().unwrap().len() > 500);
+    let cid = cid::seal(&net).unwrap_or_else(|e| panic!("connect-3 should seal: {e}"));
+    assert!(cid.starts_with('z'));
+}

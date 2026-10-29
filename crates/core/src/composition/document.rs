@@ -994,7 +994,7 @@ impl Composition {
     /// The document and its CID. Sealing is the cost: a form (a) document
     /// holds its parameters as text and seals in a moment, a Bundle is
     /// sealed whole (and refused with `[DOCUMENT_TOO_COMPLEX]` past
-    /// [`crate::cid::MAX_SEAL_WORK`]). `bundle_cid` is left to
+    /// [`crate::cid::seal_work_limit`]). `bundle_cid` is left to
     /// [`Composition::export_with_bundle_cid`].
     pub fn export(&self, form: Option<Form>) -> Result<Exported> {
         let form = form.unwrap_or_else(|| self.natural_form());
