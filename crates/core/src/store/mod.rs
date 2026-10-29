@@ -33,11 +33,17 @@
 //!
 //! | Key | What |
 //! |---|---|
-//! | `models/<cid>.jsonld` | the document, `@id` set to its CID |
-//! | `index.json` | `{"models": {cid: {title, created, parents, license, superseded_by, places, transitions}}}` |
+//! | `models/<cid>.jsonld` | the document, `@id` set to its CID; a net, a bundle, a composition or a content document ([`DocKind`]) |
+//! | `index.json` | `{"models": {cid: {title, created, kind?, about?, parents, license, superseded_by, places, transitions}}}` |
 //! | `edges.json` | `{"relations": {id: {Subject, Predicate, Object, At}}}` (sim's Relation JSON) |
 //! | `collections.json` | `{"collections": {id: {Name}}}` |
 //! | `maps/<id>.json` | `{"Data": {...}}`, the canonical bytes the id is computed over |
+//!
+//! A document that is not a net says so in its index entry (`kind`: `bundle`,
+//! `composition` or `content`); a net's entry has no `kind`, so it is byte for
+//! byte what it was before the other kinds were stored. A content document's
+//! `about` is the CID of the composition it describes. Every kind is a model
+//! to the rest of the store (edges, collections, licenses, versions).
 //!
 //! [`LAYOUT_PREFIXES`] lists the directories of this table and
 //! [`LayoutFile::of`] its keys. A new key goes in both, or
@@ -68,7 +74,7 @@ use serde::{de::DeserializeOwned, Deserialize, Serialize};
 use serde_json::{json, Value};
 
 pub use backend::{FsBackend, MemoryBackend, StoreBackend};
-pub use kind::{kind_of, DocKind};
+pub use kind::{kind_of, require_kind, DocKind};
 use predicate::{Fate, Kind, Range};
 
 use crate::doc::Document;
@@ -83,6 +89,12 @@ pub struct ModelMeta {
     /// Milliseconds since the epoch when first stored (0 on the web build).
     #[serde(default)]
     pub created: u64,
+    /// `bundle`, `composition` or `content`; absent for a net.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
+    /// A content document's composition: the CID it describes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub about: Option<String>,
     /// The models this one was derived from (provenance), nearest first.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub parents: Vec<String>,
@@ -608,27 +620,87 @@ impl Store {
 
     // ---- models ----
 
-    /// Seals and stores a document. Idempotent by CID: a second put of the
-    /// same net returns `existed: true` and keeps the first metadata (a
-    /// missing title or parent list is filled in).
+    /// Seals and stores a net ([`Store::put_document`] over the document as
+    /// a save would write it). Idempotent by CID: a second put of the same
+    /// net returns `existed: true` and keeps the first metadata (a missing
+    /// title or parent list is filled in).
     pub fn put_model(
         &self,
         doc: &Document,
         title: Option<&str>,
         parents: Option<Vec<String>>,
     ) -> Result<Value> {
+        self.put_document(
+            &doc.to_value(),
+            DocKind::Net,
+            title,
+            parents,
+            None,
+            (doc.places.len(), doc.transitions.len()),
+        )
+    }
+
+    /// Seals and stores any document of a [`DocKind`] the store keeps, under
+    /// its pflow CID (`@id` is added after sealing, which ignores it). The
+    /// rules are `put_model`'s: idempotent by CID, the first metadata
+    /// stands, parents must be model CIDs and may not close a cycle. `kind`
+    /// must be what [`kind_of`] says of `doc` (`[DOCUMENT_KIND]` otherwise).
+    ///
+    /// The title defaults to the document's `name`. `counts` are the places
+    /// and transitions the index shows (a net's own; a composition's flat
+    /// net, or 0 and 0 when it does not flatten; 0 and 0 for content).
+    /// `about` is a content document's composition: any model CID, with a
+    /// `note` in the result when that CID is not a stored composition or
+    /// bundle. The result is `put_model`'s, plus `kind` when the index
+    /// records one and `about` for content.
+    pub fn put_document(
+        &self,
+        doc: &Value,
+        kind: DocKind,
+        title: Option<&str>,
+        parents: Option<Vec<String>>,
+        about: Option<&str>,
+        counts: (usize, usize),
+    ) -> Result<Value> {
+        let found = require_kind(doc)?;
+        if kind != found {
+            return Err(crate::composition::document::refuse(
+                "DOCUMENT_KIND",
+                format!(
+                    "stored as {}, but the document is {}",
+                    kind.name(),
+                    found.name()
+                ),
+            ));
+        }
+        if let Some(a) = about {
+            if kind != DocKind::Content {
+                return Err(Error::BadArgs(format!(
+                    "about relates a content document to its composition; a {} has none",
+                    kind.name()
+                )));
+            }
+            if !canon::is_model_cid(a) {
+                return Err(Error::BadArgs(format!(
+                    "about {a:?} is not a model CID (z…, the composition's `cid`)"
+                )));
+            }
+        }
         let _g = self.lock();
-        let mut v = doc.to_value();
+        let mut v = doc.clone();
         let cid = crate::cid::seal(&v)?;
         if let Value::Object(m) = &mut v {
             m.insert("@id".into(), json!(cid));
         }
         let snap = self.snapshot()?;
         let mut models = snap.models.clone();
-        // Parents: as given, else the document's own `parents` field.
+        // Parents: as given, else a net's own `parents` field (the other
+        // kinds have no such field).
         let mut parents = parents.unwrap_or_else(|| {
-            doc.extra
-                .get("parents")
+            if kind != DocKind::Net {
+                return vec![];
+            }
+            v.get("parents")
                 .and_then(Value::as_array)
                 .map(|a| {
                     a.iter()
@@ -664,21 +736,31 @@ impl Store {
             text.push('\n');
             self.backend.put(&model_key(&cid), text.as_bytes())?;
         }
+        // Read from the snapshot above, so a composition this same command
+        // stored a moment ago counts.
+        let about_note = about.and_then(|a| match snap.models.get(a) {
+            None => Some(format!(
+                "{a} is not in the local store; store.put the composition this content is about"
+            )),
+            Some(m) => match DocKind::from_index(m.kind.as_deref()) {
+                DocKind::Composition | DocKind::Bundle => None,
+                other => Some(format!(
+                    "{a} is stored as a {}, not a composition or bundle",
+                    other.name()
+                )),
+            },
+        });
         let existed = models.contains_key(&cid);
         let meta = models.entry(cid.clone()).or_insert_with(|| ModelMeta {
             created: canon::now_ms(),
+            kind: kind.index_name().map(str::to_string),
             ..Default::default()
         });
         let before = meta.clone();
         if meta.title.is_empty() {
             meta.title = title
                 .map(str::to_string)
-                .or_else(|| {
-                    doc.extra
-                        .get("name")
-                        .and_then(Value::as_str)
-                        .map(str::to_string)
-                })
+                .or_else(|| v.get("name").and_then(Value::as_str).map(str::to_string))
                 .unwrap_or_default();
         }
         if meta.parents.is_empty() {
@@ -686,21 +768,35 @@ impl Store {
         } else if !parents.is_empty() && meta.parents != parents {
             notes.push("this model's parents were recorded when it was first stored; the first record stands".into());
         }
-        meta.places = doc.places.len();
-        meta.transitions = doc.transitions.len();
+        match (&meta.about, about) {
+            (None, Some(a)) => meta.about = Some(a.to_string()),
+            (Some(first), Some(a)) if first != a => notes.push(
+                "this content's composition was recorded when it was first stored; the first record stands".into(),
+            ),
+            _ => {}
+        }
+        meta.places = counts.0;
+        meta.transitions = counts.1;
         let meta = meta.clone();
         if !existed || meta != before {
             self.save_models(&models)?;
         }
-        let mut out = json!({
-            "cid": cid,
-            "existed": existed,
-            "title": meta.title,
-            "parents": meta.parents,
-            "created": meta.created,
-        });
+        let mut out = json!({ "cid": cid });
+        if let Some(k) = &meta.kind {
+            out["kind"] = json!(k);
+        }
+        out["existed"] = json!(existed);
+        out["title"] = json!(meta.title);
+        out["parents"] = json!(meta.parents);
+        out["created"] = json!(meta.created);
+        if let Some(a) = &meta.about {
+            out["about"] = json!(a);
+        }
         if !notes.is_empty() {
             out["notes"] = json!(notes);
+        }
+        if let Some(n) = about_note {
+            out["note"] = json!(n);
         }
         Ok(out)
     }
@@ -711,6 +807,19 @@ impl Store {
             Error::NotFound(format!("no model {cid} in the local store (store.list)"))
         })?;
         serde_json::from_slice(&bytes).map_err(|e| Error::Parse(format!("stored model {cid}: {e}")))
+    }
+
+    /// The stored document as it was sealed: [`Store::get_model`] without
+    /// the `@id` the store added. A composition, bundle or content loader
+    /// refuses a key it does not know, so those documents are opened from
+    /// this, and an unedited raw Bundle round-trips to the bytes it was
+    /// stored from.
+    pub fn get_sealed(&self, cid: &str) -> Result<Value> {
+        let mut v = self.get_model(cid)?;
+        if let Value::Object(m) = &mut v {
+            m.shift_remove("@id");
+        }
+        Ok(v)
     }
 
     pub fn model_meta(&self, cid: &str) -> Result<Option<ModelMeta>> {
@@ -1310,10 +1419,11 @@ impl Store {
     /// What [`Store::replace_all`] checks before it changes anything: this
     /// store is a memory one, every key is a file of the layout, and every
     /// file holds what its key says, as the store writes it. A model file
-    /// is a document whose CID ([`crate::cid::seal`]) is the one in its
-    /// key, a map's content id is its key's, the index, edges and
-    /// collections parse as their own shape with each entry under its
-    /// content id, and every model the index lists has its file. So a
+    /// is a document of a kind the store keeps ([`DocKind`]) whose CID
+    /// ([`crate::cid::seal`]) is the one in its key, a map's content id is
+    /// its key's, the index, edges and collections parse as their own
+    /// shape with each entry under its content id, and every model the
+    /// index lists has its file, of the kind the index gives it. So a
     /// damaged or edited state is refused rather than serving one net under
     /// another's CID. Edges and lineage may name entities that are gone:
     /// `delete_model {force}` leaves them so.
@@ -1324,7 +1434,7 @@ impl Store {
                 self.location()
             )));
         }
-        let mut model_files = BTreeSet::new();
+        let mut model_files: BTreeMap<&str, DocKind> = BTreeMap::new();
         let mut index = IndexFile::default();
         for (key, text) in blobs {
             backend::check_key(key)?;
@@ -1357,14 +1467,25 @@ impl Store {
                         Error::Parse(m) => damaged(&m),
                         e => damaged(&e),
                     };
-                    Document::from_value(&v).map_err(named)?;
+                    // A net must read as one; for a file that is no kind of
+                    // document the store keeps, this says what is wrong
+                    // with it (not an object, say) before the kind check.
+                    let kind = kind_of(&v);
+                    if matches!(kind, DocKind::Net | DocKind::Unknown) {
+                        Document::from_value(&v).map_err(named)?;
+                    }
+                    if kind == DocKind::Unknown {
+                        return Err(refuse(format!(
+                            "store {key}: the document there is of no kind the store keeps (a PetriNet, PetriNetBundle, PatternComposition or ModelContent)"
+                        )));
+                    }
                     let sealed = crate::cid::seal(&v).map_err(named)?;
                     if sealed != cid {
                         return Err(refuse(format!(
                             "store {key}: the document there has CID {sealed}, not the {cid} its key names"
                         )));
                     }
-                    model_files.insert(cid);
+                    model_files.insert(cid, kind);
                 }
                 LayoutFile::Map(id) => {
                     let v = json()?;
@@ -1380,12 +1501,26 @@ impl Store {
         if let Some(cid) = index
             .models
             .keys()
-            .find(|c| !model_files.contains(c.as_str()))
+            .find(|c| !model_files.contains_key(c.as_str()))
         {
             return Err(refuse(format!(
                 "store {INDEX} lists model {cid}, but {} is not in the state",
                 model_key(cid)
             )));
+        }
+        // The index says which kind each document is; the document says so
+        // too, and they must agree.
+        for (cid, meta) in &index.models {
+            let listed = DocKind::from_index(meta.kind.as_deref());
+            let actual = model_files[cid.as_str()];
+            if listed != actual {
+                return Err(refuse(format!(
+                    "store {INDEX} lists model {cid} as a {}, but {} holds a {}",
+                    listed.name(),
+                    model_key(cid),
+                    actual.name()
+                )));
+            }
         }
         Ok(())
     }

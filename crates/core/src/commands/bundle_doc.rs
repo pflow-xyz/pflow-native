@@ -76,16 +76,10 @@ fn source(id: &str, a: &Value) -> Step {
 }
 
 /// The resolver for `cid` subnets: a net in the local store. A net whose `@type` names its net
-/// type (`ResourceNet`, as examples/producer-consumer.json) is a net too, though `kind_of` only
-/// calls the plain `PetriNet` one so.
+/// type (`ResourceNet`, as examples/producer-consumer.json) is a net too: `kind_of` says so.
 pub fn from_store(cid: &str) -> Option<Value> {
     let v = store::open().get_model(cid).ok()?;
-    let is_net = match store::kind_of(&v) {
-        store::DocKind::Net => true,
-        store::DocKind::Unknown => v.get("places").is_some() && v.get("transitions").is_some(),
-        _ => false,
-    };
-    is_net.then_some(v)
+    (store::kind_of(&v) == store::DocKind::Net).then_some(v)
 }
 
 /// The report shape of `bundle.validate`.
@@ -122,7 +116,7 @@ pub fn load_result(c: &Composition, form: Form) -> Result<Value> {
 pub fn build(a: &Value) -> Result<(Composition, Form)> {
     let doc = match (a.get("document").filter(|v| !v.is_null()), s(a, "cid")) {
         (Some(d), None) => value_arg(d, "document")?,
-        (None, Some(cid)) => store::open().get_model(cid)?,
+        (None, Some(cid)) => store::open().get_sealed(cid)?,
         _ => return Err(Error::BadArgs("pass `document` or `cid`".into())),
     };
     let strict = b(a, "strict").unwrap_or(true);

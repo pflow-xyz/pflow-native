@@ -299,11 +299,21 @@ receipt key (`provenance::issue`, sim's Ed25519 canonical-JSON scheme).
 
 | `DocKind` | `@type` | In the index |
 |---|---|---|
-| `Net` | `PetriNet` (or the legacy untyped net with `places` and `transitions`) | `kind` omitted, so a net's index entry is byte-for-byte what it was |
+| `Net` | `PetriNet`, or any other `@type` that is not one of these with `places` and `transitions` (a `ResourceNet`; the legacy untyped net) | `kind` omitted, so a net's index entry is byte-for-byte what it was |
 | `Bundle` | `PetriNetBundle` | `kind: "bundle"` |
 | `Composition` | `PatternComposition` | `kind: "composition"` |
 | `Content` | `ModelContent` | `kind: "content"`, `about: <composition cid>` |
 | `Unknown` | anything else | refused |
+
+`store.put` stores the open net (or `model`), the open composition (`composition: true`; `form` as in
+`bundle.export`), its content (`content: true`, recorded `about` the composition's CID; with `composition`
+both), or any `document` of a kind above. `store.open` opens by kind: a net as the open net; a composition
+or bundle as `bundle.load {cid}` does (one undo step, and the library's content comes back when the CID is
+the library example's); content attaches strictly to the open composition (`[NO_COMPOSITION]` when none is
+open). `store.list {kind}` filters. Documents are opened from `Store::get_sealed`, the stored document
+without the `@id` the store added, because the loaders refuse a key they do not know. `replace_all` refuses
+a state whose index gives a model another kind than its document has, or holds a file of no kind the store
+keeps.
 
 `Store::put_model(&Document, …)` is now a thin wrapper over `Store::put_document(&Value, kind, …)`; the
 file layout (`models/<cid>.jsonld`, `index.json`) and `dump_blobs` / `replace_all` are unchanged, so

@@ -5,6 +5,9 @@
 
 use serde_json::Value;
 
+use crate::composition::document::refuse;
+use crate::Result;
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum DocKind {
     /// A Petri net in editor JSON-LD ("Shape A").
@@ -45,15 +48,39 @@ impl DocKind {
     }
 }
 
-/// Classifies a document by its `@type`; an untyped object with `places`
-/// and `transitions` is a net (the legacy editor shape).
+/// Classifies a document by its `@type`. An object with `places` and
+/// `transitions` and no other kind's `@type` is a net: untyped (the legacy
+/// editor shape) or typed by its net type (`ResourceNet`, as
+/// examples/producer-consumer.json), which `Document` keeps and the store
+/// has always sealed like any other net.
 pub fn kind_of(v: &Value) -> DocKind {
     match v.get("@type").and_then(Value::as_str) {
         Some("PetriNet") => DocKind::Net,
         Some("PetriNetBundle") => DocKind::Bundle,
         Some("PatternComposition") => DocKind::Composition,
         Some("ModelContent") => DocKind::Content,
-        None if v.get("places").is_some() && v.get("transitions").is_some() => DocKind::Net,
+        _ if v.get("places").is_some() && v.get("transitions").is_some() => DocKind::Net,
         _ => DocKind::Unknown,
+    }
+}
+
+/// [`kind_of`], with `[DOCUMENT_KIND]` for a document the store does not
+/// keep.
+pub fn require_kind(v: &Value) -> Result<DocKind> {
+    match kind_of(v) {
+        DocKind::Unknown => {
+            let ty = match v.get("@type") {
+                Some(Value::String(t)) => format!("@type {t:?}"),
+                Some(other) => format!("@type {other}"),
+                None => "no @type".into(),
+            };
+            Err(refuse(
+                "DOCUMENT_KIND",
+                format!(
+                    "the store keeps a PetriNet, a PetriNetBundle, a PatternComposition or a ModelContent document; this one has {ty}"
+                ),
+            ))
+        }
+        k => Ok(k),
     }
 }

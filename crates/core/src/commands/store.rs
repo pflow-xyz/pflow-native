@@ -10,11 +10,15 @@ use std::collections::{BTreeMap, BTreeSet, VecDeque};
 
 use serde_json::{json, Value};
 
+use super::bundle_doc;
 use crate::artifact::{ArtifactData, GraphEdge, GraphNode};
+use crate::composition::content::ModelContent;
+use crate::composition::document::{self, refuse, value_arg, Form};
+use crate::composition::{self as comp, Composition};
 use crate::doc::Document;
 use crate::registry::{always, arg, b, n, opt, s, strs, ArgType::*, CommandSpec};
 use crate::session::{Session, Step};
-use crate::store::{self, predicate, Snapshot};
+use crate::store::{self, predicate, DocKind, Snapshot};
 use crate::{Error, Result};
 
 const MENU: &str = "Store";
@@ -24,9 +28,15 @@ pub const SET: &[CommandSpec] = &[
         id: "store.put",
         label: "Put in Store…",
         help:
-            "Seal a model (its pflow.xyz CID) and keep it in the local store. Idempotent by CID: \
-               storing the same net again returns existed: true and keeps the first metadata. \
-               `parents` records provenance (defaults to the document's own `parents`).",
+            "Seal a document (its pflow.xyz CID) and keep it in the local store. By default the \
+               open net, or a library net by `model`. `composition: true` stores the open \
+               composition (`form` auto, composition or bundle, as bundle.export); `content: true` \
+               with it also stores the attached content, recorded as about the composition's CID, \
+               and alone stores just that content. `document` stores any PetriNet, PetriNetBundle, \
+               PatternComposition or ModelContent document you pass. Idempotent by CID: storing the \
+               same document again returns existed: true and keeps the first metadata. `parents` \
+               records provenance (a net defaults to its own `parents`). A bundle, composition or \
+               content result carries `kind`; a net's result is as it always was.",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -38,12 +48,32 @@ pub const SET: &[CommandSpec] = &[
             opt(
                 "title",
                 Str,
-                "title for listings (defaults to the net's name)",
+                "title for listings (defaults to the document's name)",
             ),
             opt(
                 "parents",
                 StrList,
                 "CIDs this model was derived from, nearest first",
+            ),
+            opt(
+                "composition",
+                Bool,
+                "store the open composition instead of a net",
+            ),
+            opt(
+                "form",
+                Str,
+                "with composition: auto (default), composition or bundle",
+            ),
+            opt(
+                "content",
+                Bool,
+                "store the open composition's content (with composition: both)",
+            ),
+            opt(
+                "document",
+                Json,
+                "any PetriNet, PetriNetBundle, PatternComposition or ModelContent document (or a string holding it)",
             ),
         ],
         enabled: always,
@@ -64,7 +94,10 @@ pub const SET: &[CommandSpec] = &[
     CommandSpec {
         id: "store.open",
         label: "Open from Store…",
-        help: "Make a stored model the open net (undoable; the net has no file path).",
+        help: "Open a stored document by its kind (undoable). A net becomes the open net (it has no \
+               file path); a composition or bundle becomes the open composition, as bundle.load \
+               {cid} does; content attaches to the open composition (refused when none is open, \
+               or when an element id does not resolve).",
         menu: MENU,
         shortcut: None,
         args: &[arg("cid", Str, "model CID")],
@@ -75,8 +108,10 @@ pub const SET: &[CommandSpec] = &[
     CommandSpec {
         id: "store.list",
         label: "List Stored Models",
-        help: "Stored models, newest first, with title, size, created (ms), collections, license \
-               and successor. `query` filters by title or CID substring. Stores a table artifact.",
+        help: "Stored models, newest first, with title, kind (net, bundle, composition or content), \
+               size, created (ms), collections, license, successor and, for content, the \
+               composition it is about. `query` filters by title or CID substring, `kind` by kind. \
+               Stores a table artifact.",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -85,6 +120,7 @@ pub const SET: &[CommandSpec] = &[
                 Str,
                 "case-insensitive substring of the title or CID",
             ),
+            opt("kind", Str, "only this kind: net, bundle, composition or content"),
             opt("limit", Int, "at most this many rows (default 100)"),
         ],
         enabled: always,
@@ -393,6 +429,33 @@ fn label(snap: &Snapshot, id: &str) -> String {
 }
 
 fn put(sess: &mut Session, a: &Value) -> Result<Value> {
+    let (composition, content) = (
+        b(a, "composition").unwrap_or(false),
+        b(a, "content").unwrap_or(false),
+    );
+    let document = a.get("document").filter(|v| !v.is_null());
+    if s(a, "form").is_some() && !composition {
+        return Err(Error::BadArgs(
+            "form says which document `composition: true` stores; pass it with composition".into(),
+        ));
+    }
+    if let Some(d) = document {
+        if composition || content || s(a, "model").is_some() {
+            return Err(Error::BadArgs(
+                "document is the whole request: pass it without model, composition or content"
+                    .into(),
+            ));
+        }
+        return put_given(a, d);
+    }
+    if composition || content {
+        if s(a, "model").is_some() {
+            return Err(Error::BadArgs(
+                "model names a net; composition and content store the open composition".into(),
+            ));
+        }
+        return put_composition(sess, a, composition, content);
+    }
     let name = s(a, "model").unwrap_or("current");
     // The open net is stored as a save would write it, rates included.
     let doc = if matches!(name, "" | "current") {
@@ -403,6 +466,160 @@ fn put(sess: &mut Session, a: &Value) -> Result<Value> {
     store::open().put_model(&doc, s(a, "title"), strs(a, "parents"))
 }
 
+/// The places and transitions of the flat net, or 0 and 0 when it does not
+/// flatten (what the index shows for a composition).
+fn flat_counts(c: &Composition) -> (usize, usize) {
+    comp::flatten(&c.bundle)
+        .map(|f| (f.model.places.len(), f.model.transitions.len()))
+        .unwrap_or((0, 0))
+}
+
+/// Adds `note` to a result, after any note it already has.
+fn add_note(out: &mut Value, note: Option<String>) {
+    let Some(n) = note else { return };
+    out["note"] = match out["note"].as_str() {
+        Some(prev) => json!(format!("{prev}; {n}")),
+        None => json!(n),
+    };
+}
+
+/// `store.put {composition, content}`: the open composition, its content, or both.
+fn put_composition(sess: &Session, a: &Value, composition: bool, content: bool) -> Result<Value> {
+    let c = sess.composition.as_ref().ok_or_else(|| {
+        Error::Invalid("no composition is open (bundle.open, bundle.load)".into())
+    })?;
+    let form = match s(a, "form").unwrap_or("auto") {
+        "auto" => None,
+        "composition" => Some(Form::Composition),
+        "bundle" => Some(Form::Bundle),
+        other => {
+            return Err(Error::BadArgs(format!(
+                "form {other:?}; there are auto, composition, bundle"
+            )))
+        }
+    };
+    // Everything that can be refused is, before anything is written.
+    let k = if content {
+        let k = c.doc.content.as_ref().ok_or_else(|| {
+            refuse(
+                "NO_CONTENT",
+                "no model content is attached to the open composition (bundle.load {content}, content.load)",
+            )
+        })?;
+        k.cid()?;
+        Some(k)
+    } else {
+        None
+    };
+    let st = store::open();
+    let (mut out, about) = if composition {
+        let exp = c.export(form)?;
+        let kind = match exp.form {
+            Form::Composition => DocKind::Composition,
+            Form::Bundle => DocKind::Bundle,
+        };
+        let mut out = st.put_document(
+            &exp.document,
+            kind,
+            s(a, "title"),
+            strs(a, "parents"),
+            None,
+            flat_counts(c),
+        )?;
+        if let Some(bc) = &exp.bundle_cid {
+            out["bundle_cid"] = json!(bc);
+        }
+        (Some(out), exp.cid)
+    } else {
+        (None, c.export(None)?.cid)
+    };
+    if let Some(k) = k {
+        // Alone, the content takes the title and parents; beside a
+        // composition they are the composition's.
+        let alone = out.is_none();
+        let r = st.put_document(
+            &k.to_document(),
+            DocKind::Content,
+            s(a, "title").filter(|_| alone),
+            strs(a, "parents").filter(|_| alone),
+            Some(&about),
+            (0, 0),
+        )?;
+        match &mut out {
+            Some(o) => o["content"] = json!({"cid": r["cid"], "existed": r["existed"]}),
+            None => out = Some(r),
+        }
+    }
+    Ok(out.expect("composition or content was asked for"))
+}
+
+/// `store.put {document}`: a document of any kind the store keeps.
+fn put_given(a: &Value, d: &Value) -> Result<Value> {
+    let doc = value_arg(d, "document")?;
+    let kind = store::require_kind(&doc)?;
+    let (title, parents) = (s(a, "title"), strs(a, "parents"));
+    let st = store::open();
+    match kind {
+        DocKind::Content => {
+            // Its composition is the one it says it was written against.
+            let (about, note) = match doc.get("composition").and_then(Value::as_str) {
+                Some(c) if store::canon::is_model_cid(c) => (Some(c), None),
+                Some(c) => (
+                    None,
+                    Some(format!(
+                        "the document's composition {c:?} is not a model CID, so no `about` was recorded"
+                    )),
+                ),
+                None => (None, None),
+            };
+            let mut out = st.put_document(&doc, kind, title, parents, about, (0, 0))?;
+            add_note(&mut out, note);
+            Ok(out)
+        }
+        DocKind::Composition | DocKind::Bundle => {
+            // Counts come from loading it. One that does not load is stored as given.
+            let mut bare = doc.clone();
+            if let Value::Object(m) = &mut bare {
+                m.shift_remove("@id");
+            }
+            let (counts, canonical, mut note) =
+                match document::load(&bare, &bundle_doc::from_store) {
+                    Ok(l) => {
+                        let exp = l.composition.export(Some(l.form)).ok();
+                        (
+                            flat_counts(&l.composition),
+                            exp,
+                            None,
+                        )
+                    }
+                    Err(e) => (
+                        (0, 0),
+                        None,
+                        Some(format!(
+                            "the document does not load ({e}); it is stored as given, and store.open refuses it until it does"
+                        )),
+                    ),
+                };
+            let mut out = st.put_document(&doc, kind, title, parents, None, counts)?;
+            if let Some(exp) = canonical {
+                if let Some(bc) = &exp.bundle_cid {
+                    out["bundle_cid"] = json!(bc);
+                }
+                if out["cid"] != json!(exp.cid) {
+                    note = Some(format!(
+                        "this is not the form bundle.export writes (that is {}); bundle.load it and bundle.export for the canonical document",
+                        exp.cid
+                    ));
+                }
+            }
+            add_note(&mut out, note);
+            Ok(out)
+        }
+        DocKind::Net => st.put_model(&Document::from_value(&doc)?, title, parents),
+        DocKind::Unknown => unreachable!("require_kind refused it"),
+    }
+}
+
 fn get(_: &mut Session, a: &Value) -> Result<Value> {
     store::open().get_model(s(a, "cid").unwrap())
 }
@@ -410,7 +627,16 @@ fn get(_: &mut Session, a: &Value) -> Result<Value> {
 fn open(sess: &mut Session, a: &Value) -> Result<Value> {
     let cid = s(a, "cid").unwrap();
     let v = store::open().get_model(cid)?;
-    let doc = Document::from_value(&v)?;
+    match store::require_kind(&v)? {
+        DocKind::Net => open_net(sess, cid, &v),
+        DocKind::Composition | DocKind::Bundle => open_composition(sess, cid),
+        DocKind::Content => open_content(sess, cid),
+        DocKind::Unknown => unreachable!("require_kind refused it"),
+    }
+}
+
+fn open_net(sess: &mut Session, cid: &str, v: &Value) -> Result<Value> {
+    let doc = Document::from_value(v)?;
     let out = json!({
         "cid": cid,
         "places": doc.places.len(),
@@ -422,16 +648,69 @@ fn open(sess: &mut Session, a: &Value) -> Result<Value> {
     Ok(out)
 }
 
+/// A stored composition or bundle becomes the open composition, exactly as
+/// `bundle.load {cid}` opens it.
+fn open_composition(sess: &mut Session, cid: &str) -> Result<Value> {
+    let (c, form) = bundle_doc::build(&json!({ "cid": cid }))?;
+    let mut out = bundle_doc::load_result(&c, form)?;
+    out["kind"] = json!(form.name());
+    sess.edit("open composition from store", |s| {
+        s.composition = Some(c);
+        Ok(())
+    })?;
+    Ok(out)
+}
+
+/// Stored content attaches to the open composition, strictly (an element id
+/// that does not resolve refuses it, as `bundle.load {content}` does).
+fn open_content(sess: &mut Session, cid: &str) -> Result<Value> {
+    let st = store::open();
+    let mc = ModelContent::parse(&st.get_sealed(cid)?)?;
+    if sess.composition.is_none() {
+        return Err(refuse(
+            "NO_COMPOSITION",
+            format!(
+                "no composition is open: content {cid} attaches to one (bundle.open, bundle.load, or store.open a composition first)"
+            ),
+        ));
+    }
+    let about = st.model_meta(cid)?.and_then(|m| m.about);
+    let (summary, open_cid) = sess.edit("attach content from store", |s| {
+        let c = s.composition.as_mut().expect("checked above");
+        bundle_doc::attach(c, mc, true)?;
+        Ok((document::content_json(c), c.document_cid().ok()))
+    })?;
+    let mut out = json!({"cid": cid, "kind": "content", "about": about, "content": summary});
+    if let (Some(a), Some(open)) = (&about, &open_cid) {
+        if a != open {
+            out["note"] = json!(format!(
+                "this content was stored about {a}; the open composition is {open}"
+            ));
+        }
+    }
+    Ok(out)
+}
+
 fn list(sess: &mut Session, a: &Value) -> Result<Value> {
     let snap = store::open().snapshot()?;
     let q = s(a, "query").unwrap_or("").to_lowercase();
     let limit = n(a, "limit").map_or(100, |l| l.max(0.0) as usize);
+    let kind = s(a, "kind").filter(|k| !k.is_empty());
+    if let Some(k) = kind {
+        if !["net", "bundle", "composition", "content"].contains(&k) {
+            return Err(Error::BadArgs(format!(
+                "kind {k:?}; there are net, bundle, composition, content"
+            )));
+        }
+    }
+    let kind_name = |m: &store::ModelMeta| DocKind::from_index(m.kind.as_deref()).name();
     let mut all: Vec<(&String, &store::ModelMeta)> = snap
         .models
         .iter()
         .filter(|(cid, m)| {
             q.is_empty() || cid.to_lowercase().contains(&q) || m.title.to_lowercase().contains(&q)
         })
+        .filter(|(_, m)| kind.is_none_or(|k| kind_name(m) == k))
         .collect();
     all.sort_by(|x, y| y.1.created.cmp(&x.1.created).then(x.0.cmp(y.0)));
     let total = all.len();
@@ -442,6 +721,8 @@ fn list(sess: &mut Session, a: &Value) -> Result<Value> {
             json!({
                 "cid": cid,
                 "title": m.title,
+                "kind": kind_name(m),
+                "about": m.about,
                 "places": m.places,
                 "transitions": m.transitions,
                 "created": m.created,
@@ -455,12 +736,14 @@ fn list(sess: &mut Session, a: &Value) -> Result<Value> {
     let cols = [
         "cid",
         "title",
+        "kind",
         "places",
         "transitions",
         "created",
         "collections",
         "license",
         "superseded_by",
+        "about",
     ];
     let trows = rows
         .iter()
