@@ -788,8 +788,26 @@ pub fn limit_work_on_this_thread(limit: Option<u64>) {
 }
 
 /// The deepest chain of N-degree calls (the length of a list, give or take):
-/// each pending call holds a few hundred bytes on the heap, not the stack.
+/// each pending call holds a few hundred bytes on the heap, not the stack, and
+/// the issuer it carries is as long as the document has blank nodes. A list of
+/// this many alike cells reaches it in about a hundred thousand steps, far
+/// under the work ceiling, so it is a bound of its own: the chain is refused
+/// when it gets this deep, not after the ceiling has been spent on walks of it.
 const MAX_SEAL_DEPTH: usize = 20_000;
+
+#[cfg(test)]
+thread_local! {
+    static DEPTH_LIMIT: std::cell::Cell<Option<usize>> = const { std::cell::Cell::new(None) };
+}
+
+/// [`MAX_SEAL_DEPTH`], or this thread's override in a test.
+fn max_seal_depth() -> usize {
+    #[cfg(test)]
+    if let Some(d) = DEPTH_LIMIT.with(std::cell::Cell::get) {
+        return d;
+    }
+    MAX_SEAL_DEPTH
+}
 
 fn too_complex(limit: u64) -> Error {
     Error::Invalid(format!(
@@ -1007,6 +1025,7 @@ impl Canon<'_> {
         let longer = |path: &str, chosen: &str| {
             !chosen.is_empty() && path.len() >= chosen.len() && path > chosen
         };
+        let max_depth = max_seal_depth();
         let mut stack = vec![self.enter(id, issuer)?];
         // What the call that just finished returns to its caller.
         let mut returned: Option<(String, Issuer)> = None;
@@ -1060,7 +1079,7 @@ impl Canon<'_> {
                     // Issued when the attempt was built; the call keeps it.
                     at.issued = at.issuer.issue(related);
                     let handed = std::mem::replace(&mut at.issuer, Issuer::new(0));
-                    if stack.len() >= MAX_SEAL_DEPTH {
+                    if stack.len() >= max_depth {
                         return Err(too_complex(self.limit));
                     }
                     let child = self.enter(related, handed)?;
@@ -1295,6 +1314,36 @@ mod tests {
         let err = seal(&doc).unwrap_err().to_string();
         limit_work_on_this_thread(None);
         assert!(err.starts_with("[DOCUMENT_TOO_COMPLEX] "), "{err}");
+    }
+
+    /// `n` alike list cells, each holding a distinct object: the walk from a cell goes the length
+    /// of the list.
+    fn arcs_list(n: usize) -> Value {
+        let items: Vec<Value> = (0..n).map(|i| json!({"source": format!("p{i}")})).collect();
+        json!({"@context": PFLOW_CONTEXT_URL, "@type": "PetriNet", "arcs": items})
+    }
+
+    #[test]
+    fn a_chain_deeper_than_the_depth_limit_is_refused_though_the_work_would_fit() {
+        // 100 cells seal; with the depth limit lowered to 50 the same document is refused, and with
+        // it restored it seals to the same CID: the work budget is not what refused it.
+        let doc = arcs_list(100);
+        let cid = seal(&doc).unwrap();
+        DEPTH_LIMIT.with(|d| d.set(Some(50)));
+        let err = seal(&doc).unwrap_err();
+        DEPTH_LIMIT.with(|d| d.set(None));
+        assert!(is_too_complex(&err), "{err}");
+        assert_eq!(seal(&doc).unwrap(), cid);
+    }
+
+    #[test]
+    fn a_list_as_long_as_the_depth_limit_is_refused_far_under_the_work_ceiling() {
+        // The real constant is reachable by a real document, and it is reached after about a
+        // hundred thousand steps; the ceiling is 80 million.
+        let doc = arcs_list(MAX_SEAL_DEPTH + 100);
+        let quads = to_rdf(&doc).unwrap();
+        let err = canonicalize_within(&quads, Some(MAX_SEAL_WORK)).unwrap_err();
+        assert!(is_too_complex(&err), "{err}");
     }
 
     #[test]
