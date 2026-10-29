@@ -158,10 +158,24 @@ pub fn instance(id: &str) -> Option<&'static InstanceSpec> {
 /// The default composition's instances.
 pub const DEFAULT_INSTANCES: [&str; 3] = ["orders", "workers", "payment"];
 
+/// The largest magnitude a numeric parameter (a capacity, an initial balance, an amount) may
+/// have. A pattern sums them (a saga's conservation constant totals its accounts; its moves add
+/// up per account), pflow-compose adds unchecked, and a document is at most 4 MiB: 2^22
+/// numbers of at most 2^40 sum to at most 2^62, inside an i64. Without a bound two balances of
+/// 2^62 panicked the process in a debug build and wrote a wrapped constant in a release one.
+pub const MAX_PARAM: i64 = 1 << 40;
+
 fn int(p: &Value, k: &str) -> Result<i64, String> {
-    p.get(k)
+    let n = p
+        .get(k)
         .and_then(Value::as_i64)
-        .ok_or_else(|| format!("parameter {k:?} must be an integer"))
+        .ok_or_else(|| format!("parameter {k:?} must be an integer"))?;
+    if n.unsigned_abs() > MAX_PARAM as u64 {
+        return Err(format!(
+            "parameter {k:?} is {n}; a pattern parameter is at most {MAX_PARAM} (2^40) in magnitude"
+        ));
+    }
+    Ok(n)
 }
 
 fn text(p: &Value, k: &str) -> Result<String, String> {

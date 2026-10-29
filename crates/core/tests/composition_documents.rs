@@ -1606,6 +1606,25 @@ fn a_constructor_that_refuses_its_parameters_refuses_the_document() {
     let mut i = payment_inst();
     i["params"]["steps"][1]["moves"][0]["to"] = json!("nobody");
     cases.push(("saga move to an unknown account", i));
+    // Two balances of 2^62 sum past an i64: pflow-compose adds them unchecked (a panic in a debug
+    // build, a wrapped conservation constant in a release one).
+    let big = 1i64 << 62;
+    let mut i = payment_inst();
+    i["params"]["accounts"] = json!({"a": {"initial": big, "shared": false},
+                                     "b": {"initial": big, "shared": false}});
+    i["params"]["steps"] = json!([{"id": "x", "name": "n", "compensation": "c",
+        "moves": [{"from": "a", "to": "b", "amount": big}]}]);
+    cases.push(("saga balances that sum past an i64", i));
+    let mut i = payment_inst();
+    i["params"]["accounts"]["customer"]["initial"] = json!(i64::MAX);
+    cases.push(("saga balance of i64::MAX", i));
+    let mut i = orders_inst();
+    i["params"]["Capacity"] = json!(i64::MAX);
+    i["params"]["Initial"] = json!(0);
+    cases.push(("queue capacity of i64::MAX", i));
+    let mut i = workers_inst();
+    i["params"]["capacity"] = json!(i64::MAX);
+    cases.push(("pool capacity of i64::MAX", i));
     for (what, inst) in cases {
         let err = load_err(&doc(json!([inst]), json!([])));
         assert_code(&err, "INSTANCE_BUILD");
@@ -1623,6 +1642,32 @@ fn a_constructor_that_refuses_its_parameters_refuses_the_document() {
         err.contains("unknown account \"nobody\""),
         "the constructor's message follows: {err}"
     );
+}
+
+/// The bound on a numeric parameter is 2^40 in magnitude, inclusive, and the message names the
+/// parameter.
+#[test]
+fn a_numeric_parameter_is_bounded_at_two_to_the_fortieth() {
+    use pflow_native_core::composition::MAX_PARAM;
+    assert_eq!(MAX_PARAM, 1 << 40);
+    let with_balance = |n: i64| {
+        let mut i = payment_inst();
+        i["params"]["accounts"]["customer"]["initial"] = json!(n);
+        doc(json!([i]), json!([]))
+    };
+    let mut s = session();
+    run(
+        &mut s,
+        "bundle.load",
+        json!({"document": with_balance(MAX_PARAM)}),
+    );
+    let err = load_err(&with_balance(MAX_PARAM + 1));
+    assert_code(&err, "INSTANCE_BUILD");
+    assert!(
+        err.contains("parameter \"initial\" is 1099511627777"),
+        "{err}"
+    );
+    assert_code(&load_err(&with_balance(-MAX_PARAM - 1)), "INSTANCE_BUILD");
 }
 
 #[test]
