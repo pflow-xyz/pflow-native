@@ -1037,7 +1037,9 @@ pub fn missing(c: &Composition) -> Vec<Value> {
             "NO_PORTS",
             format!(
                 "{} subnet(s) declare no ports ({}): nothing to drag a link from or to, so snap-together \
-                 offers no candidates there; links already in the document are drawn",
+                 offers no candidates there; a link already in the document is drawn between ports only \
+                 where both its ends are ports, and the Flat net, Boundaries and Laws views read every link \
+                 through Flatten",
                 portless.len(),
                 portless.join(", ")
             ),

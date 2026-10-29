@@ -1965,8 +1965,9 @@ fn the_by_reference_identity_vectors_load_to_their_golden_cids_and_export_unchan
 
 #[test]
 fn a_net_whose_type_names_its_net_type_resolves_too() {
-    // examples/producer-consumer.json is `@type: "ResourceNet"`, which the store keeps as a net
-    // (put_model seals it like any other) though `kind_of` only knows the plain `PetriNet`.
+    // examples/producer-consumer.json is `@type: "ResourceNet"`: a net that names its net type in
+    // its `@type`. `kind_of` classifies it as a net (anything that is not a composition, a bundle
+    // or content), so the store keeps it as one and a `cid` part reference to it resolves.
     let mut s = session();
     run(
         &mut s,
@@ -2734,4 +2735,27 @@ fn orders_session() -> Session {
     let mut s = session();
     run(&mut s, "bundle.open", json!({}));
     s
+}
+
+/// The identity rule is reported, not enforced, on load: a shape it refuses (a subnet that is both
+/// inline and a reference) still loads, and `model_error` carries the rule's own refusal.
+#[test]
+fn a_shape_the_identity_rule_refuses_loads_and_reports_model_error() {
+    let mut d = cafe();
+    d["subnets"][0]["cid"] = json!("z4EBG9jDsuUdvVN4bUXRHxoDG3p274FfhcJd8BiruRcE1jLCHi8");
+    let mut s = session();
+    let out = run(&mut s, "bundle.load", json!({"document": d}));
+    assert_eq!(out["cid"], json!(cid::seal(&d).unwrap()));
+    assert!(
+        out["model_error"].as_str().unwrap().starts_with("[E_PART]"),
+        "{out}"
+    );
+    assert!(out.get("model_cid").is_none(), "{out}");
+    // A sound document has no such member.
+    let mut t = session();
+    let ok = run(&mut t, "bundle.load", json!({"document": cafe()}));
+    assert!(
+        ok.get("model_error").is_none() && ok["model_cid"] == ok["cid"],
+        "{ok}"
+    );
 }

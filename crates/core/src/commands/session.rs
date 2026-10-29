@@ -355,10 +355,29 @@ fn parse(sess: &Session, state: &Value) -> Result<Parsed> {
             // The document (either form) when the state has one; the older
             // `{instances, links}` of catalog ids otherwise (a state a build
             // before composition documents saved).
-            v => Some(
-                crate::composition::document::restore_part(v, &super::bundle_doc::from_store)
-                    .map_err(|e| bad("composition", e))?,
-            ),
+            v => {
+                // A bundle that names its parts by CID needs them to draw. They are in the state's
+                // own `store` part when it has one (that is the store after the restore, and the
+                // page's is empty before it), else in the store as it is.
+                let saved = obj
+                    .get("store")
+                    .and_then(|s| s.get("blobs"))
+                    .and_then(Value::as_object);
+                let resolve = |cid: &str| -> Option<Value> {
+                    match saved {
+                        Some(blobs) => {
+                            let text = blobs.get(&format!("models/{cid}.jsonld"))?.as_str()?;
+                            let doc: Value = serde_json::from_str(text).ok()?;
+                            (store::kind_of(&doc) == store::DocKind::Net).then_some(doc)
+                        }
+                        None => super::bundle_doc::from_store(cid),
+                    }
+                };
+                Some(
+                    crate::composition::document::restore_part(v, &resolve)
+                        .map_err(|e| bad("composition", e))?,
+                )
+            }
         });
     }
     if let Some(v) = obj.get("plan") {

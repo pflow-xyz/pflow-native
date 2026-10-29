@@ -1401,3 +1401,31 @@ fn superseding_across_kinds_is_allowed_and_says_so() {
         "{same}"
     );
 }
+
+/// A bare wrapper of one part IS that part's net (model identity), but the store files the wrapper
+/// under its own CID, as a document of its own: put says both, so a caller can tell.
+#[test]
+fn store_put_of_a_bundle_reports_what_model_identity_says_of_it() {
+    let mut s = session();
+    let wrap: Value = serde_json::from_str(include_str!(
+        "fixtures/model/fixtures/wrap-coffee-shop.jsonld"
+    ))
+    .unwrap();
+    let put = run(&mut s, "store.put", json!({"document": wrap}));
+    assert_eq!(
+        put["cid"],
+        "z4EBG9jCPFrJGh9KDjNP4BticrCkisx1RnHCvUSCb3K7P6VEPdb"
+    );
+    assert_eq!(
+        put["model_cid"],
+        "z4EBG9jDsuUdvVN4bUXRHxoDG3p274FfhcJd8BiruRcE1jLCHi8"
+    );
+    assert_eq!(put["reduced"], true);
+    assert_eq!(
+        put["parts"],
+        json!(["z4EBG9jDsuUdvVN4bUXRHxoDG3p274FfhcJd8BiruRcE1jLCHi8"])
+    );
+    let put = run(&mut s, "store.put", json!({"document": cafe()}));
+    assert_eq!(put["model_cid"], put["cid"]);
+    assert_eq!(put["reduced"], false);
+}

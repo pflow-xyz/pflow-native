@@ -888,3 +888,63 @@ fn loaded_content_survives_a_dump_and_a_restore_dormant_entries_included() {
     assert_eq!(state["composition"]["library"], "orders");
     assert!(state["composition"].get("content").is_none());
 }
+
+/// A bundle that names its parts by CID is saved as the document it is (the references, not the
+/// nets inlined), so restoring it needs the parts: they come from the state's own store part, which
+/// is what the store is after the restore. The page's store is empty before it.
+#[test]
+fn a_bundle_that_names_its_parts_by_cid_restores_from_the_state_itself() {
+    let part = |t: &str| -> Value { serde_json::from_str(t).unwrap() };
+    let maker = part(include_str!("fixtures/model/fixtures/part-maker.jsonld"));
+    let taker = part(include_str!("fixtures/model/fixtures/part-taker.jsonld"));
+    let handoff = part(include_str!(
+        "fixtures/model/fixtures/compose-handoff.jsonld"
+    ));
+
+    memory_store();
+    let mut s = Session::default();
+    run(&mut s, "store.put", json!({"document": maker}));
+    run(&mut s, "store.put", json!({"document": taker}));
+    let loaded = run(&mut s, "bundle.load", json!({"document": handoff}));
+    let state = run(&mut s, "session.dump_state", Value::Null);
+    assert_eq!(
+        state["composition"]["document"], handoff,
+        "saved as the references it is"
+    );
+
+    // A fresh page: nothing in its store, everything in the state.
+    memory_store();
+    let mut t = Session::default();
+    run(&mut t, "session.restore_state", json!({"state": state}));
+    let st = run(&mut t, "bundle.state", Value::Null);
+    assert_eq!(st["instances"], json!(["maker", "taker"]));
+    assert_eq!(st["document"]["edited"], false);
+    let exp = run(&mut t, "bundle.export", Value::Null);
+    assert_eq!(exp["document"], handoff);
+    assert_eq!(exp["cid"], loaded["cid"]);
+
+    // The composition alone, into a store that lacks the parts: refused, and it says which CID.
+    let alone = run(
+        &mut s,
+        "session.dump_state",
+        json!({"parts": ["composition"]}),
+    );
+    memory_store();
+    let mut u = Session::default();
+    let e = refused(&mut u, "session.restore_state", json!({"state": alone}));
+    assert!(
+        e.contains("BUNDLE_PART_UNRESOLVED") && e.contains("z4EBG9j"),
+        "{e}"
+    );
+    // ...and into a store that has them, accepted.
+    let store = memory_store();
+    let _ = store;
+    let mut v = Session::default();
+    run(&mut v, "store.put", json!({"document": maker}));
+    run(&mut v, "store.put", json!({"document": taker}));
+    run(&mut v, "session.restore_state", json!({"state": alone}));
+    assert_eq!(
+        run(&mut v, "bundle.export", Value::Null)["document"],
+        handoff
+    );
+}

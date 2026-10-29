@@ -637,6 +637,9 @@ fn put_given(a: &Value, d: &Value) -> Result<Value> {
                     ),
                 };
             let mut out = st.put_document(&doc, kind, title, parents, None, counts)?;
+            // What model identity says of it: a bare wrapper of one part IS that part's net, which
+            // the store files under the wrapper's own CID, a document of its own.
+            bundle_doc::identity_into(&mut out, &bare);
             // The store writes the CID as `@id` and the loaders are given the document without it,
             // so an `@id` of the author's does not come back with the document.
             if let Some(own) = doc.get("@id").filter(|own| **own != out["cid"]) {
