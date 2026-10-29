@@ -758,10 +758,11 @@ struct Canon<'a> {
 /// seals or is refused alike everywhere.
 ///
 /// What an honest document needs is about its blank nodes squared (a net's
-/// arcs are one long list): 0.4 to 0.95 times the square for the nets of this
-/// repository (tic-tac-toe 0.4 million steps for 701 nodes, connect-3 2.9
-/// million for 1796, connect-4 37 million for 6260). So the limit is twice
-/// that, [`seal_work_limit`], and a hostile document pays for its own size:
+/// arcs are one long list): about 0.8 to 0.95 times the square of the
+/// blank-node count, rising with size, for the nets of this repository
+/// (tic-tac-toe 0.4 million steps for 701 nodes, connect-3 2.9 million for
+/// 1796, connect-4 37 million for 6260). So the limit is twice that,
+/// [`seal_work_limit`], and a hostile document pays for its own size:
 /// a small one (identical siblings are few bytes and few nodes) gets the
 /// floor, a few seconds in a debug build and a fraction of that in a release
 /// one, whatever it hides; a large one gets at most the ceiling.

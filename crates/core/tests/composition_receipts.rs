@@ -1493,9 +1493,10 @@ fn tamper(mem: &MemoryBackend, cid: &str, edit: impl FnOnce(&mut Value)) {
         .unwrap();
 }
 
-/// A file in the store that no longer seals to its name is not served as that CID: not by
-/// `store.get`, `store.open`, `bundle.load {cid}`, nor as a part named by `cid` (where a tampered
-/// net would otherwise stand in for the one the document names).
+/// A composition, bundle or content file in the store that no longer seals to its name is not
+/// served as that CID: not by `store.get`, `store.open`, `bundle.load {cid}`, nor as a part named
+/// by `cid` (where it would otherwise stand in for the net the document names). A net is read
+/// without a seal, as it always was: `a_stored_net_is_read_without_sealing_it`.
 #[test]
 fn a_store_file_that_is_not_the_document_its_name_says_is_refused_on_every_read() {
     let mem = world();

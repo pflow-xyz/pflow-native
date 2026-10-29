@@ -121,18 +121,28 @@ are not interpreted until pflow-compose has the fields.
 rule, `crates/core/src/model_id.rs`) says about that document: `model_cid` (the part's CID when the
 document is a bare wrapper), `reduced` and `parts` (the by-reference CIDs), or `model_error` with the
 `[E_…]` text when the rule refuses the shape. That check is a report, not a gate: `bundle.load` accepts
-shapes the rule refuses. For form (a) `bundle.load`, `bundle.export` and `store.put` also report `bundle_cid`,
-the seal of the plain Bundle that form flattens to (what a Bundle-reading tool such as pflow.xyz or go-pflow
-would hash). Nothing else computes it: the CID a receipt names, the autosave (`session.dump_state`) and the
-content checks seal the recipe only, which is small however large the net it builds. A Bundle too large to seal
-has `bundle_cid: null` and a `bundle_cid_error` (`[DOCUMENT_TOO_COMPLEX] …`); the composition still loads and has
-its `cid`. Sealing is bounded: URDNA2015 is superlinear (a long `@list` is quadratic in its length, groups of
+shapes the rule refuses. For form (a), `bundle.load`, `bundle.export`, `store.put` and `store.open` also report
+`bundle_cid`, the seal of the plain Bundle that form flattens to (what a Bundle-reading tool such as pflow.xyz
+or go-pflow would hash), **when asked**: `bundle_cid: true`. It is not computed otherwise, because it is the one
+expensive seal of a composition (the arcs of a flattened saga are a long list: a hundred steps cost 8 to 11
+seconds in a release build, two hundred 48 to 76, where the recipe seals in a moment), only a person
+comparing with another tool wants it, and an answer that carries a field nobody asked for should not wait for
+it. Without the argument the result has neither `bundle_cid` nor `bundle_cid_error`, and the flattened Bundle is
+not sealed at all; with it the Bundle is sealed once by that command. A Bundle document is its own plain Bundle
+(its `cid` is the seal), so the argument adds nothing for form (b). The CID a receipt names, the autosave
+(`session.dump_state`) and the content checks seal the recipe only, whatever is asked, which is small however
+large the net it builds. A Bundle too large to seal, asked for, gives `bundle_cid: null` and a
+`bundle_cid_error` (`[DOCUMENT_TOO_COMPLEX] …`); the composition still loads and has its `cid`. Sealing is bounded: URDNA2015 is superlinear (a long `@list` is quadratic in its length, groups of
 identical sibling objects are factorial), so `cid::seal` counts its steps and refuses a document that needs more
 than `cid::seal_work_limit` with `[DOCUMENT_TOO_COMPLEX]`, the same on every platform. What an honest document
-needs is about its blank nodes squared (a net's arcs are one long list; 0.4 to 0.95 times the square for the
-nets of `examples/`: tic-tac-toe 0.4 million steps, connect-3 2.9 million, connect-4 37 million, a saga of 40
-steps flattened 2.4 million), so the limit is twice the square of the document's blank nodes, between 2 million
-(`MIN_SEAL_WORK`: what any small document, however it is built, may spend) and 80 million (`MAX_SEAL_WORK`).
+needs is about its blank nodes squared (a net's arcs are one long list; about 0.8 to 0.95 times the square of
+the blank-node count, rising with size, for the nets of `examples/`: tic-tac-toe 0.4 million steps for 701 nodes,
+connect-3 2.9 million for 1796, connect-4 37 million for 6260, a saga of 40 steps flattened 2.4 million), so the
+limit is twice the square of the document's blank nodes, between 2 million (`MIN_SEAL_WORK`: what any small
+document, however it is built, may spend) and 80 million (`MAX_SEAL_WORK`). A chain of 20,000 alike list cells
+(`MAX_SEAL_DEPTH`) is refused as soon as the walk gets that deep, about a hundred thousand steps in, rather than
+after the ceiling has been spent walking it; the guard has a test with the constant lowered and one with a real
+list.
 A raw Bundle that cannot be sealed cannot be given a CID, so `bundle.load` and `store.put` refuse it with that
 code. A document is refused for its keys, its caps or its cites before it is sealed. A
 PatternComposition has no part CIDs, so it is its own `@type` with CID = seal(doc); `tests/composition_documents.rs`
@@ -350,8 +360,9 @@ Arguments and results are JSON. `Json` arguments accept the value or a string ho
 ### `bundle.load` (edit, journaled, one undo step)
 
 `document` (Json, a form (a) or (b) document) **or** `cid` (a stored document), optional `content`
-(Json, a ModelContent document; or `library: "<id>"`), optional `strict` (default true).
-Result: `{form: "composition"|"bundle", name, cid, bundle_cid?, bundle_cid_error?, model_cid, reduced, parts, model_error?,
+(Json, a ModelContent document; or `library: "<id>"`), optional `strict` (default true), optional `bundle_cid`
+(bool, default false: also seal the Bundle a form (a) document flattens to, §1.3).
+Result: `{form: "composition"|"bundle", name, cid, bundle_cid? and bundle_cid_error? (only when asked), model_cid, reduced, parts, model_error?,
 instances, links, validation, flatten: {ok, error?}, missing, content: {source, entries, kinds, unresolved,
 warnings, dormant, scenarios}}`. `cid` is the seal of the document as written (as received, for a raw Bundle
 and for a form (a) `params` string); `model_cid`, `reduced` and `parts` are `model_id`'s reading of it (§1.3).
@@ -359,8 +370,9 @@ Replaces any open composition.
 
 ### `bundle.export` (query, stores a Report artifact)
 
-`form` (`auto` default: the form it was loaded or built as; `composition`, `bundle`), `content` (bool).
-Result: `{form, document, cid, bundle_cid?, bundle_cid_error?, model_cid, reduced, parts, content?: {document, cid}}`. `composition` from a
+`form` (`auto` default: the form it was loaded or built as; `composition`, `bundle`), `content` (bool), `bundle_cid`
+(bool, default false, as for `bundle.load`).
+Result: `{form, document, cid, bundle_cid? and bundle_cid_error? (only when asked), model_cid, reduced, parts, content?: {document, cid}}`. `composition` from a
 composition with any `pattern: ""` instance is refused `[EXPORT_NEEDS_PATTERNS]`. `bundle` from a
 raw-loaded, unedited composition returns the loaded JSON; otherwise the Bundle pflow-compose serialises
 (with `@context`/`@type`). The built-in orders example exports as form (a) and reloads identically.
@@ -397,7 +409,8 @@ journaled), return `{result, receipt, report}` as `sim.receipt` does and store t
 * `store.put` takes `composition: true` (the open composition's document; `form` as in `bundle.export`),
   `content: true` (its content, stored with `about` = the composition's CID), or `document` (any
   document `store::kind_of` knows). `store.open` opens by kind; `store.list` shows `kind` and `about` and takes
-  `about` to find the content stored for a composition.
+  `about` to find the content stored for a composition. `store.put` and `store.open` take `bundle_cid` like
+  `bundle.load` (§1.3).
 * `file.open` of a PetriNetBundle, PatternComposition or ModelContent file is refused `[DOCUMENT_TYPE]` with a
   pointer to `bundle.load` / `content.load`; it opens nets.
 * `provenance.verify_receipt` replays `composition-run`, `composition-check` and `composition-content` receipts (§6).
@@ -424,10 +437,21 @@ or bundle as `bundle.load {cid}` does (one undo step, and the library's content 
 the library example's); content attaches strictly to the open composition (`[NO_COMPOSITION]` when none is
 open). `store.list {kind}` filters. Documents are opened from `Store::get_sealed`, the stored document
 without the `@id` the store added, because the loaders refuse a key they do not know. The store is
-addressed by content, so a read is checked: `Store::get_model` seals what it read and a file that seals to
-another CID is refused `[STORE_ALTERED]` ("a different document … the store file was altered"), whether it
-was asked for by `store.get`, `store.open`, `bundle.load {cid}`, a bundle's `cid` part or a receipt's replay.
-It costs one seal per read. A document's own `@id`
+addressed by content, so a read of a composition, a bundle or a content document is checked: `Store::get_model`
+seals what it read and a file that seals to another CID is refused `[STORE_ALTERED]` ("a different document … the
+store file was altered"), whether it was asked for by `store.get`, `store.open`, `bundle.load {cid}` or a receipt's
+replay. **A net is not checked**: it is parsed, exactly as on main, because sealing one costs its size squared
+(connect-4's takes tens of seconds) and every net the editor opens, and every `cid` part of a Bundle, is read
+there; so a net file altered in place is served as it is (`replace_all`, which restores a saved state, still
+verifies every file). The check costs one seal per store handle for the same bytes: the handle remembers the CID
+and a digest of the file that sealed, so a second read, or `store.open` after `bundle.load {cid}`, is free, a
+document the handle `put` is known to seal, and a changed file is sealed again; a refusal is never remembered.
+A `cid` part of a Bundle whose file is there and not served is reported with the store's cause
+(`[BUNDLE_PART_UNRESOLVED] subnets[0] refers to <cid>, which the store did not serve: [STORE_ALTERED] …`, or that
+it is a composition and not a net), and "is not in the local store" is said only of a CID the store does not have.
+`store.put` of one of these kinds over a file that does not seal to its name writes the document over it and says
+so (`existed: true, repaired: true`); a net's file is left alone. `store.supersede` names the two kinds from the
+index and reads no document. A document's own `@id`
 other than its CID (a raw Bundle may carry one) is replaced by the CID in the store and not given back by
 `store.open`; `store.put` says so.
 
@@ -532,14 +556,19 @@ The `why` strings of a run are pflow-metamodel's, so a receipt is bound to the p
   never rewritten, an edit keeps the keys and parts it did not touch.
 * The bounds and the guards (added after review): `cid.rs` unit tests (a long list is refused, not overflowed;
   identical siblings are refused; the work is counted; the limit grows with the document and the examples
-  fit it); `tests/cid.rs` (connect-3 still seals); `tests/composition_documents.rs` (a hostile document is
+  fit it; the depth guard refuses a chain the work budget would allow, with the constant lowered, and a list
+  as long as the real one); `tests/cid.rs` (connect-3 still seals); `tests/composition_documents.rs` (a hostile document is
   `[DOCUMENT_TOO_COMPLEX]` and opens nothing; a document refused for its keys is not sealed first; a saga whose
   Bundle is too large to seal (the limit lowered for the test) still loads, and `dump_state` seals the recipe once; a parameter past 2^40; a
   replaced part does not keep the cid it replaced; the link rename and the raw Bundle's link cap round trip);
   `tests/model_content.rs` (the library's findings carry their checks, pinned; `model:x` does not resolve;
   scripts and expected rows are bounded; content refused is not sealed); `tests/composition_receipts.rs` (a store
-  file that is not its name's document is refused on every read; a forged receipt is invalid without a replay for
-  each kind); `tests/session_state.rs` (a restored composition keeps its origin).
+  file of the composition, bundle and content kinds that is not its name's document is refused on every read
+  and sealed once per handle for the same bytes; a net is read without a seal; `store.supersede` seals nothing; a
+  bundle part the store refuses is reported with the cause; putting again repairs an altered file; a forged
+  receipt is invalid without a replay for each kind; the receipt, verify and state commands never seal the
+  flattened Bundle); `tests/composition_documents.rs` (`bundle_cid` is absent unless asked for and sealed once
+  by the command that was); `tests/composition_store.rs` (a content document's `@id` must be its CID); `tests/session_state.rs` (a restored composition keeps its origin).
 * The existing `views_*` and `compose` tests pass unchanged.
 
 ## 8. Decisions
@@ -570,5 +599,14 @@ Recorded because the acceptance criteria say what they relax.
    (with the command to use) where main opened it as an empty net.
 7. **Parity goldens are unchanged**: `parity/composition-views/goldens.json` and the `views_*` / `compose` tests pass
    without edits; the content panel is outside the manifest.
-8. **A forged `resultHash` or signature is invalid without a replay**, and a store file that is not the document its
-   name says is refused (`[STORE_ALTERED]`): both were true of the code and are now pinned by tests.
+8. **`store.get`, `store.open` and a bundle's `cid` parts check what they read, for the new kinds only.** On main
+   `Store::get_model` only parsed the file (only `replace_all` verified, when a saved state is restored); here a
+   composition, a bundle or a content document that does not seal to its name is refused `[STORE_ALTERED]`, once per
+   store handle for the same bytes (§5). That is new behaviour of an existing command, recorded because it changes
+   what a reader of the store can be told. A net is read exactly as on main: no check, no seal, and a net's index
+   entry is byte-for-byte what it was. **A forged `resultHash` or signature is invalid without a replay**: that half
+   was already true of the code and is now pinned by tests.
+9. **`bundle_cid` is opt-in** (`bundle_cid: true` on `bundle.load`, `bundle.export`, `store.put`, `store.open`). Its
+   seal of the flattened Bundle was the slowest thing a plain load did (§1.3), and nothing but a comparison with
+   another tool reads it. The commands are new on this branch, so nothing that read `bundle_cid` by default
+   existed outside it; the tests that assert it ask for it.
