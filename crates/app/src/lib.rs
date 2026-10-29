@@ -11,6 +11,7 @@ pub mod control;
 mod dialogs;
 mod inspector;
 mod json_pane;
+pub mod modelcontent;
 mod notes;
 mod panels;
 mod plot;
@@ -81,6 +82,8 @@ pub struct App {
     pub(crate) console: panels::ConsoleState,
     pub(crate) dialogs: dialogs::DialogState,
     pub(crate) json: json_pane::JsonPaneState,
+    /// The composition views' Model content panel (modelcontent.rs).
+    pub(crate) model_content: modelcontent::State,
     /// Color index the token tool adds/removes.
     pub(crate) token_color: usize,
     applied_theme: Option<Theme>,
@@ -128,6 +131,7 @@ impl App {
             console: Default::default(),
             dialogs: Default::default(),
             json: Default::default(),
+            model_content: Default::default(),
             token_color: 0,
             applied_theme: None,
             clipboard_out: None,
@@ -571,6 +575,10 @@ impl App {
     /// The composition views: drawn from the session, every action queued
     /// as a registry command; a drag asks the registry which targets light.
     fn composition_views(&mut self, ui: &mut egui::Ui) {
+        // First, so the views' own panels keep their layout above it.
+        for st in modelcontent::panel(&mut self.model_content, &mut self.sess, ui) {
+            self.queue(&st.command, st.args);
+        }
         let steps = compviews::panel(&mut self.comp, &self.sess, ui);
         for st in steps {
             self.queue(&st.command, st.args);

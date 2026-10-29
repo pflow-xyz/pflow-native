@@ -245,6 +245,19 @@ any other loaded document (an edited example, a raw Bundle) is bare unless the c
 The statics `comp::scenarios()` and `comp::scenario(id)` are now derived from `orders` content (parsed
 once), so the four orders scenarios have one source.
 
+### 3.6 Where the app shows it
+
+`crates/app/src/modelcontent.rs` draws a collapsible "Model content" bar under the composition views, for the
+view and example on screen, from `content.get {view}` (`{subject: "plan", view}` for `connect4`) and
+`bundle.state`, read once per `(revision, view, example)` and drawn from the cached result. Top to bottom: the
+view's `convention-example` text; "What this model lacks" (the `missing` list, the bare sentence when no content
+is attached, and the count of dormant entries); then the entries by kind (`finding`, `caveat`, `judgment`,
+`note`), each a collapsing header with its text, check claim and cites. A `scenario` entry is not listed (the
+Process view and the lens test draw it). "Run checks" hands back one `content.check {entry}` per frame (with
+`subject: "plan"` for `connect4`); the app queues each and the mark is read from the report that command
+stored, so the panel never edits the session. The panel is outside the parity manifest: the goldens do not
+change.
+
 ## 4. Commands
 
 Arguments and results are JSON. `Json` arguments accept the value or a string holding it.
@@ -393,4 +406,7 @@ The `why` strings of a run are pflow-metamodel's, so a receipt is bound to the p
   and a run that stops are receipted as they are; an edited composition verifies the old receipt when the
   original is stored and is `uncheckable` when it is not; the content is pinned by its CID; net receipts
   verify as before.
+* `crates/app/tests/model_content_panel.rs`: the panel drawn headless: the convention example first, the
+  lacks section above the groups, a raw Bundle that says it is bare, both examples, the cache key, a check that
+  goes red marked as failed, the plan's checks run with `subject: "plan"`, and no trace left in the session.
 * The existing `views_*` and `compose` tests pass unchanged.
