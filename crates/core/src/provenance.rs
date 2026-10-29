@@ -415,7 +415,6 @@ pub fn receipt_key() -> Result<ReceiptKey> {
     }
 }
 
-/// The local key's id if one exists, without creating it.
 /// Sets `signatureValid`, `keyId`, `trustedKey` (is that this machine's key) and `keyNote` (or
 /// `signatureError`) on a verification result: the part of verifying a receipt that does not depend
 /// on what it certified, shared by net and composition receipts so the two cannot drift. Returns
@@ -437,6 +436,7 @@ pub fn describe_signature(out: &mut Value, r: &Receipt) -> std::result::Result<S
     sig
 }
 
+/// The local key's id if one exists, without creating it.
 pub fn local_key_id() -> Option<String> {
     match crate::outbound::data_dir() {
         Some(dir) => {
