@@ -1,0 +1,60 @@
+{
+  "@context": "https://pflow.xyz/schema",
+  "@type": "PatternComposition",
+  "name": "composition",
+  "instances": [
+    {
+      "id": "orders",
+      "pattern": "queue",
+      "params": "{\"Capacity\":3,\"ID\":\"orders\",\"Initial\":2,\"Payload\":\"\"}",
+      "why": "Bounded (capacity 3) so the capacity invariant exists; two orders waiting so the one-saga-per-order caveat shows up in a run."
+    },
+    {
+      "id": "workers",
+      "pattern": "resource-pool",
+      "params": "{\"capacity\":2,\"id\":\"workers\",\"name\":\"workers\"}",
+      "why": "\"a fixed number of workers\": two."
+    },
+    {
+      "id": "payment",
+      "pattern": "saga",
+      "params": "{\"accounts\":{\"customer\":{\"initial\":1,\"shared\":false},\"merchant\":{\"initial\":0,\"shared\":false}},\"id\":\"payment\",\"steps\":[{\"compensation\":\"release stock\",\"id\":\"reserve\",\"moves\":[],\"name\":\"reserve stock\"},{\"compensation\":\"refund\",\"id\":\"charge\",\"moves\":[{\"amount\":1,\"from\":\"customer\",\"to\":\"merchant\"}],\"name\":\"charge card\"}]}",
+      "why": "Two steps so compensation runs in reverse; charge moves one token, so its compensation is the refund. \"A failed payment must refund\" is fail_commit after the charge."
+    }
+  ],
+  "links": [
+    {
+      "kind": "event",
+      "from": {
+        "subnet": "orders",
+        "port": "dequeue"
+      },
+      "to": {
+        "subnet": "workers",
+        "port": "acquire"
+      }
+    },
+    {
+      "kind": "event",
+      "from": {
+        "subnet": "orders",
+        "port": "dequeue"
+      },
+      "to": {
+        "subnet": "payment",
+        "port": "do:reserve"
+      }
+    },
+    {
+      "kind": "event",
+      "from": {
+        "subnet": "workers",
+        "port": "release"
+      },
+      "to": {
+        "subnet": "payment",
+        "port": "commit"
+      }
+    }
+  ]
+}

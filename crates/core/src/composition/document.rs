@@ -208,6 +208,19 @@ fn text_field(m: &Map<String, Value>, k: &str, what: &str) -> Result<String> {
         })
 }
 
+/// An optional string field: absent or `null` is `None`; anything else that is not a string is
+/// refused, because a mistyped value would be dropped by the next export.
+fn opt_text(m: &Map<String, Value>, k: &str, what: &str) -> Result<Option<String>> {
+    match m.get(k) {
+        None | Some(Value::Null) => Ok(None),
+        Some(Value::String(s)) => Ok(Some(s.clone())),
+        Some(_) => Err(refuse(
+            "COMPOSITION_FIELD",
+            format!("{what}: {k:?} must be a string"),
+        )),
+    }
+}
+
 fn only_keys(m: &Map<String, Value>, allowed: &[&str], what: &str) -> Result<()> {
     for k in m.keys() {
         if !allowed.contains(&k.as_str()) {
@@ -281,16 +294,9 @@ fn spec_from_json(inst: &Value) -> Result<InstanceSpec> {
         })?,
         &id,
     )?;
-    let label = m
-        .get("label")
-        .and_then(Value::as_str)
-        .unwrap_or(&id)
-        .to_string();
-    let why = m
-        .get("why")
-        .and_then(Value::as_str)
-        .unwrap_or_default()
-        .to_string();
+    let what = format!("instance {id:?}");
+    let label = opt_text(m, "label", &what)?.unwrap_or_else(|| id.clone());
+    let why = opt_text(m, "why", &what)?.unwrap_or_default();
     let extra = instance(&id).is_some_and(|c| {
         c.extra && c.pattern == pattern && canonical_json(&c.params) == canonical_json(&params)
     });
@@ -324,8 +330,15 @@ pub fn link_from_json(v: &Value) -> Result<Link> {
     let kind =
         parse_kind(&text_field(m, "kind", "link")?).map_err(|e| refuse("COMPOSITION_FIELD", e))?;
     let end = |k: &str| {
-        parse_endpoint(m.get(k).unwrap_or(&Value::Null))
-            .map_err(|e| refuse("COMPOSITION_FIELD", format!("link {k}: {e}")))
+        let v = m.get(k).unwrap_or(&Value::Null);
+        if let Value::Object(o) = v {
+            only_keys(
+                o,
+                &["subnet", "port", "place", "transition"],
+                &format!("link {k}"),
+            )?;
+        }
+        parse_endpoint(v).map_err(|e| refuse("COMPOSITION_FIELD", format!("link {k}: {e}")))
     };
     let mut l = Link {
         kind,
@@ -333,14 +346,14 @@ pub fn link_from_json(v: &Value) -> Result<Link> {
         to: end("to")?,
         ..Default::default()
     };
-    if let Some(s) = m.get("id").and_then(Value::as_str) {
-        l.id = s.into();
+    if let Some(s) = opt_text(m, "id", "link")? {
+        l.id = s;
     }
-    if let Some(s) = m.get("condition").and_then(Value::as_str) {
-        l.condition = s.into();
+    if let Some(s) = opt_text(m, "condition", "link")? {
+        l.condition = s;
     }
-    if let Some(s) = m.get("lowering").and_then(Value::as_str) {
-        l.lowering = s.into();
+    if let Some(s) = opt_text(m, "lowering", "link")? {
+        l.lowering = s;
     }
     if let Some(r) = m.get("rename") {
         let r = obj(r, "link rename")?;
@@ -430,17 +443,9 @@ impl Composition {
                     .map_err(|v| refuse("LINK_REFUSED", format!("{key}: {}", v.refusal())))?;
             }
         }
-        let name = m
-            .get("name")
-            .and_then(Value::as_str)
-            .unwrap_or("composition")
-            .to_string();
+        let name = opt_text(m, "name", "document")?.unwrap_or_else(|| "composition".into());
         c.bundle.name = name.clone();
-        c.bundle.description = m
-            .get("description")
-            .and_then(Value::as_str)
-            .unwrap_or_default()
-            .to_string();
+        c.bundle.description = opt_text(m, "description", "document")?.unwrap_or_default();
         if let Some(b) = m.get("namespace") {
             c.bundle.namespace = Some(
                 b.as_bool()
@@ -738,10 +743,14 @@ pub fn load(doc: &Value, resolve: PartResolver) -> Result<Loaded> {
     if ty == Some(TYPE_COMPOSITION) {
         let mut composition = Composition::from_composition_document(doc)?;
         // A document that is a library example gets the library's content
-        // back: the content records the CID it was written against.
-        if let Some(lib) = crate::cid::seal(doc)
+        // back: the content records the CID it was written against. That
+        // is the CID of the document the composition exports (params as
+        // canonical text), not of the spelling received: `params` as an
+        // object is the same composition and must find the same content.
+        if let Some(lib) = composition
+            .export(Some(Form::Composition))
             .ok()
-            .and_then(|cid| content::library_for_cid(&cid))
+            .and_then(|e| content::library_for_cid(&e.cid))
         {
             composition.doc.content = Some(lib.content.clone());
             composition.doc.content_source = ContentSource::Library(lib.id.to_string());
