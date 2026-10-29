@@ -46,7 +46,12 @@ pub const SET: &[CommandSpec] = &[
                (the open net, or a library model with that CID; also once their rates have changed, rebuilt under the receipt's \
                modelRates), which must reproduce resultHash. A receipt without modelRates that was issued with session rates names \
                the net under those rates; they are rebuilt from the rates its scenario ran with, unless the scenario overrode one, \
-               and then it is found only where they are again (set them back, or a library copy saved under them).",
+               and then it is found only where they are again (set them back, or a library copy saved under them). \
+               A composition receipt (scenario.kind composition-run, composition-check or composition-content, from \
+               bundle.receipt and content.receipt) is replayed on the composition document its model CID names (the open \
+               one, or the stored one) and, for a check or content, on the content document it pins; the check or script \
+               it carries must also be the one that content holds under the same id (bindingError), and verdicts are \
+               the same.",
         menu: MENU,
         shortcut: None,
         args: &[
@@ -249,19 +254,7 @@ fn verify_receipt(sess: &mut Session, a: &Value) -> Result<Value> {
         "revisionNow": pv::revision(),
         "model": r.model,
     });
-    let sig = r.verify_signature();
-    out["signatureValid"] = json!(sig.is_ok());
-    match &sig {
-        Ok(kid) => {
-            out["keyId"] = json!(kid);
-            let local = pv::local_key_id();
-            out["trustedKey"] = json!(local.as_deref() == Some(kid.as_str()));
-            if r.key_ephemeral {
-                out["keyNote"] = json!("signed under an ephemeral key");
-            }
-        }
-        Err(e) => out["signatureError"] = json!(e),
-    }
+    let sig = pv::describe_signature(&mut out, &r);
     let mut replay_ok = !replay;
     if replay {
         out["replayed"] = json!(false);

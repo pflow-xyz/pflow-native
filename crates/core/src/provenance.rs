@@ -416,6 +416,27 @@ pub fn receipt_key() -> Result<ReceiptKey> {
 }
 
 /// The local key's id if one exists, without creating it.
+/// Sets `signatureValid`, `keyId`, `trustedKey` (is that this machine's key) and `keyNote` (or
+/// `signatureError`) on a verification result: the part of verifying a receipt that does not depend
+/// on what it certified, shared by net and composition receipts so the two cannot drift. Returns
+/// the signature's verdict.
+pub fn describe_signature(out: &mut Value, r: &Receipt) -> std::result::Result<String, String> {
+    let sig = r.verify_signature();
+    out["signatureValid"] = json!(sig.is_ok());
+    match &sig {
+        Ok(kid) => {
+            out["keyId"] = json!(kid);
+            let local = local_key_id();
+            out["trustedKey"] = json!(local.as_deref() == Some(kid.as_str()));
+            if r.key_ephemeral {
+                out["keyNote"] = json!("signed under an ephemeral key");
+            }
+        }
+        Err(e) => out["signatureError"] = json!(e),
+    }
+    sig
+}
+
 pub fn local_key_id() -> Option<String> {
     match crate::outbound::data_dir() {
         Some(dir) => {

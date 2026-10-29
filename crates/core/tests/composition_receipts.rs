@@ -1103,3 +1103,358 @@ fn net_receipts_still_verify_through_the_same_command() {
     assert_eq!(v["kind"], "composition-run", "{v}");
     assert_verdict(&v, "uncheckable");
 }
+
+// ------------------------------------------------------------ a loosely written content document
+
+/// `store.put {document}` stored a content document exactly as given, so one written the way the
+/// prototype writes it (`check` as an object) sat under a CID nothing else names: `content.export`,
+/// `about` and a receipt's `content` all name the normalised document. It is now stored as that
+/// document, and the receipt verifies from the store in a fresh session.
+#[test]
+fn a_loose_content_document_is_stored_as_the_one_every_consumer_names() {
+    world();
+    let loose = content();
+    assert!(loose["entries"][2]["check"].is_object(), "written loose");
+    assert_ne!(cid::seal(&loose).unwrap(), content_cid(&loose));
+
+    let mut s = session_with(loose.clone());
+    let receipt = run(
+        &mut s,
+        "content.receipt",
+        json!({"entry": "commit-completes"}),
+    );
+    let named = receipt["receipt"]["scenario"]["content"].clone();
+    assert_eq!(named, json!(content_cid(&loose)));
+
+    let put = run(&mut s, "store.put", json!({"document": loose}));
+    assert_eq!(
+        put["cid"], named,
+        "stored under the CID the receipt names: {put}"
+    );
+    assert!(
+        put["note"].as_str().unwrap().contains("normalised"),
+        "it says it changed the spelling: {put}"
+    );
+    assert!(put["note"]
+        .as_str()
+        .unwrap()
+        .contains(&cid::seal(&loose).unwrap()));
+    // The stored document is the one content.export writes.
+    let exported = run(&mut s, "content.export", json!({}));
+    assert_eq!(
+        store::open().get_sealed(named.as_str().unwrap()).unwrap(),
+        exported["document"]
+    );
+
+    run(&mut s, "store.put", json!({"composition": true}));
+    let mut fresh = Session::default();
+    let v = verify(&mut fresh, &receipt);
+    assert_valid(&v);
+    assert_eq!(v["contentFrom"], "store", "{v}");
+
+    // A document already in the normal form is stored without a word about it.
+    let again = run(
+        &mut s,
+        "store.put",
+        json!({"document": exported["document"]}),
+    );
+    assert_eq!(again["cid"], named);
+    assert!(again.get("note").is_none(), "{again}");
+}
+
+#[test]
+fn a_content_document_that_does_not_parse_is_stored_as_given_and_says_so() {
+    world();
+    let mut s = Session::default();
+    let junk = json!({
+        "@context": "https://pflow.xyz/schema", "@type": "ModelContent",
+        "entries": "x", "junk": 1,
+    });
+    let put = run(&mut s, "store.put", json!({"document": junk}));
+    assert_eq!(put["cid"], json!(cid::seal(&junk).unwrap()));
+    assert!(
+        put["note"]
+            .as_str()
+            .unwrap()
+            .contains("does not parse as model content"),
+        "{put}"
+    );
+    run(&mut s, "bundle.open", json!({}));
+    let e = err(&mut s, "store.open", json!({"cid": put["cid"]}));
+    assert!(e.starts_with("[CONTENT_FIELD]"), "{e}");
+}
+
+// ------------------------------------------------------------ labels, trust, and the content receipt's negative case
+
+/// `receipt` re-signed by `key` after `edit`, with the key's id and public key embedded.
+fn resign_with(
+    receipt: &Value,
+    key: &pv::ReceiptKey,
+    edit: impl FnOnce(&mut pv::Receipt),
+) -> Value {
+    let mut r = pv::parse_receipt(receipt).unwrap();
+    edit(&mut r);
+    r.key_id = key.key_id();
+    r.public_key = key.public_key();
+    r.key_ephemeral = key.ephemeral();
+    r.signature = pv::b64(&key.sign(&r.signing_bytes()));
+    serde_json::to_value(&r).unwrap()
+}
+
+/// A replay runs the check or the script *in the receipt*. Without a comparison with the content
+/// the receipt names, a receipt re-signed over a check that is trivially true, under the id of a
+/// real entry of the real content, verified as that entry's.
+#[test]
+fn a_receipt_re_signed_over_another_check_under_a_real_entry_id_is_invalid() {
+    world();
+    let mut s = session();
+    let out = run(
+        &mut s,
+        "content.receipt",
+        json!({"entry": "commit-completes"}),
+    );
+    let trivial = json!({"claim": "state exists", "steps": [
+        {"command": "bundle.state", "args": {}, "expect": [{"path": "", "op": "exists"}]}]});
+    // First sign it with a made-up hash to learn what the replay of the trivial check gives, then
+    // sign that: a forger's receipt whose result hash is exactly right.
+    let probe = resign(&out["receipt"], |r| r.scenario["check"] = trivial.clone());
+    let replay_hash = verify(&mut s, &probe)["replayHash"].clone();
+    let forged = resign(&out["receipt"], |r| {
+        r.scenario["check"] = trivial.clone();
+        r.result_hash = replay_hash.as_str().unwrap().to_string();
+    });
+    let v = verify(&mut s, &forged);
+    assert_eq!(v["signatureValid"], true, "{v}");
+    assert_eq!(v["resultMatches"], true, "the hash is right: {v}");
+    assert!(
+        v["bindingError"]
+            .as_str()
+            .unwrap()
+            .contains("commit-completes"),
+        "{v}"
+    );
+    assert_verdict(&v, "invalid");
+    // The honest one is untouched, and says nothing of binding.
+    let v = verify(&mut s, &out["receipt"]);
+    assert_valid(&v);
+    assert!(
+        v.get("bindingError").is_none() && v.get("bindingNote").is_none(),
+        "{v}"
+    );
+}
+
+#[test]
+fn a_run_receipt_whose_script_is_not_the_declared_scenarios_is_invalid() {
+    world();
+    let mut s = session();
+    let out = run(&mut s, "bundle.receipt", json!({"scenario": "commit"}));
+    assert_eq!(
+        out["receipt"]["scenario"]["content"],
+        json!(content_cid(&content()))
+    );
+    let other = |r: &mut pv::Receipt| r.scenario["scenario"]["script"] = json!(["orders/dequeue"]);
+    let probe = resign(&out["receipt"], other);
+    let replay_hash = verify(&mut s, &probe)["replayHash"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let forged = resign(&out["receipt"], |r| {
+        other(r);
+        r.result_hash = replay_hash.clone();
+    });
+    let v = verify(&mut s, &forged);
+    assert_eq!(v["resultMatches"], true, "{v}");
+    assert!(
+        v["bindingError"].as_str().unwrap().contains("\"commit\""),
+        "{v}"
+    );
+    assert_verdict(&v, "invalid");
+    // A bare script has no declared scenario to compare with.
+    let script = run(
+        &mut s,
+        "bundle.receipt",
+        json!({"script": ["orders/dequeue"]}),
+    );
+    assert_valid(&verify(&mut s, &script["receipt"]));
+}
+
+#[test]
+fn a_run_receipt_whose_content_is_gone_is_valid_and_says_the_label_is_unchecked() {
+    world();
+    let mut s = session();
+    let out = run(&mut s, "bundle.receipt", json!({"scenario": "commit"}));
+    // Another content on the same composition: the receipt's content is nowhere.
+    let mut t = Session::default();
+    run(
+        &mut t,
+        "bundle.load",
+        json!({"document": orders_document(), "content": content_with(vec![wrong_claim()])}),
+    );
+    run(&mut t, "content.clear", json!({}));
+    let v = verify(&mut t, &out["receipt"]);
+    assert_valid(&v);
+    assert!(
+        v["bindingNote"].as_str().unwrap().contains("unchecked"),
+        "{v}"
+    );
+}
+
+#[test]
+fn a_foreign_key_is_not_trusted_and_an_ephemeral_one_says_so() {
+    world();
+    let mut s = session();
+    let out = run(&mut s, "bundle.receipt", json!({"scenario": "commit"}));
+    let own = verify(&mut s, &out["receipt"]);
+    assert_eq!(own["trustedKey"], true, "{own}");
+    assert!(own.get("keyNote").is_none(), "{own}");
+
+    let foreign = pv::ReceiptKey::from_seed([7u8; 32], Some(PathBuf::from("/nowhere/key.json")));
+    let theirs = resign_with(&out["receipt"], &foreign, |_| {});
+    let v = verify(&mut s, &theirs);
+    assert_valid(&v);
+    assert_eq!(
+        v["trustedKey"], false,
+        "a valid signature by somebody else: {v}"
+    );
+    assert_ne!(v["keyId"], own["keyId"]);
+    assert!(v.get("keyNote").is_none(), "{v}");
+
+    let ephemeral = pv::ReceiptKey::from_seed([9u8; 32], None);
+    let v = verify(&mut s, &resign_with(&out["receipt"], &ephemeral, |_| {}));
+    assert_valid(&v);
+    assert_eq!(v["trustedKey"], false, "{v}");
+    assert_eq!(v["keyNote"], "signed under an ephemeral key", "{v}");
+
+    // The net path answers the same keys the same way (they share one helper).
+    let mut n = Session::default();
+    run(&mut n, "file.open_example", json!({"name": "sir"}));
+    let net = run(
+        &mut n,
+        "sim.receipt",
+        json!({"scenario": {"hours": 1, "realizations": 2, "seed": 3, "samples": 10}}),
+    );
+    let v = verify(&mut n, &resign_with(&net["receipt"], &ephemeral, |_| {}));
+    assert_eq!(v["trustedKey"], false, "{v}");
+    assert_eq!(v["keyNote"], "signed under an ephemeral key", "{v}");
+}
+
+/// A net receipt re-signed to claim a composition kind: the model it names is a net, not a
+/// composition, so it cannot be replayed as one.
+#[test]
+fn a_net_receipt_claiming_a_composition_kind_is_uncheckable() {
+    world();
+    let mut n = Session::default();
+    run(&mut n, "file.open_example", json!({"name": "sir"}));
+    let net = run(
+        &mut n,
+        "sim.receipt",
+        json!({"scenario": {"hours": 1, "realizations": 2, "seed": 3, "samples": 10}}),
+    );
+    run(&mut n, "store.put", json!({}));
+    let forged = resign(&net["receipt"], |r| {
+        r.scenario = json!({"kind": "composition-run", "form": "composition", "content": null,
+            "scenario": {"id": "x", "title": "x", "script": [], "expect": []}});
+    });
+    let v = verify(&mut n, &forged);
+    assert_eq!(v["kind"], "composition-run", "{v}");
+    assert_eq!(v["signatureValid"], true, "{v}");
+    assert_verdict(&v, "uncheckable");
+}
+
+/// What the content receipt signs for content that is not sound: `valid` is false, the unresolved
+/// element ids are listed, and the replay reproduces both, so the receipt is `valid` as a record of
+/// what was found.
+#[test]
+fn a_content_receipt_records_unsound_content_as_it_is() {
+    world();
+    let dormant = json!({
+        "id": "ghost", "kind": "finding", "text": "about a place the model lacks",
+        "about": ["place:orders/nope"],
+    });
+    let mut s = Session::default();
+    run(
+        &mut s,
+        "bundle.load",
+        json!({"document": orders_document(), "content": content()}),
+    );
+    run(
+        &mut s,
+        "content.load",
+        json!({"document": content_with(vec![dormant]), "strict": false}),
+    );
+    let out = run(&mut s, "content.receipt", json!({}));
+    assert_eq!(out["result"]["valid"], false, "{}", out["result"]);
+    assert_eq!(
+        out["result"]["unresolved"],
+        json!([{"entry": "ghost", "ref": "place:orders/nope"}])
+    );
+    let v = verify(&mut s, &out["receipt"]);
+    assert_valid(&v);
+    // A receipt that claims the content was sound is not what the replay gives.
+    let probe = resign(&out["receipt"], |r| {
+        r.result_hash = format!("sha256:{}", "00".repeat(32))
+    });
+    let lie = verify(&mut s, &probe);
+    assert_eq!(lie["resultMatches"], false);
+    assert_verdict(&lie, "invalid");
+}
+
+/// A stored content document is only taken for the content its name says if it hashes to that name.
+#[test]
+fn a_stored_content_file_that_is_not_the_document_its_name_says_is_not_trusted() {
+    let mem = world();
+    let mut s = session();
+    let receipt = run(
+        &mut s,
+        "content.receipt",
+        json!({"entry": "commit-completes"}),
+    );
+    let named = content_cid(&content());
+    let composition = run(&mut s, "bundle.export", json!({}));
+    stash(&mem, &composition["document"]);
+    let mut altered = content_document(&content());
+    altered["name"] = json!("not the content the receipt names");
+    plant(&mem, &named, &altered);
+
+    let mut fresh = Session::default();
+    let v = verify(&mut fresh, &receipt["receipt"]);
+    assert_eq!(v["replayed"], false, "{v}");
+    assert!(
+        v["replayError"]
+            .as_str()
+            .unwrap()
+            .contains("different document"),
+        "{v}"
+    );
+    assert_verdict(&v, "uncheckable");
+    // Put right, the same receipt verifies.
+    plant(&mem, &named, &content_document(&content()));
+    assert_valid(&verify(&mut fresh, &receipt["receipt"]));
+}
+
+/// A check cannot sign: `bundle.receipt` is a query but not a read of the model.
+#[test]
+fn a_check_that_asks_for_a_receipt_is_refused_at_load() {
+    world();
+    let signs = json!({
+        "id": "signer", "kind": "finding", "text": "a check that signs", "about": ["model:"],
+        "check": {"claim": "c", "steps": [
+            {"command": "bundle.receipt", "args": {"script": ["orders/dequeue"]},
+             "expect": [{"path": "/receipt/signature", "op": "exists"}]}]},
+    });
+    let mut s = Session::default();
+    run(
+        &mut s,
+        "bundle.load",
+        json!({"document": orders_document()}),
+    );
+    let e = err(
+        &mut s,
+        "content.load",
+        json!({"document": content_with(vec![signs])}),
+    );
+    assert!(
+        e.contains("[CHECK_COMMAND_FORBIDDEN]") && e.contains("not a read"),
+        "{e}"
+    );
+}

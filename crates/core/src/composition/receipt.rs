@@ -25,7 +25,7 @@ use serde_json::{json, Value};
 
 use super::checks::{self, Base};
 use super::content::{self, DeclaredScenario, Entry, ModelContent};
-use super::document::{self, refuse, ContentSource};
+use super::document::{self, canonical_json, refuse, ContentSource};
 use super::{flatten, Composition};
 use crate::artifact::ArtifactData;
 use crate::commands::bundle_doc;
@@ -382,6 +382,65 @@ struct Replayed {
     model_from: String,
     content_from: Option<String>,
     hash: String,
+    /// Whether the labels the receipt signs (which entry, which declared scenario) are what the
+    /// content it names says. `Err`: how they differ. A replay runs the check or script *in the
+    /// scenario*, so without this a receipt re-signed over a trivial check under a real entry id
+    /// would verify as that entry's.
+    bound: std::result::Result<(), String>,
+    /// Set when the receipt names content that was not looked for or not found, and so was not
+    /// compared.
+    unbound: Option<String>,
+}
+
+/// Compares the check or script a receipt carries with the one the content document it names holds
+/// under the same id.
+fn bind(kind: &str, scenario: &Value, content: &ModelContent) -> std::result::Result<(), String> {
+    match kind {
+        CHECK => {
+            let id = scenario["entry"].as_str().unwrap_or_default();
+            let held = content
+                .entry(id)
+                .and_then(|e| e.check.as_ref())
+                .ok_or_else(|| format!("the content has no entry {id:?} with a check"))?;
+            let signed = scenario.get("check").unwrap_or(&Value::Null);
+            if canonical_json(held) != canonical_json(signed) {
+                return Err(format!(
+                    "the check the receipt carries is not the check of entry {id:?} in the content it names"
+                ));
+            }
+            Ok(())
+        }
+        RUN => {
+            let s = &scenario["scenario"];
+            let id = s["id"].as_str().unwrap_or_default();
+            let held = content
+                .scenarios()
+                .into_iter()
+                .find(|d| d.id == id)
+                .ok_or_else(|| format!("the content declares no scenario {id:?}"))?;
+            let as_entry = Entry {
+                id: id.to_string(),
+                kind: "scenario".into(),
+                order: None,
+                title: String::new(),
+                text: String::new(),
+                about: vec![],
+                views: vec![],
+                cites: vec![],
+                check: None,
+                scenario: Some(json!({"script": s["script"], "expect": s["expect"]})),
+            };
+            let signed = DeclaredScenario::of(&as_entry)
+                .ok_or("the receipt's scenario is not a script and its expectations")?;
+            if (&held.script, &held.expect) != (&signed.script, &signed.expect) {
+                return Err(format!(
+                    "the script or expectations the receipt carries are not those of scenario {id:?} in the content it names"
+                ));
+            }
+            Ok(())
+        }
+        _ => Ok(()),
+    }
 }
 
 /// Finds what the receipt names and replays it. Err: why that cannot be
@@ -394,8 +453,23 @@ fn replay_receipt(sess: &Session, r: &Receipt) -> std::result::Result<Replayed, 
         ));
     }
     let (model_from, c) = find_composition(sess, &r.model)?;
+    let mut unbound = None;
     let (content, content_from) = if kind == RUN {
-        (None, None)
+        // A run is replayed from the script it carries. The content it was declared in, when it
+        // names one, is only looked for to compare the labels (so `contentFrom` is not reported:
+        // a run receipt's result does not depend on it).
+        match r.scenario["content"].as_str() {
+            None => (None, None),
+            Some(cid) => match find_content(sess, &c, cid) {
+                Ok((_, mc)) => (Some(mc), None),
+                Err(e) => {
+                    unbound = Some(format!(
+                        "the content the scenario is said to be declared in was not found, so that is unchecked ({e})"
+                    ));
+                    (None, None)
+                }
+            },
+        }
     } else {
         let cid = r.scenario["content"]
             .as_str()
@@ -403,11 +477,16 @@ fn replay_receipt(sess: &Session, r: &Receipt) -> std::result::Result<Replayed, 
         let (from, mc) = find_content(sess, &c, cid)?;
         (Some(mc), Some(from))
     };
+    let bound = content
+        .as_ref()
+        .map_or(Ok(()), |mc| bind(kind, &r.scenario, mc));
     let result = replay(&c, content.as_ref(), &r.scenario)?;
     Ok(Replayed {
         model_from,
         content_from,
         hash: checks::result_hash(&result),
+        bound,
+        unbound,
     })
 }
 
@@ -425,19 +504,7 @@ pub fn verify_command(sess: &mut Session, a: &Value, r: &Receipt) -> Result<Valu
         "model": r.model,
         "kind": kind_of(r),
     });
-    let sig = r.verify_signature();
-    out["signatureValid"] = json!(sig.is_ok());
-    match &sig {
-        Ok(kid) => {
-            out["keyId"] = json!(kid);
-            let local = pv::local_key_id();
-            out["trustedKey"] = json!(local.as_deref() == Some(kid.as_str()));
-            if r.key_ephemeral {
-                out["keyNote"] = json!("signed under an ephemeral key");
-            }
-        }
-        Err(e) => out["signatureError"] = json!(e),
-    }
+    let sig = pv::describe_signature(&mut out, r);
     let mut replay_ok = !replay;
     if replay {
         out["replayed"] = json!(false);
@@ -456,7 +523,13 @@ pub fn verify_command(sess: &mut Session, a: &Value, r: &Receipt) -> Result<Valu
                     }
                     let matches = done.hash == r.result_hash;
                     out["resultMatches"] = json!(matches);
-                    replay_ok = matches;
+                    if let Err(e) = &done.bound {
+                        out["bindingError"] = json!(e);
+                    }
+                    if let Some(n) = &done.unbound {
+                        out["bindingNote"] = json!(n);
+                    }
+                    replay_ok = matches && done.bound.is_ok();
                     if !matches {
                         out["replayHash"] = json!(done.hash);
                         out["note"] = json!("signature intact but the replay diverges; if revisionNow differs from revisionAtIssue this is engine drift, not forgery");
@@ -468,7 +541,10 @@ pub fn verify_command(sess: &mut Session, a: &Value, r: &Receipt) -> Result<Valu
     let valid = sig.is_ok() && replay_ok;
     out["verdict"] = json!(if valid {
         pv::VALID
-    } else if sig.is_err() || out["resultMatches"] == json!(false) {
+    } else if sig.is_err()
+        || out["resultMatches"] == json!(false)
+        || out.get("bindingError").is_some()
+    {
         pv::INVALID
     } else {
         pv::UNCHECKABLE
