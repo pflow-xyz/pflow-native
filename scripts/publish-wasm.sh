@@ -14,8 +14,10 @@
 # What is published, one directory per build:
 #
 #   pflow_native_wasm_bg.wasm      the engine; its sha256 is the CID (bafyrei + first 32 hex)
-#   pflow_native_wasm_bg.wasm.gz   the same bytes, gzip -9 -n (the CDN's nginx does not compress
-#                                  wasm, so pages fetch this and decompress it themselves)
+#   pflow_native_wasm_bg.wasm.br   the same bytes, brotli quality 11, and
+#   pflow_native_wasm_bg.wasm.gz   gzip -9 -n: the CDN sends one of them for the .wasm, by
+#                                  Accept-Encoding (nginx does not compress wasm), and the
+#                                  browser decodes it
 #   pflow_native_wasm.js           the wasm-bindgen glue, which only works with this .wasm
 #
 # The landing page's frontmatter records the commit, the version and every
@@ -61,10 +63,12 @@ OUT="$STAGE/pflow-native-wasm"
 cp "$SHIM/pflow_native_wasm_bg.wasm" "$SHIM/pflow_native_wasm.js" "$OUT/"
 # -n: no name or mtime in the header, so the same .wasm gives the same .gz.
 gzip -9 -n -c "$OUT/pflow_native_wasm_bg.wasm" > "$OUT/pflow_native_wasm_bg.wasm.gz"
+node -e 'const z=require("zlib"),fs=require("fs"),[,f]=process.argv,b=fs.readFileSync(f);fs.writeFileSync(f+".br",z.brotliCompressSync(b,{params:{[z.constants.BROTLI_PARAM_QUALITY]:11,[z.constants.BROTLI_PARAM_SIZE_HINT]:b.length}}))' "$OUT/pflow_native_wasm_bg.wasm"
 cp "$PFLOW_XYZ/publish/cdn.py" "$STAGE/cdn.py"
 
 WASM_SHA="$(sha "$OUT/pflow_native_wasm_bg.wasm")"
 GZ_SHA="$(sha "$OUT/pflow_native_wasm_bg.wasm.gz")"
+BR_SHA="$(sha "$OUT/pflow_native_wasm_bg.wasm.br")"
 JS_SHA="$(sha "$OUT/pflow_native_wasm.js")"
 CID="bafyrei${WASM_SHA:0:32}"
 
@@ -76,8 +80,7 @@ Load the glue as an ES module and hand it the engine; check the bytes first:
 
 \`\`\`js
 const base = "https://cdn.stackdump.com/ipfs/$CID/";
-const gz = await fetch(base + "pflow_native_wasm_bg.wasm.gz");
-const bytes = await new Response(gz.body.pipeThrough(new DecompressionStream("gzip"))).arrayBuffer();
+const bytes = await (await fetch(base + "pflow_native_wasm_bg.wasm")).arrayBuffer();
 // sha256(bytes) must be $WASM_SHA
 const glue = await import(base + "pflow_native_wasm.js");
 await glue.default({ module_or_path: await WebAssembly.compile(bytes) });
@@ -87,6 +90,7 @@ const engine = new glue.Engine();
 | file | sha256 |
 |---|---|
 | pflow_native_wasm_bg.wasm | \`$WASM_SHA\` |
+| pflow_native_wasm_bg.wasm.br | \`$BR_SHA\` |
 | pflow_native_wasm_bg.wasm.gz | \`$GZ_SHA\` |
 | pflow_native_wasm.js | \`$JS_SHA\` |
 EOF
@@ -95,7 +99,7 @@ ARGS=(pflow-native-wasm --source pflow-native --schema WasmModule/v1
   --title "pflow-native wasm engine $VERSION (${COMMIT:0:7})"
   --tag wasm --tag pflow-native --body body.md --wait
   --meta "commit=$COMMIT" --meta "version=$VERSION"
-  --meta "wasm_sha256=$WASM_SHA" --meta "gzip_sha256=$GZ_SHA" --meta "js_sha256=$JS_SHA")
+  --meta "wasm_sha256=$WASM_SHA" --meta "brotli_sha256=$BR_SHA" --meta "gzip_sha256=$GZ_SHA" --meta "js_sha256=$JS_SHA")
 [ "$DRAFT" = 1 ] && ARGS+=(--draft)
 [ "${DRY_RUN:-0}" = 1 ] && ARGS+=(--dry-run)
 
@@ -109,5 +113,5 @@ fi
 
 [ "${DRY_RUN:-0}" = 1 ] && exit 0
 # What a page pins (pflow-xyz: scripts/sync-native-wasm.mjs --cdn <url>).
-printf '{"url": "https://cdn.stackdump.com/ipfs/%s/", "commit": "%s", "version": "%s", "wasm_sha256": "%s", "gzip_sha256": "%s", "js_sha256": "%s"}\n' \
-  "$CID" "$COMMIT" "$VERSION" "$WASM_SHA" "$GZ_SHA" "$JS_SHA"
+printf '{"url": "https://cdn.stackdump.com/ipfs/%s/", "commit": "%s", "version": "%s", "wasm_sha256": "%s", "brotli_sha256": "%s", "gzip_sha256": "%s", "js_sha256": "%s"}\n' \
+  "$CID" "$COMMIT" "$VERSION" "$WASM_SHA" "$BR_SHA" "$GZ_SHA" "$JS_SHA"
