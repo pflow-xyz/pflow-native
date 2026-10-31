@@ -25,9 +25,12 @@ make test        # cargo test --workspace (core unit + command tests, CLI MCP st
 make lint        # fmt --check + clippy -D warnings
 make wasm-check  # core + app + wasm shim for wasm32-unknown-unknown
 make wasm-shim   # crates/wasm → target/wasm-shim/ (.wasm + JS glue; needs wasm-bindgen-cli 0.2.129)
+make wasm-budget  # target/wasm-shim's .wasm against pflow.xyz's size budget
 make test-offline  # the build without the `services` feature (no pflow.xyz / sim / GitHub)
 make screenshot  # regenerate docs/screenshot-sir.png
 ```
+
+CI (`.github/workflows/ci.yml`) runs on every push to `main` and every PR: fmt, clippy `-D warnings` and tests on Linux, tests on macOS, and `wasm-shim` plus `wasm-budget`, all on the Rust version pinned there.
 
 To build against a sibling `../pflow-rs`, copy `.cargo/config.toml.example` to `.cargo/config.toml`. Otherwise the pinned git rev in the root `Cargo.toml` is used.
 
